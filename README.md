@@ -93,6 +93,7 @@ XReader is local-first:
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md)
+- [Performance](docs/PERFORMANCE.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Contributing](CONTRIBUTING.md)
 - [Changelog](CHANGELOG.md)

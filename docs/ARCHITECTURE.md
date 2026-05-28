@@ -106,6 +106,12 @@ Primary local gates:
 ./gradlew :app:lintRelease :app:assembleRelease --console=plain
 ```
 
+Performance baselines:
+
+```bash
+tools/perf_baseline.sh --iterations 7 --reader-tap 400 780
+```
+
 Device checks should cover:
 
 - importing EPUB/PDF/TXT

@@ -11,7 +11,7 @@ This is the working product roadmap for the personal APK line. Items should appe
 - Add per-book search index health in the metadata/edit surface.
 - Add export/import for notes and bookmarks.
 - Add public-domain test fixtures for screenshots and instrumented reader QA.
-- Capture startup and reader-open performance baselines in a repeatable script.
+- Track startup and reader-open baseline history after each major UI, import, or Readium change.
 
 ## Reader Polish
 

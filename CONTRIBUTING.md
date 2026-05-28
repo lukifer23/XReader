@@ -45,12 +45,19 @@ Run before pushing:
 
 For reader/UI changes, also install on a device or emulator and smoke-test a real EPUB/PDF when possible.
 
+For startup, reader-open, import, or UI performance changes, capture a local adb baseline:
+
+```bash
+tools/perf_baseline.sh --iterations 7 --reader-tap 400 780
+```
+
 ## Documentation
 
 Update documentation when behavior changes:
 
 - `README.md` for user-facing capability/build changes.
 - `docs/ARCHITECTURE.md` for data flow or dependency changes.
+- `docs/PERFORMANCE.md` for performance methodology or headline baseline changes.
 - `docs/ROADMAP.md` for product scope changes.
 - `CHANGELOG.md` for notable shipped changes.
 - `NOTICE` when bundled assets or third-party attribution changes.
