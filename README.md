@@ -15,7 +15,7 @@ Implemented:
 - Private app-library imports with checksum duplicate detection.
 - Library organization by books, authors, series, genres, years, recent, unread, in progress, finished, and favorites.
 - Persisted library sort and comfortable/compact density controls.
-- Metadata editing for title, author, year, genre, series, and series order.
+- Metadata editing for title, author, year, genre, series, series order, and opt-in bulk series/genre cleanup.
 - Covers, including EPUB guide/title-page cover references, metadata extraction, manual cover replacement, per-book health checks, and repair/reindex actions.
 - Resume from persisted Readium locators with percent read and progress state.
 - Swipe, tap-zone, hardware-key, TOC, search-result, bookmark, and scrubber navigation.
@@ -95,6 +95,7 @@ XReader is local-first:
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md)
+- [Competitive Research](docs/COMPETITIVE_RESEARCH.md)
 - [Performance](docs/PERFORMANCE.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Contributing](CONTRIBUTING.md)

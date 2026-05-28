@@ -1,21 +1,32 @@
 package com.xreader.app.repository
 
 import android.net.Uri
+import androidx.room.withTransaction
+import com.xreader.app.core.TextTools
+import com.xreader.app.data.AuthorEntity
 import com.xreader.app.data.BookDao
 import com.xreader.app.data.BookEntity
+import com.xreader.app.data.GenreEntity
 import com.xreader.app.data.SearchDao
 import com.xreader.app.data.SearchIndexEntity
+import com.xreader.app.data.SeriesEntity
+import com.xreader.app.data.XReaderDatabase
 import com.xreader.app.importer.ImportService
 import kotlinx.coroutines.flow.Flow
 import java.time.Clock
 import java.util.concurrent.atomic.AtomicBoolean
 
+data class MetadataUpdateResult(
+    val updatedBooks: Int,
+)
+
 class LibraryRepository(
-    private val bookDao: BookDao,
-    private val searchDao: SearchDao,
+    private val database: XReaderDatabase,
     private val importService: ImportService,
     private val clock: Clock = Clock.systemUTC(),
 ) {
+    private val bookDao: BookDao = database.books()
+    private val searchDao: SearchDao = database.search()
     private val libraryDetailsBackfillRunning = AtomicBoolean(false)
 
     fun observeBooks(query: String): Flow<List<BookEntity>> = bookDao.observeBooks(query)
@@ -63,22 +74,54 @@ class LibraryRepository(
         genre: String?,
         series: String?,
         seriesIndex: Double?,
-    ) {
+        applyToSeries: Boolean,
+    ): MetadataUpdateResult = database.withTransaction {
         val resolvedTitle = title.trim().ifBlank { book.title }
+        val resolvedAuthor = author.cleanMetadataValue() ?: "Unknown Author"
+        val resolvedGenre = genre.cleanMetadataValue()
+        val resolvedSeries = series.cleanMetadataValue()
+        val now = clock.millis()
         val updated = book.copy(
             title = resolvedTitle,
-            author = author.trim().ifBlank { "Unknown Author" },
-            sortTitle = com.xreader.app.core.TextTools.sortTitle(resolvedTitle),
+            author = resolvedAuthor,
+            sortTitle = TextTools.sortTitle(resolvedTitle),
             year = year,
-            genre = genre?.trim()?.ifBlank { null },
-            series = series?.trim()?.ifBlank { null },
+            genre = resolvedGenre,
+            series = resolvedSeries,
             seriesIndex = seriesIndex,
-            updatedAt = clock.millis()
+            updatedAt = now
         )
-        bookDao.update(updated)
-        bookDao.insertAuthor(com.xreader.app.data.AuthorEntity(name = updated.author))
-        updated.genre?.let { bookDao.insertGenre(com.xreader.app.data.GenreEntity(name = it)) }
-        updated.series?.let { bookDao.insertSeries(com.xreader.app.data.SeriesEntity(name = it)) }
+        var updatedBooks = 0
+        if (updated.copy(updatedAt = book.updatedAt) != book) {
+            bookDao.update(updated)
+            updatedBooks += 1
+        }
+
+        if (applyToSeries && (book.series.cleanMetadataValue() != null || resolvedSeries != null)) {
+            val peers = bookDao.booksForSharedSeriesMetadata(
+                bookId = book.id,
+                originalAuthor = book.author,
+                targetAuthor = resolvedAuthor,
+                originalSeries = book.series.cleanMetadataValue().orEmpty(),
+                targetSeries = resolvedSeries.orEmpty()
+            )
+            peers.forEach { peer ->
+                val peerUpdated = peer.copy(
+                    genre = resolvedGenre,
+                    series = resolvedSeries,
+                    updatedAt = now
+                )
+                if (peer.genre != resolvedGenre || peer.series != resolvedSeries) {
+                    bookDao.update(peerUpdated)
+                    updatedBooks += 1
+                }
+            }
+        }
+
+        bookDao.insertAuthor(AuthorEntity(name = updated.author))
+        updated.genre?.let { bookDao.insertGenre(GenreEntity(name = it)) }
+        updated.series?.let { bookDao.insertSeries(SeriesEntity(name = it)) }
+        MetadataUpdateResult(updatedBooks = updatedBooks)
     }
 
     suspend fun searchBook(bookId: Long, query: String): List<SearchIndexEntity> =
@@ -104,4 +147,7 @@ class LibraryRepository(
         if (terms.isEmpty()) return null
         return terms.joinToString(" ") { "normalizedBody:${it}*" }
     }
+
+    private fun String?.cleanMetadataValue(): String? =
+        this?.trim()?.ifBlank { null }
 }

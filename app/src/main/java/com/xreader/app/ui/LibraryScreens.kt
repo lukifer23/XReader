@@ -58,6 +58,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -181,7 +182,7 @@ internal fun LibraryScreen(
     onOpenSearchResult: (Long, String?) -> Unit,
     onToggleFavorite: (BookListItem) -> Unit,
     onShowAll: () -> Unit,
-    onUpdateMetadata: (BookEntity, String, String, Int?, String?, String?, Double?) -> Unit,
+    onUpdateMetadata: (BookEntity, String, String, Int?, String?, String?, Double?, Boolean) -> Unit,
     onReplaceCover: (BookEntity, Uri) -> Unit,
     onRefreshBookHealth: (Long) -> Unit,
     onRepairBook: (BookEntity) -> Unit,
@@ -324,8 +325,8 @@ internal fun LibraryScreen(
                 coverTarget = book
                 coverLauncher.launch(supportedCoverMimeTypes)
             },
-            onSave = { title, author, year, genre, series, index ->
-                onUpdateMetadata(book, title, author, year, genre, series, index)
+            onSave = { title, author, year, genre, series, index, applyToSeries ->
+                onUpdateMetadata(book, title, author, year, genre, series, index, applyToSeries)
                 editing = null
             }
         )
@@ -791,7 +792,7 @@ internal fun BookMetadataDialog(
     onRefreshHealth: () -> Unit,
     onRepairBook: () -> Unit,
     onReplaceCover: () -> Unit,
-    onSave: (String, String, Int?, String?, String?, Double?) -> Unit,
+    onSave: (String, String, Int?, String?, String?, Double?, Boolean) -> Unit,
 ) {
     var title by remember(book.id) { mutableStateOf(book.title) }
     var author by remember(book.id) { mutableStateOf(book.author) }
@@ -799,6 +800,8 @@ internal fun BookMetadataDialog(
     var genre by remember(book.id) { mutableStateOf(book.genre.orEmpty()) }
     var series by remember(book.id) { mutableStateOf(book.series.orEmpty()) }
     var seriesIndex by remember(book.id) { mutableStateOf(book.seriesIndex?.toString().orEmpty()) }
+    var applyToSeries by remember(book.id) { mutableStateOf(false) }
+    val canApplyToSeries = series.isNotBlank() || !book.series.isNullOrBlank()
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Edit metadata") },
@@ -838,6 +841,23 @@ internal fun BookMetadataDialog(
                     OutlinedTextField(series, { series = it }, label = { Text("Series") }, singleLine = true, modifier = Modifier.weight(1f))
                     OutlinedTextField(seriesIndex, { seriesIndex = it }, label = { Text("#") }, singleLine = true, modifier = Modifier.width(96.dp))
                 }
+                if (canApplyToSeries) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            "Apply genre and series to matching books",
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Switch(
+                            checked = applyToSeries,
+                            onCheckedChange = { applyToSeries = it }
+                        )
+                    }
+                }
             }
         },
         confirmButton = {
@@ -849,7 +869,8 @@ internal fun BookMetadataDialog(
                         year.toIntOrNull(),
                         genre,
                         series,
-                        seriesIndex.toDoubleOrNull()
+                        seriesIndex.toDoubleOrNull(),
+                        applyToSeries
                     )
                 }
             ) { Text("Save") }

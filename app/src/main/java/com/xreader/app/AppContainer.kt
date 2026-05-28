@@ -44,7 +44,7 @@ class AppContainer(
     }
 
     val libraryRepository: LibraryRepository by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
-        LibraryRepository(database.books(), database.search(), importService)
+        LibraryRepository(database, importService)
     }
     val readingRepository: ReadingRepository by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         ReadingRepository(database.reading())

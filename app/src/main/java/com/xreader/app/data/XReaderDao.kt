@@ -27,6 +27,31 @@ interface BookDao {
     @Query("SELECT * FROM books WHERE id = :id")
     suspend fun getBook(id: Long): BookEntity?
 
+    @Query(
+        """
+        SELECT * FROM books
+        WHERE id != :bookId
+            AND series IS NOT NULL
+            AND series != ''
+            AND (
+                (:originalSeries != '' AND LOWER(series) = LOWER(:originalSeries))
+                OR (:targetSeries != '' AND LOWER(series) = LOWER(:targetSeries))
+            )
+            AND (
+                LOWER(author) = LOWER(:originalAuthor)
+                OR LOWER(author) = LOWER(:targetAuthor)
+            )
+        ORDER BY seriesIndex ASC, year ASC, sortTitle ASC
+        """
+    )
+    suspend fun booksForSharedSeriesMetadata(
+        bookId: Long,
+        originalAuthor: String,
+        targetAuthor: String,
+        originalSeries: String,
+        targetSeries: String,
+    ): List<BookEntity>
+
     @Query("SELECT * FROM books ORDER BY updatedAt DESC LIMIT :limit")
     suspend fun booksForMaintenance(limit: Int): List<BookEntity>
 

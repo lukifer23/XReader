@@ -18,7 +18,7 @@ This is the working product roadmap for the personal APK line. Items should appe
 
 ## Library Polish
 
-- Add better bulk metadata operations for series and genre cleanup.
+- Add broader bulk metadata tools beyond the current matching-series genre/series cleanup.
 - Add sort controls within each group.
 
 ## Later

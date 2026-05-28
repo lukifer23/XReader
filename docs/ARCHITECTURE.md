@@ -52,6 +52,8 @@ EPUB cover extraction checks explicit OPF cover metadata, EPUB 3 `cover-image` p
 
 The manual Settings repair action and the per-book metadata repair action reuse this parsing/indexing path against stored private-library files. They refresh covers, metadata fields that are empty or safe to improve, word/page counts, and search rows. They preserve user-edited title and author values. Covers manually replaced from local image files are stored as app-private downsampled JPEGs and are not overwritten by repair.
 
+Manual metadata edits can optionally apply the edited genre and series name to other books by the same author that match the old or new series name. The bulk cleanup runs in a Room transaction and keeps per-book fields such as title, year, and series index isolated to each book.
+
 ## Reader Flow
 
 `PublicationService` opens stored EPUB/PDF publications with Readium and exposes:

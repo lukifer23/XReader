@@ -211,10 +211,24 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         genre: String?,
         series: String?,
         seriesIndex: Double?,
+        applyToSeries: Boolean,
     ) {
         viewModelScope.launch {
-            container.libraryRepository.updateMetadata(book, title, author, year, genre, series, seriesIndex)
-            message.value = "Updated metadata"
+            val result = container.libraryRepository.updateMetadata(
+                book = book,
+                title = title,
+                author = author,
+                year = year,
+                genre = genre,
+                series = series,
+                seriesIndex = seriesIndex,
+                applyToSeries = applyToSeries
+            )
+            message.value = when {
+                result.updatedBooks > 1 -> "Updated metadata for ${result.updatedBooks} books"
+                result.updatedBooks == 1 -> "Updated metadata"
+                else -> "Metadata already up to date"
+            }
         }
     }
 
