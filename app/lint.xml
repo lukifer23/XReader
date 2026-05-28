@@ -1,0 +1,11 @@
+<lint>
+    <issue id="OldTargetApi">
+        <ignore path="build.gradle.kts" />
+    </issue>
+    <issue id="GradleDependency">
+        <ignore path="build.gradle.kts" />
+    </issue>
+    <issue id="TrustAllX509TrustManager">
+        <ignore regexp=".*/\.gradle/caches/.*org\.bouncycastle/.*" />
+    </issue>
+</lint>

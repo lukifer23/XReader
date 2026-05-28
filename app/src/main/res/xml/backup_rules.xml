@@ -1,0 +1,5 @@
+<full-backup-content>
+    <exclude domain="file" path="library/books/" />
+    <exclude domain="file" path="library/tmp/" />
+    <exclude domain="database" path="xreader.db" />
+</full-backup-content>

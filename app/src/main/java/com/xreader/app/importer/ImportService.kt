@@ -1,0 +1,447 @@
+package com.xreader.app.importer
+
+import android.content.ContentResolver
+import android.content.Context
+import android.net.Uri
+import android.provider.OpenableColumns
+import com.xreader.app.core.TextTools
+import com.xreader.app.data.BookDao
+import com.xreader.app.data.BookEntity
+import com.xreader.app.data.BookFormat
+import com.xreader.app.data.SearchDao
+import com.xreader.app.data.SearchIndexEntity
+import com.xreader.app.data.XReaderDatabase
+import androidx.room.withTransaction
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.security.MessageDigest
+import java.time.Clock
+import java.util.Locale
+
+class ImportService(
+    private val context: Context,
+    private val database: XReaderDatabase,
+    private val clock: Clock = Clock.systemUTC(),
+) {
+    private val bookDao: BookDao = database.books()
+    private val searchDao: SearchDao = database.search()
+    data class ImportResult(
+        val bookId: Long,
+        val duplicate: Boolean,
+    )
+
+    data class LibraryRepairResult(
+        val scanned: Int,
+        val coversUpdated: Int,
+        val metadataUpdated: Int,
+        val searchRows: Int,
+        val failed: Int,
+    )
+
+    private val epubParser = EpubParser()
+    private val txtConverter = TxtToEpubConverter()
+    private val pdfTools = PdfTools(context)
+
+    suspend fun import(uri: Uri): ImportResult = withContext(Dispatchers.IO) {
+        val displayName = context.contentResolver.displayName(uri)
+        val sourceExtension = TextTools.extension(displayName)
+        require(sourceExtension in setOf("epub", "pdf", "txt")) {
+            "Unsupported file type: .$sourceExtension"
+        }
+
+        val safeName = displayName.replace(Regex("""[^\w.\- ]"""), "_")
+        val tmp = File(context.cacheDir, "import-${System.nanoTime()}-$safeName")
+        context.contentResolver.openInputStream(uri).use { input ->
+            requireNotNull(input) { "Could not open selected file." }
+            tmp.outputStream().buffered().use { output -> input.copyTo(output) }
+        }
+
+        val checksum = sha256(tmp)
+        bookDao.getByChecksum(checksum)?.let {
+            tmp.delete()
+            return@withContext ImportResult(it.id, duplicate = true)
+        }
+
+        val now = clock.millis()
+        val libraryDir = File(context.filesDir, "library/books").apply { mkdirs() }
+        val stagingDir = File(context.filesDir, "library/tmp").apply { mkdirs() }
+        val storedFormat = when (sourceExtension) {
+            "pdf" -> BookFormat.PDF
+            else -> BookFormat.EPUB
+        }
+        val storedExtension = when (storedFormat) {
+            BookFormat.PDF -> "pdf"
+            BookFormat.EPUB -> "epub"
+        }
+        val storedFile = File(libraryDir, "$checksum.$storedExtension")
+        val stagedFile = File(stagingDir, "$checksum-${System.nanoTime()}.$storedExtension")
+
+        try {
+            if (sourceExtension == "txt") {
+                txtConverter.convert(tmp, stagedFile, displayName.substringBeforeLast('.'))
+            } else {
+                tmp.copyTo(stagedFile, overwrite = true)
+            }
+            tmp.delete()
+
+            val parsed = parseStoredBook(
+                file = stagedFile,
+                format = storedFormat,
+                fallbackTitle = displayName.substringBeforeLast('.'),
+                fallbackAuthor = "Unknown Author"
+            )
+
+            stagedFile.copyTo(storedFile, overwrite = true)
+            stagedFile.delete()
+            val coverFile = parsed.coverImage?.let { cover ->
+                File(context.filesDir, writeCover(checksum, cover))
+            }
+
+            val wordCount = parsed.units.sumOf { it.wordCount }
+            val book = BookEntity(
+                title = TextTools.cleanTitle(parsed.title),
+                author = parsed.author.ifBlank { "Unknown Author" },
+                sortTitle = TextTools.sortTitle(parsed.title),
+                genre = parsed.genre?.takeIf { it.isNotBlank() },
+                year = parsed.year,
+                series = parsed.series,
+                seriesIndex = parsed.seriesIndex,
+                description = parsed.description,
+                language = parsed.language,
+                format = storedFormat,
+                sourceExtension = sourceExtension,
+                fileName = storedFile.name,
+                filePath = storedFile.relativeTo(context.filesDir).path,
+                coverImagePath = coverFile?.relativeTo(context.filesDir)?.path,
+                checksum = checksum,
+                fileSizeBytes = storedFile.length(),
+                wordCount = wordCount,
+                pageCount = parsed.pageCount,
+                importedAt = now,
+                updatedAt = now
+            )
+
+            val bookId = try {
+                database.withTransaction {
+                    val insertedId = bookDao.insert(book)
+                    bookDao.insertAuthor(com.xreader.app.data.AuthorEntity(name = book.author))
+                    book.genre?.let { bookDao.insertGenre(com.xreader.app.data.GenreEntity(name = it)) }
+                    book.series?.let { bookDao.insertSeries(com.xreader.app.data.SeriesEntity(name = it)) }
+                    searchDao.replaceForBook(insertedId, parsed.units.toSearchRows(insertedId))
+                    insertedId
+                }
+            } catch (error: Throwable) {
+                storedFile.delete()
+                coverFile?.delete()
+                throw error
+            }
+            inferMissingSeriesFromTitlesInternal()
+            normalizeSeriesOrderInternal()
+            ImportResult(bookId, duplicate = false)
+        } catch (error: Throwable) {
+            tmp.delete()
+            stagedFile.delete()
+            throw error
+        }
+    }
+
+    suspend fun deleteStoredFile(book: BookEntity) = withContext(Dispatchers.IO) {
+        File(context.filesDir, book.filePath).delete()
+        book.coverImagePath?.let { File(context.filesDir, it).delete() }
+    }
+
+    suspend fun backfillLibraryDetails(limit: Int = 50) = withContext(Dispatchers.IO) {
+        backfillMissingCoversInternal(limit)
+        backfillMetadataInternal(limit)
+        inferMissingSeriesFromTitlesInternal()
+        normalizeSeriesOrderInternal()
+    }
+
+    suspend fun repairLibrary(limit: Int = 500): LibraryRepairResult = withContext(Dispatchers.IO) {
+        var scanned = 0
+        var coversUpdated = 0
+        var metadataUpdated = 0
+        var searchRows = 0
+        var failed = 0
+        bookDao.booksForMaintenance(limit).forEach { book ->
+            scanned += 1
+            val file = File(context.filesDir, book.filePath)
+            if (!file.exists()) {
+                failed += 1
+                return@forEach
+            }
+            val outcome = runCatching {
+                val parsed = parseStoredBook(
+                    file = file,
+                    format = book.format,
+                    fallbackTitle = book.title,
+                    fallbackAuthor = book.author
+                )
+                val refreshedCoverPath = parsed.coverImage?.let { writeCover(book.checksum, it) }
+                val rows = parsed.units.toSearchRows(book.id)
+                val updated = book.repairedCopy(parsed, refreshedCoverPath, file.length())
+                val changedMetadata = updated != book
+                database.withTransaction {
+                    if (changedMetadata) bookDao.update(updated)
+                    updated.genre?.let { bookDao.insertGenre(com.xreader.app.data.GenreEntity(name = it)) }
+                    updated.series?.let { bookDao.insertSeries(com.xreader.app.data.SeriesEntity(name = it)) }
+                    searchDao.replaceForBook(book.id, rows)
+                }
+                RepairBookOutcome(
+                    coverUpdated = refreshedCoverPath != null,
+                    metadataUpdated = changedMetadata,
+                    searchRows = rows.size
+                )
+            }.getOrElse {
+                failed += 1
+                return@forEach
+            }
+            if (outcome.coverUpdated) coversUpdated += 1
+            if (outcome.metadataUpdated) metadataUpdated += 1
+            searchRows += outcome.searchRows
+        }
+        inferMissingSeriesFromTitlesInternal()
+        normalizeSeriesOrderInternal()
+        LibraryRepairResult(
+            scanned = scanned,
+            coversUpdated = coversUpdated,
+            metadataUpdated = metadataUpdated,
+            searchRows = searchRows,
+            failed = failed
+        )
+    }
+
+    suspend fun backfillMissingCovers(limit: Int = 50) = withContext(Dispatchers.IO) {
+        backfillMissingCoversInternal(limit)
+    }
+
+    private suspend fun backfillMissingCoversInternal(limit: Int) {
+        bookDao.booksMissingCovers().take(limit).forEach { book ->
+            val file = File(context.filesDir, book.filePath)
+            if (!file.exists()) return@forEach
+            val cover = runCatching {
+                when (book.format) {
+                    BookFormat.EPUB -> epubParser.parseCover(file)
+                    BookFormat.PDF -> pdfTools.renderCover(file)
+                }
+            }.getOrNull() ?: return@forEach
+            val coverPath = writeCover(book.checksum, cover)
+            bookDao.setCoverImagePath(book.id, coverPath, clock.millis())
+        }
+    }
+
+    private suspend fun backfillMetadataInternal(limit: Int) {
+        bookDao.epubBooksForMetadataAudit(limit).forEach { book ->
+            val file = File(context.filesDir, book.filePath)
+            if (!file.exists()) return@forEach
+            val metadata = runCatching { epubParser.readMetadata(file) }.getOrNull() ?: return@forEach
+            val genre = if (PublicationMetadataTools.shouldReplaceGenre(book.genre, metadata.genre)) {
+                metadata.genre
+            } else {
+                book.genre
+            }
+            val series = book.series ?: metadata.series
+            val seriesIndex = book.seriesIndex ?: metadata.seriesIndex
+            val year = book.year ?: metadata.year
+            if (genre == book.genre && series == book.series && seriesIndex == book.seriesIndex && year == book.year) {
+                return@forEach
+            }
+            val updated = book.copy(
+                genre = genre,
+                series = series,
+                seriesIndex = seriesIndex,
+                year = year,
+                updatedAt = clock.millis()
+            )
+            database.withTransaction {
+                bookDao.update(updated)
+                updated.genre?.let { bookDao.insertGenre(com.xreader.app.data.GenreEntity(name = it)) }
+                updated.series?.let { bookDao.insertSeries(com.xreader.app.data.SeriesEntity(name = it)) }
+            }
+        }
+    }
+
+    private suspend fun normalizeSeriesOrderInternal() {
+        bookDao.booksWithSeriesForNormalization()
+            .groupBy { book ->
+                "${book.author.trim().lowercase(Locale.US)}\u0000${book.series.orEmpty().trim().lowercase(Locale.US)}"
+            }
+            .values
+            .filter { it.size > 1 }
+            .forEach { books ->
+                val chronological = books.sortedWith(
+                    compareBy<BookEntity> { it.year ?: Int.MAX_VALUE }
+                        .thenBy { it.sortTitle.lowercase(Locale.US) }
+                        .thenBy { it.importedAt }
+                )
+                val indexed = books
+                    .filter { it.seriesIndex != null }
+                    .sortedWith(
+                        compareBy<BookEntity> { it.seriesIndex ?: Double.MAX_VALUE }
+                            .thenBy { it.year ?: Int.MAX_VALUE }
+                            .thenBy { it.sortTitle.lowercase(Locale.US) }
+                    )
+                val missingIndex = books.any { it.seriesIndex == null }
+                val duplicateIndex = indexed.mapNotNull { it.seriesIndex }.distinct().size != indexed.size
+                val indexConflictsWithYear = indexed.size == books.size && indexed.map { it.id } != chronological.map { it.id }
+                if (!missingIndex && !duplicateIndex && !indexConflictsWithYear) return@forEach
+
+                database.withTransaction {
+                    chronological.forEachIndexed { index, book ->
+                        val expected = (index + 1).toDouble()
+                        if (book.seriesIndex != expected) {
+                            bookDao.update(book.copy(seriesIndex = expected, updatedAt = clock.millis()))
+                        }
+                    }
+                }
+            }
+    }
+
+    private suspend fun inferMissingSeriesFromTitlesInternal() {
+        val books = bookDao.booksForSeriesInference()
+        val seriesByAuthor = books
+            .mapNotNull { book ->
+                val series = book.series?.trim()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                book.author.trim().lowercase(Locale.US) to series
+            }
+            .groupBy({ it.first }, { it.second })
+            .mapValues { (_, values) -> values.distinctBy { it.lowercase(Locale.US) } }
+        books
+            .filter { it.series.isNullOrBlank() }
+            .forEach { book ->
+                val series = seriesByAuthor[book.author.trim().lowercase(Locale.US)]
+                    ?.firstOrNull { it.equals(book.title, ignoreCase = true) }
+                    ?: return@forEach
+                bookDao.update(book.copy(series = series, updatedAt = clock.millis()))
+                bookDao.insertSeries(com.xreader.app.data.SeriesEntity(name = series))
+            }
+    }
+
+    private fun parseStoredBook(
+        file: File,
+        format: BookFormat,
+        fallbackTitle: String,
+        fallbackAuthor: String,
+    ): ParsedImport =
+        when (format) {
+            BookFormat.EPUB -> {
+                val epub = epubParser.parse(file)
+                ParsedImport(
+                    title = epub.metadata.title ?: fallbackTitle,
+                    author = epub.metadata.author ?: fallbackAuthor,
+                    year = epub.metadata.year,
+                    genre = epub.metadata.genre,
+                    series = epub.metadata.series,
+                    seriesIndex = epub.metadata.seriesIndex,
+                    description = epub.metadata.description,
+                    language = epub.metadata.language,
+                    units = epub.units,
+                    pageCount = null,
+                    coverImage = epub.coverImage
+                )
+            }
+            BookFormat.PDF -> {
+                val pdf = pdfTools.parse(file)
+                ParsedImport(
+                    title = pdf.metadata.title ?: fallbackTitle,
+                    author = pdf.metadata.author ?: fallbackAuthor,
+                    year = pdf.metadata.year,
+                    genre = pdf.metadata.genre,
+                    series = pdf.metadata.series,
+                    seriesIndex = pdf.metadata.seriesIndex,
+                    description = pdf.metadata.description,
+                    language = pdf.metadata.language,
+                    units = pdf.units,
+                    pageCount = pdf.pageCount,
+                    coverImage = pdf.coverImage
+                )
+            }
+        }
+
+    private fun BookEntity.repairedCopy(
+        parsed: ParsedImport,
+        refreshedCoverPath: String?,
+        fileSizeBytes: Long,
+    ): BookEntity {
+        val repaired = copy(
+            genre = if (PublicationMetadataTools.shouldReplaceGenre(genre, parsed.genre)) parsed.genre else genre,
+            year = year ?: parsed.year,
+            series = series ?: parsed.series,
+            seriesIndex = seriesIndex ?: parsed.seriesIndex,
+            description = description ?: parsed.description,
+            language = language ?: parsed.language,
+            coverImagePath = refreshedCoverPath ?: coverImagePath,
+            fileSizeBytes = fileSizeBytes,
+            wordCount = parsed.units.sumOf { it.wordCount },
+            pageCount = parsed.pageCount ?: pageCount,
+        )
+        return if (repaired == this) this else repaired.copy(updatedAt = clock.millis())
+    }
+
+    private data class RepairBookOutcome(
+        val coverUpdated: Boolean,
+        val metadataUpdated: Boolean,
+        val searchRows: Int,
+    )
+
+    private data class ParsedImport(
+        val title: String,
+        val author: String,
+        val year: Int?,
+        val genre: String?,
+        val series: String?,
+        val seriesIndex: Double?,
+        val description: String?,
+        val language: String?,
+        val units: List<com.xreader.app.reader.ReadingUnit>,
+        val pageCount: Int?,
+        val coverImage: EpubParser.CoverImage?,
+    )
+
+    private fun List<com.xreader.app.reader.ReadingUnit>.toSearchRows(bookId: Long): List<SearchIndexEntity> =
+        mapNotNull { unit ->
+            unit.body.takeIf { it.isNotBlank() }?.let {
+                SearchIndexEntity(
+                    bookId = bookId,
+                    locator = unit.locator,
+                    heading = unit.heading,
+                    body = it,
+                    normalizedBody = TextTools.normalizeForSearch(it),
+                    unitIndex = unit.index
+                )
+            }
+        }
+
+    private fun writeCover(checksum: String, cover: EpubParser.CoverImage): String {
+        val target = File(context.filesDir, "library/covers/$checksum.${cover.extension}")
+        target.parentFile?.mkdirs()
+        target.writeBytes(cover.bytes)
+        return target.relativeTo(context.filesDir).path
+    }
+
+    private fun ContentResolver.displayName(uri: Uri): String {
+        runCatching {
+            query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (index >= 0) return cursor.getString(index)
+                }
+            }
+        }
+        return uri.lastPathSegment?.substringAfterLast('/') ?: "book"
+    }
+
+    private fun sha256(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().buffered().use { input ->
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            while (true) {
+                val read = input.read(buffer)
+                if (read < 0) break
+                digest.update(buffer, 0, read)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+}

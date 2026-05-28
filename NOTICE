@@ -1,0 +1,21 @@
+XReader notices
+===============
+
+XReader is distributed under the MIT License. See LICENSE.
+
+Bundled dictionary data
+-----------------------
+
+XReader includes a derived SQLite dictionary asset built from Princeton WordNet
+3.0. The WordNet license is bundled at:
+
+app/src/main/assets/dictionary/LICENSE_WORDNET.txt
+
+WordNet 3.0 Copyright 2006 by Princeton University. All rights reserved.
+
+Third-party libraries
+---------------------
+
+XReader depends on AndroidX, Jetpack Compose, Kotlin, Room, Readium Kotlin
+Toolkit, jsoup, PDFBox Android, and Android desugaring libraries. Their
+respective licenses are governed by their upstream projects.
