@@ -30,6 +30,9 @@ interface BookDao {
     @Query("SELECT * FROM books ORDER BY updatedAt DESC LIMIT :limit")
     suspend fun booksForMaintenance(limit: Int): List<BookEntity>
 
+    @Query("SELECT * FROM books")
+    suspend fun booksForBackup(): List<BookEntity>
+
     @Query("SELECT * FROM books WHERE coverImagePath IS NULL OR coverImagePath = ''")
     suspend fun booksMissingCovers(): List<BookEntity>
 
@@ -123,6 +126,9 @@ interface AnnotationDao {
     @Query("SELECT * FROM annotations ORDER BY updatedAt DESC")
     fun observeAllAnnotations(): Flow<List<AnnotationEntity>>
 
+    @Query("SELECT * FROM annotations ORDER BY updatedAt DESC")
+    suspend fun allAnnotations(): List<AnnotationEntity>
+
     @Query("SELECT * FROM annotations WHERE bookId = :bookId ORDER BY updatedAt DESC")
     fun observeAnnotations(bookId: Long): Flow<List<AnnotationEntity>>
 
@@ -135,8 +141,25 @@ interface AnnotationDao {
     @Query("DELETE FROM annotations WHERE id = :id")
     suspend fun deleteAnnotation(id: Long)
 
+    @Query(
+        """
+        SELECT * FROM annotations
+        WHERE bookId = :bookId AND kind = :kind AND locator = :locator AND quote = :quote
+        LIMIT 1
+        """
+    )
+    suspend fun getAnnotationForImport(
+        bookId: Long,
+        kind: AnnotationKind,
+        locator: String,
+        quote: String,
+    ): AnnotationEntity?
+
     @Query("SELECT * FROM bookmarks WHERE bookId = :bookId ORDER BY progress ASC")
     fun observeBookmarks(bookId: Long): Flow<List<BookmarkEntity>>
+
+    @Query("SELECT * FROM bookmarks ORDER BY createdAt DESC")
+    suspend fun allBookmarks(): List<BookmarkEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertBookmark(bookmark: BookmarkEntity): Long

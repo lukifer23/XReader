@@ -22,6 +22,7 @@ Initial public repository snapshot.
 - Reader themes, fullscreen mode, typography controls, PDF fit controls, page animation toggle, and real font-family options.
 - Grouped Settings screen for reader appearance, typography, reading behavior, library display, and maintenance.
 - Notes, highlights, bookmarks, global notes view, and in-reader annotation navigation.
+- Local JSON export/import for notes, highlights, and bookmarks matched back to books by checksum.
 - Offline English dictionary backed by Princeton WordNet.
 - Local full-text search with fallback from Readium search to the app search index.
 - Reading analytics for active time, WPM estimate, streaks, and book/author/genre summaries.

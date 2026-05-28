@@ -91,6 +91,8 @@ Reader and library settings are persisted with DataStore. Settings include:
 
 Font choices are limited to families that Android/Readium CSS can resolve or fall back from cleanly.
 
+Settings also exposes local notes/bookmark export and import through Android's Storage Access Framework. The backup is JSON, contains notes, highlights, and bookmarks, and matches restored items to already-imported books by file checksum. Imported entries for books that are not in the local library are skipped instead of creating orphan annotations.
+
 ## Dictionary
 
 `tools/build_wordnet_asset.py` converts WordNet 3.0 data files into a compact SQLite asset. On first use, `DictionaryRepository` imports entries into Room and serves normalized local lookup for selected words.

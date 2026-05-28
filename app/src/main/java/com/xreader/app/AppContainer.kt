@@ -10,6 +10,7 @@ import com.xreader.app.dictionary.DictionaryRepository
 import com.xreader.app.importer.ImportService
 import com.xreader.app.readium.ReadiumRuntime
 import com.xreader.app.reader.PublicationService
+import com.xreader.app.repository.AnnotationBackupService
 import com.xreader.app.repository.AnnotationRepository
 import com.xreader.app.repository.LibraryRepository
 import com.xreader.app.repository.ReadingRepository
@@ -46,7 +47,10 @@ class AppContainer(
         ReadingRepository(database.reading())
     }
     val annotationRepository: AnnotationRepository by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
-        AnnotationRepository(database.annotations())
+        AnnotationRepository(database.annotations(), database.books())
+    }
+    val annotationBackupService: AnnotationBackupService by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        AnnotationBackupService(appContext, annotationRepository)
     }
     val dictionaryRepository: DictionaryRepository by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         DictionaryRepository(appContext, database.dictionary())

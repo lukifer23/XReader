@@ -2,6 +2,8 @@
 
 package com.xreader.app.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -24,6 +26,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Search
@@ -322,6 +326,18 @@ internal fun SettingsRoute(viewModel: SettingsViewModel, onBack: () -> Unit) {
     val librarySettings by viewModel.librarySettings.collectAsStateWithLifecycle()
     val maintenance by viewModel.maintenance.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val backupMimeTypes = remember {
+        arrayOf("application/json", "text/json", "text/plain", "application/octet-stream")
+    }
+    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) viewModel.exportAnnotations(uri)
+    }
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) viewModel.importAnnotations(uri)
+    }
+    val maintenanceBusy = maintenance.repairingLibrary ||
+        maintenance.exportingAnnotations ||
+        maintenance.importingAnnotations
     LaunchedEffect(maintenance.message) {
         maintenance.message?.let { message ->
             snackbarHostState.showSnackbar(message)
@@ -434,7 +450,7 @@ internal fun SettingsRoute(viewModel: SettingsViewModel, onBack: () -> Unit) {
                 SettingsSection("Maintenance") {
                     Button(
                         onClick = viewModel::repairLibrary,
-                        enabled = !maintenance.repairingLibrary,
+                        enabled = !maintenanceBusy,
                     ) {
                         if (maintenance.repairingLibrary) {
                             CircularProgressIndicator(
@@ -446,6 +462,38 @@ internal fun SettingsRoute(viewModel: SettingsViewModel, onBack: () -> Unit) {
                         }
                         Spacer(Modifier.width(8.dp))
                         Text(if (maintenance.repairingLibrary) "Repairing library" else "Repair covers and search")
+                    }
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = { exportLauncher.launch("xreader-notes-bookmarks.json") },
+                            enabled = !maintenanceBusy
+                        ) {
+                            if (maintenance.exportingAnnotations) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                )
+                            } else {
+                                Icon(Icons.Filled.FileDownload, contentDescription = null)
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            Text(if (maintenance.exportingAnnotations) "Exporting notes" else "Export notes")
+                        }
+                        Button(
+                            onClick = { importLauncher.launch(backupMimeTypes) },
+                            enabled = !maintenanceBusy
+                        ) {
+                            if (maintenance.importingAnnotations) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                )
+                            } else {
+                                Icon(Icons.Filled.FileUpload, contentDescription = null)
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            Text(if (maintenance.importingAnnotations) "Importing notes" else "Import notes")
+                        }
                     }
                 }
             }
