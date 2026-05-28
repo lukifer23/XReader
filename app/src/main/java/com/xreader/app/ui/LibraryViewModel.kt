@@ -192,6 +192,17 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    fun replaceCover(book: BookEntity, uri: Uri) {
+        viewModelScope.launch {
+            runCatching { container.libraryRepository.replaceCover(book, uri) }
+                .onSuccess { message.value = "Updated cover" }
+                .onFailure { error ->
+                    Log.e("XReader", "Cover replacement failed for ${book.id}", error)
+                    message.value = error.message ?: "Cover update failed"
+                }
+        }
+    }
+
     fun deleteBook(book: BookEntity) {
         viewModelScope.launch {
             container.libraryRepository.deleteBook(book)

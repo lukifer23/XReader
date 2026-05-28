@@ -2,13 +2,13 @@
 
 package com.xreader.app.ui
 
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,6 +31,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
@@ -49,7 +50,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -73,7 +73,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.xreader.app.AppContainer
@@ -154,6 +153,7 @@ internal fun LibraryRoute(
             onOpenSearchResult = openReaderAt,
             onToggleFavorite = viewModel::toggleFavorite,
             onUpdateMetadata = viewModel::updateMetadata,
+            onReplaceCover = viewModel::replaceCover,
             onDeleteBook = viewModel::deleteBook,
             modifier = Modifier.padding(padding)
         )
@@ -174,12 +174,25 @@ internal fun LibraryScreen(
     onOpenSearchResult: (Long, String?) -> Unit,
     onToggleFavorite: (BookListItem) -> Unit,
     onUpdateMetadata: (BookEntity, String, String, Int?, String?, String?, Double?) -> Unit,
+    onReplaceCover: (BookEntity, Uri) -> Unit,
     onDeleteBook: (BookEntity) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var editing by remember { mutableStateOf<BookEntity?>(null) }
     var deleteCandidate by remember { mutableStateOf<BookEntity?>(null) }
+    var coverTarget by remember { mutableStateOf<BookEntity?>(null) }
     var searchExpanded by remember { mutableStateOf(false) }
+    val supportedCoverMimeTypes = remember {
+        arrayOf("image/jpeg", "image/png", "image/webp", "image/*")
+    }
+    val coverLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        val book = coverTarget
+        coverTarget = null
+        if (uri != null && book != null) {
+            onReplaceCover(book, uri)
+            editing = null
+        }
+    }
     val continueItem = remember(state.books, state.group) {
         if (state.group == LibraryGroup.BOOKS) {
             state.books
@@ -209,13 +222,6 @@ internal fun LibraryScreen(
             .background(MaterialTheme.colorScheme.background)
             .padding(horizontal = 16.dp)
     ) {
-        LibraryActionRow(
-            state = state,
-            searchExpanded = searchExpanded,
-            onToggleSearch = { searchExpanded = true },
-            onSort = onSort,
-            onToggleDensity = onToggleDensity
-        )
         AnimatedVisibility(visible = searchExpanded) {
             LibrarySearchField(
                 query = state.query,
@@ -230,7 +236,15 @@ internal fun LibraryScreen(
                 }
             )
         }
-        LibraryFilterRow(selected = state.group, onGroup = onGroup)
+        AnimatedVisibility(visible = !searchExpanded) {
+            LibraryActionRow(
+                state = state,
+                onToggleSearch = { searchExpanded = true },
+                onGroup = onGroup,
+                onSort = onSort,
+                onToggleDensity = onToggleDensity
+            )
+        }
         if (state.librarySearchResults.isNotEmpty()) {
             SearchResultsStrip(state.librarySearchResults, onOpenSearchResult)
         }
@@ -286,6 +300,10 @@ internal fun LibraryScreen(
         BookMetadataDialog(
             book = book,
             onDismiss = { editing = null },
+            onReplaceCover = {
+                coverTarget = book
+                coverLauncher.launch(supportedCoverMimeTypes)
+            },
             onSave = { title, author, year, genre, series, index ->
                 onUpdateMetadata(book, title, author, year, genre, series, index)
                 editing = null
@@ -317,11 +335,12 @@ internal fun LibraryScreen(
 @Composable
 internal fun LibraryActionRow(
     state: LibraryUiState,
-    searchExpanded: Boolean,
     onToggleSearch: () -> Unit,
+    onGroup: (LibraryGroup) -> Unit,
     onSort: (LibrarySort) -> Unit,
     onToggleDensity: () -> Unit,
 ) {
+    var groupMenuOpen by remember { mutableStateOf(false) }
     var sortMenuOpen by remember { mutableStateOf(false) }
     val bookCount = state.books.size
     val inProgress = state.books.count { (it.state?.progress ?: 0.0) in 0.01..0.994 }
@@ -343,12 +362,40 @@ internal fun LibraryActionRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 8.dp, bottom = 2.dp),
+            .padding(top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(state.group.label(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Box {
+                TextButton(
+                    onClick = { groupMenuOpen = true },
+                    contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp)
+                ) {
+                    Text(
+                        state.group.label(),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
+                }
+                DropdownMenu(expanded = groupMenuOpen, onDismissRequest = { groupMenuOpen = false }) {
+                    LibraryGroup.entries.forEach { group ->
+                        DropdownMenuItem(
+                            text = { Text(group.label()) },
+                            leadingIcon = {
+                                if (group == state.group) {
+                                    Icon(Icons.Filled.Check, contentDescription = null)
+                                }
+                            },
+                            onClick = {
+                                groupMenuOpen = false
+                                onGroup(group)
+                            }
+                        )
+                    }
+                }
+            }
             Text(
                 statusText,
                 style = MaterialTheme.typography.bodySmall,
@@ -357,14 +404,12 @@ internal fun LibraryActionRow(
                 overflow = TextOverflow.Ellipsis
             )
         }
-        if (!searchExpanded) {
-            TooltipIconButton(
-                label = "Search library",
-                onClick = onToggleSearch,
-                modifier = Modifier.size(44.dp)
-            ) {
-                Icon(Icons.Filled.Search, contentDescription = null)
-            }
+        TooltipIconButton(
+            label = "Search library",
+            onClick = onToggleSearch,
+            modifier = Modifier.size(44.dp)
+        ) {
+            Icon(Icons.Filled.Search, contentDescription = null)
         }
         Box {
             TooltipIconButton(
@@ -441,75 +486,6 @@ internal fun LibrarySearchField(
             }
         }
     )
-}
-
-@Composable
-internal fun LibraryFilterRow(
-    selected: LibraryGroup,
-    onGroup: (LibraryGroup) -> Unit,
-) {
-    var statusMenuOpen by remember { mutableStateOf(false) }
-    val primaryGroups = remember {
-        listOf(
-            LibraryGroup.AUTHORS,
-            LibraryGroup.SERIES,
-            LibraryGroup.GENRES,
-            LibraryGroup.YEARS
-        )
-    }
-    val statusGroups = remember {
-        listOf(
-            LibraryGroup.RECENT,
-            LibraryGroup.UNREAD,
-            LibraryGroup.IN_PROGRESS,
-            LibraryGroup.FINISHED,
-            LibraryGroup.FAVORITES
-        )
-    }
-    val statusSelected = selected in statusGroups
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(vertical = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        FilterChip(
-            selected = selected == LibraryGroup.BOOKS,
-            onClick = { onGroup(LibraryGroup.BOOKS) },
-            label = { Text(LibraryGroup.BOOKS.label()) }
-        )
-        Box {
-            FilterChip(
-                selected = statusSelected,
-                onClick = { statusMenuOpen = true },
-                label = { Text(if (statusSelected) selected.label() else "Status") }
-            )
-            DropdownMenu(expanded = statusMenuOpen, onDismissRequest = { statusMenuOpen = false }) {
-                statusGroups.forEach { group ->
-                    DropdownMenuItem(
-                        text = { Text(group.label()) },
-                        leadingIcon = {
-                            if (selected == group) {
-                                Icon(Icons.Filled.Check, contentDescription = null)
-                            }
-                        },
-                        onClick = {
-                            statusMenuOpen = false
-                            onGroup(group)
-                        }
-                    )
-                }
-            }
-        }
-        primaryGroups.forEach { group ->
-            FilterChip(
-                selected = selected == group,
-                onClick = { onGroup(group) },
-                label = { Text(group.label()) }
-            )
-        }
-    }
 }
 
 @Composable
@@ -715,6 +691,7 @@ internal fun SearchResultsStrip(
 internal fun BookMetadataDialog(
     book: BookEntity,
     onDismiss: () -> Unit,
+    onReplaceCover: () -> Unit,
     onSave: (String, String, Int?, String?, String?, Double?) -> Unit,
 ) {
     var title by remember(book.id) { mutableStateOf(book.title) }
@@ -731,6 +708,20 @@ internal fun BookMetadataDialog(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    BookCoverTile(book = book, width = 52.dp, height = 74.dp)
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Cover", style = MaterialTheme.typography.titleSmall)
+                        TextButton(onClick = onReplaceCover) {
+                            Icon(Icons.Filled.Edit, contentDescription = null)
+                            Spacer(Modifier.width(6.dp))
+                            Text(if (book.coverImagePath.isNullOrBlank()) "Choose cover" else "Replace cover")
+                        }
+                    }
+                }
                 OutlinedTextField(title, { title = it }, label = { Text("Title") }, singleLine = true)
                 OutlinedTextField(author, { author = it }, label = { Text("Author") }, singleLine = true)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

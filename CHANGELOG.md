@@ -15,6 +15,8 @@ Initial public repository snapshot.
 - Library organization, metadata editing, favorites, finished state, and progress display.
 - Persisted library sort and comfortable/compact density controls.
 - Readium locator persistence for resume.
+- Manual cover replacement from local image files.
+- Unified library search, sorting, density, and grouping controls to reduce duplicate chrome.
 - In-reader navigation by swipe, tap zones, hardware keys, TOC, bookmarks, search results, and progress scrubber.
 - Reader themes, fullscreen mode, typography controls, PDF fit controls, page animation toggle, and real font-family options.
 - Grouped Settings screen for reader appearance, typography, reading behavior, library display, and maintenance.

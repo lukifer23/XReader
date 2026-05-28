@@ -37,6 +37,7 @@ class LibraryRepository(
         }
     }
     suspend fun repairLibrary(): ImportService.LibraryRepairResult = importService.repairLibrary()
+    suspend fun replaceCover(book: BookEntity, uri: Uri): String = importService.replaceCover(book, uri)
 
     suspend fun markOpened(bookId: Long) = bookDao.markOpened(bookId, clock.millis())
     suspend fun setFavorite(bookId: Long, favorite: Boolean) =

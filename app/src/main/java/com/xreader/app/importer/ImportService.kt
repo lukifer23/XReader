@@ -2,6 +2,8 @@ package com.xreader.app.importer
 
 import android.content.ContentResolver
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.OpenableColumns
 import com.xreader.app.core.TextTools
@@ -14,10 +16,12 @@ import com.xreader.app.data.XReaderDatabase
 import androidx.room.withTransaction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.security.MessageDigest
 import java.time.Clock
 import java.util.Locale
+import kotlin.math.roundToInt
 
 class ImportService(
     private val context: Context,
@@ -178,7 +182,11 @@ class ImportService(
                     fallbackTitle = book.title,
                     fallbackAuthor = book.author
                 )
-                val refreshedCoverPath = parsed.coverImage?.let { writeCover(book.checksum, it) }
+                val refreshedCoverPath = if (book.coverImagePath?.contains("-custom-") == true) {
+                    null
+                } else {
+                    parsed.coverImage?.let { writeCover(book.checksum, it) }
+                }
                 val rows = parsed.units.toSearchRows(book.id)
                 val updated = book.repairedCopy(parsed, refreshedCoverPath, file.length())
                 val changedMetadata = updated != book
@@ -214,6 +222,16 @@ class ImportService(
 
     suspend fun backfillMissingCovers(limit: Int = 50) = withContext(Dispatchers.IO) {
         backfillMissingCoversInternal(limit)
+    }
+
+    suspend fun replaceCover(book: BookEntity, uri: Uri): String = withContext(Dispatchers.IO) {
+        val cover = decodeCustomCover(uri)
+        val coverPath = writeCustomCover(book.checksum, cover)
+        bookDao.setCoverImagePath(book.id, coverPath, clock.millis())
+        book.coverImagePath
+            ?.takeIf { it != coverPath }
+            ?.let { File(context.filesDir, it).delete() }
+        coverPath
     }
 
     private suspend fun backfillMissingCoversInternal(limit: Int) {
@@ -420,6 +438,63 @@ class ImportService(
         return target.relativeTo(context.filesDir).path
     }
 
+    private fun writeCustomCover(checksum: String, cover: EpubParser.CoverImage): String {
+        val target = File(context.filesDir, "library/covers/$checksum-custom-${clock.millis()}.${cover.extension}")
+        target.parentFile?.mkdirs()
+        target.writeBytes(cover.bytes)
+        return target.relativeTo(context.filesDir).path
+    }
+
+    private fun decodeCustomCover(uri: Uri): EpubParser.CoverImage {
+        val tmp = File(context.cacheDir, "cover-${System.nanoTime()}")
+        try {
+            context.contentResolver.openInputStream(uri).use { input ->
+                requireNotNull(input) { "Could not open selected cover image." }
+                tmp.outputStream().buffered().use { output -> input.copyTo(output) }
+            }
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(tmp.absolutePath, bounds)
+            require(bounds.outWidth > 0 && bounds.outHeight > 0) {
+                "Selected file is not a readable image."
+            }
+            val decoded = BitmapFactory.decodeFile(
+                tmp.absolutePath,
+                BitmapFactory.Options().apply {
+                    inSampleSize = coverSampleSize(bounds.outWidth, bounds.outHeight)
+                    inPreferredConfig = Bitmap.Config.ARGB_8888
+                }
+            ) ?: error("Selected file is not a readable image.")
+            val scaled = decoded.scaledToMaxEdge(CUSTOM_COVER_MAX_EDGE)
+            val output = ByteArrayOutputStream()
+            scaled.compress(Bitmap.CompressFormat.JPEG, CUSTOM_COVER_JPEG_QUALITY, output)
+            if (scaled !== decoded) scaled.recycle()
+            decoded.recycle()
+            return EpubParser.CoverImage(output.toByteArray(), "jpg")
+        } finally {
+            tmp.delete()
+        }
+    }
+
+    private fun coverSampleSize(width: Int, height: Int): Int {
+        var sample = 1
+        while (width / sample > CUSTOM_COVER_MAX_EDGE * 2 || height / sample > CUSTOM_COVER_MAX_EDGE * 2) {
+            sample *= 2
+        }
+        return sample.coerceAtLeast(1)
+    }
+
+    private fun Bitmap.scaledToMaxEdge(maxEdge: Int): Bitmap {
+        val longest = maxOf(width, height)
+        if (longest <= maxEdge) return this
+        val scale = maxEdge.toFloat() / longest.toFloat()
+        return Bitmap.createScaledBitmap(
+            this,
+            (width * scale).roundToInt().coerceAtLeast(1),
+            (height * scale).roundToInt().coerceAtLeast(1),
+            true
+        )
+    }
+
     private fun ContentResolver.displayName(uri: Uri): String {
         runCatching {
             query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
@@ -443,5 +518,10 @@ class ImportService(
             }
         }
         return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    private companion object {
+        const val CUSTOM_COVER_MAX_EDGE = 1400
+        const val CUSTOM_COVER_JPEG_QUALITY = 90
     }
 }
