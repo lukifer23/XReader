@@ -17,4 +17,13 @@ class AnalyticsExportService(
         }
         result
     }
+
+    suspend fun exportCsvTo(uri: Uri): AnalyticsCsvExportResult = withContext(Dispatchers.IO) {
+        val result = repository.exportSummariesCsv()
+        context.contentResolver.openOutputStream(uri, "wt").use { output ->
+            requireNotNull(output) { "Could not open analytics export destination." }
+            output.bufferedWriter().use { it.write(result.csv) }
+        }
+        result
+    }
 }

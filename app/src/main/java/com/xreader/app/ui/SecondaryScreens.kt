@@ -39,6 +39,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -94,6 +96,10 @@ internal fun AnalyticsRoute(container: AppContainer, onBack: () -> Unit) {
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) viewModel.exportAnalytics(uri)
     }
+    val exportCsvLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
+        if (uri != null) viewModel.exportAnalyticsCsv(uri)
+    }
+    var exportMenuOpen by remember { mutableStateOf(false) }
     LaunchedEffect(state.message) {
         state.message?.let { message ->
             snackbarHostState.showSnackbar(message)
@@ -111,17 +117,38 @@ internal fun AnalyticsRoute(container: AppContainer, onBack: () -> Unit) {
                     }
                 },
                 actions = {
-                    IconButton(
-                        onClick = { exportLauncher.launch("xreader-reading-stats.json") },
-                        enabled = !state.exporting
-                    ) {
-                        if (state.exporting) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                strokeWidth = 2.dp
+                    Box {
+                        IconButton(
+                            onClick = { exportMenuOpen = true },
+                            enabled = !state.exporting
+                        ) {
+                            if (state.exporting) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Icon(Icons.Filled.FileDownload, contentDescription = "Export reading stats")
+                            }
+                        }
+                        DropdownMenu(
+                            expanded = exportMenuOpen,
+                            onDismissRequest = { exportMenuOpen = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("CSV") },
+                                onClick = {
+                                    exportMenuOpen = false
+                                    exportCsvLauncher.launch("xreader-reading-stats.csv")
+                                }
                             )
-                        } else {
-                            Icon(Icons.Filled.FileDownload, contentDescription = "Export reading stats")
+                            DropdownMenuItem(
+                                text = { Text("JSON") },
+                                onClick = {
+                                    exportMenuOpen = false
+                                    exportLauncher.launch("xreader-reading-stats.json")
+                                }
+                            )
                         }
                     }
                 }

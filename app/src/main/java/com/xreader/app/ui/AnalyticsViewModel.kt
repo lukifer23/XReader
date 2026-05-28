@@ -62,7 +62,22 @@ class AnalyticsViewModel(private val container: AppContainer) : ViewModel() {
             val message = runCatching { container.analyticsExportService.exportTo(uri) }
                 .fold(
                     onSuccess = {
-                        "Exported ${it.ranges} stat ranges from ${it.readingSessions} ${if (it.readingSessions == 1) "session" else "sessions"}"
+                        "Exported JSON for ${it.ranges} stat ranges from ${it.readingSessions} ${if (it.readingSessions == 1) "session" else "sessions"}"
+                    },
+                    onFailure = { it.message ?: "Stats export failed" }
+                )
+            exportState.update { it.copy(exporting = false, message = message) }
+        }
+    }
+
+    fun exportAnalyticsCsv(uri: Uri) {
+        if (exportState.value.exporting) return
+        viewModelScope.launch {
+            exportState.update { it.copy(exporting = true, message = null) }
+            val message = runCatching { container.analyticsExportService.exportCsvTo(uri) }
+                .fold(
+                    onSuccess = {
+                        "Exported CSV for ${it.ranges} stat ranges from ${it.readingSessions} ${if (it.readingSessions == 1) "session" else "sessions"}"
                     },
                     onFailure = { it.message ?: "Stats export failed" }
                 )

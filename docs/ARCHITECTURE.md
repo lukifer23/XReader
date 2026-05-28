@@ -107,7 +107,7 @@ Settings also exposes local JSON backup and restore through Android's Storage Ac
 
 ## Analytics
 
-`ReadingAnalyticsTracker` tracks foreground active reading sessions. It uses reading movement and idle timeout rules to estimate active time, words traversed, WPM, and completion. `AnalyticsRepository` aggregates those sessions into selectable 7-day, 30-day, 13-week, and all-time ranges with appropriate daily, weekly, monthly, or yearly activity buckets. `AnalyticsExportService` writes those summaries to local JSON through Android's Storage Access Framework without including imported book files, private file paths, or checksums. Current/best streaks and book, author, and genre summaries stay quiet, with no popups or gamified interruptions during reading.
+`ReadingAnalyticsTracker` tracks foreground active reading sessions. It uses reading movement and idle timeout rules to estimate active time, words traversed, WPM, and completion. `AnalyticsRepository` aggregates those sessions into selectable 7-day, 30-day, 13-week, and all-time ranges with appropriate daily, weekly, monthly, or yearly activity buckets. `AnalyticsExportService` writes those summaries to local CSV or JSON through Android's Storage Access Framework without including imported book files, private file paths, or checksums. Current/best streaks and book, author, and genre summaries stay quiet, with no popups or gamified interruptions during reading.
 
 ## Validation
 

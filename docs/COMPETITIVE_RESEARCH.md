@@ -31,7 +31,7 @@ This is the working competitive map for XReader. It should drive implementation 
 | Notes/highlights/bookmarks | Implemented with local export/import. | Table stakes in strong readers. | Add richer export targets later. |
 | Dictionary | Offline WordNet implemented. | Many rely on external dictionaries or online lookup. | Strong differentiator; keep improving morphology/phrase handling. |
 | Search | Local full-text index plus Readium fallback. | Common, but quality varies by format. | Keep hardening PDF/EPUB extraction. |
-| Analytics | Active reading, WPM, streaks, range-aware activity, book/author/genre summaries, and local JSON export. | Moon+ and some ecosystems have stats. | Continue improving trend evidence and optional export formats. |
+| Analytics | Active reading, WPM, streaks, range-aware activity, book/author/genre summaries, and local CSV/JSON export. | Moon+ and some ecosystems have stats. | Continue improving trend evidence and long-library performance. |
 | TTS | Implemented as in-reader Android TextToSpeech read-aloud from local indexed book text. | Moon+, Librera, PocketBook, BookFusion, and others offer it. | Keep hardening voice behavior and device lifecycle handling. |
 | OPDS/catalogs | Not implemented. | Moon+, Librera, FBReader, PocketBook support OPDS. | Good optional later feature. |
 | PDF reflow/crop | PDF fit implemented; reflow/crop not implemented. | PocketBook/ReadEra have PDF comfort features. | Evaluate after reader polish. |
@@ -52,7 +52,7 @@ The research points to several areas that matter more than raw feature count:
 
 - Opt-in matching-series metadata cleanup. From the metadata editor, changing a book's genre or series can now apply those two fields to other books by the same author that match the old or new series name. The operation is atomic and keeps per-book fields such as title, year, and series index untouched.
 - Range-aware reading stats. The stats screen now supports 7-day, 30-day, 13-week, and all-time ranges, with grouped analytics and activity buckets recalculated for the selected period.
-- Local reading stats export. The stats screen can export all analytics ranges to JSON through Android's document picker, keeping the workflow local and user-controlled.
+- Local reading stats export. The stats screen can export all analytics ranges to CSV or JSON through Android's document picker, keeping the workflow local and user-controlled.
 - Per-book reader appearance. Books can keep their own font, spacing, alignment, publisher-style, and PDF fit choices without changing global reading behavior.
 - Read aloud. The reader can speak forward from the current position through Android TextToSpeech using XReader's private full-text index, without cloud services or permanent reader chrome.
 

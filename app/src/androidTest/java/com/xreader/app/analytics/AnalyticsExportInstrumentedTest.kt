@@ -13,6 +13,7 @@ import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 import java.time.Clock
@@ -87,6 +88,70 @@ class AnalyticsExportInstrumentedTest {
             assertEquals(1, result.readingSessions)
             assertEquals("com.xreader.analytics.v1", root.getString("format"))
             assertEquals(AnalyticsRange.entries.size, root.getJSONArray("ranges").length())
+        } finally {
+            db.close()
+            outputFile.delete()
+        }
+    }
+
+    @Test
+    fun analyticsExportCsvIncludesFlatRowsAndOmitsPrivateLibraryPaths() {
+        val books = listOf(
+            book(id = 1, title = "Red, Rising", author = "Pierce Brown", genre = "Science Fiction")
+        )
+        val sessions = listOf(
+            session(bookId = 1, startedAt = "2026-05-28T20:00:00Z", activeMillis = 600_000, wordsRead = 3_000)
+        )
+        val summaries = AnalyticsRange.entries.map { range ->
+            AnalyticsCalculator.summarize(books, sessions, clock, range)
+        }
+
+        val csv = AnalyticsExportCsv.build(exportedAt = 123_456L, summaries = summaries)
+
+        assertTrue(csv.startsWith("record_type,exported_at,range,range_label"))
+        assertTrue(csv.contains("summary,123456,MONTH,30 days"))
+        assertTrue(csv.contains("book,123456,MONTH,30 days,,,\"Red, Rising\",Pierce Brown,Red Rising,Science Fiction,2026"))
+        assertTrue(csv.contains("author,123456,MONTH,30 days,,,Pierce Brown"))
+        assertTrue(csv.contains("genre,123456,MONTH,30 days,,,Science Fiction"))
+        assertFalse(csv.contains("library/books"))
+        assertFalse(csv.contains("checksum-"))
+    }
+
+    @Test
+    fun analyticsExportServiceWritesCsvToUri() = runBlocking {
+        val context: Context = ApplicationProvider.getApplicationContext()
+        val db = Room.inMemoryDatabaseBuilder(context, XReaderDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        val outputFile = File(context.cacheDir, "xreader-analytics-export-test.csv")
+        outputFile.delete()
+        try {
+            val bookId = db.books().insert(
+                book(id = 0, title = "Red Rising", author = "Pierce Brown", genre = "Science Fiction")
+            )
+            db.reading().insertSession(
+                session(
+                    bookId = bookId,
+                    startedAt = "2026-05-28T20:00:00Z",
+                    activeMillis = 600_000,
+                    wordsRead = 3_000
+                )
+            )
+            val repository = AnalyticsRepository(
+                bookDao = db.books(),
+                readingRepository = ReadingRepository(db.reading()),
+                clock = clock
+            )
+            val service = AnalyticsExportService(context, repository)
+
+            val result = service.exportCsvTo(Uri.fromFile(outputFile))
+            val csv = outputFile.readText()
+
+            assertEquals(AnalyticsRange.entries.size, result.ranges)
+            assertEquals(1, result.readingSessions)
+            assertTrue(csv.contains("summary,"))
+            assertTrue(csv.contains("book,"))
+            assertTrue(csv.contains("Red Rising"))
         } finally {
             db.close()
             outputFile.delete()

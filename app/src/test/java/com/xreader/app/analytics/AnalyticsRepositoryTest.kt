@@ -4,6 +4,8 @@ import com.xreader.app.data.BookEntity
 import com.xreader.app.data.BookFormat
 import com.xreader.app.data.ReadingSessionEntity
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Clock
 import java.time.Instant
@@ -101,6 +103,28 @@ class AnalyticsRepositoryTest {
         assertEquals(2, summary.sessions)
         assertEquals(3_000, summary.wordsRead)
         assertEquals(2, summary.activityBuckets.count { it.sessions > 0 })
+    }
+
+    @Test
+    fun csvExportBuildsSpreadsheetFriendlyRowsWithoutPrivateBookData() {
+        val books = listOf(
+            book(id = 1, title = "Red, Rising", author = "Pierce Brown", genre = "Science Fiction")
+        )
+        val sessions = listOf(
+            session(bookId = 1, startedAt = "2026-05-28T20:00:00Z", activeMillis = 600_000, wordsRead = 3_000)
+        )
+        val summaries = AnalyticsRange.entries.map { range ->
+            AnalyticsCalculator.summarize(books, sessions, clock, range)
+        }
+
+        val csv = AnalyticsExportCsv.build(exportedAt = 123_456L, summaries = summaries)
+
+        assertTrue(csv.startsWith("record_type,exported_at,range,range_label"))
+        assertTrue(csv.contains("summary,123456,MONTH,30 days"))
+        assertTrue(csv.contains("book,123456,MONTH,30 days,,,\"Red, Rising\",Pierce Brown"))
+        assertTrue(csv.contains("activity,123456,MONTH,30 days"))
+        assertFalse(csv.contains("library/books"))
+        assertFalse(csv.contains("checksum-"))
     }
 
     private fun book(

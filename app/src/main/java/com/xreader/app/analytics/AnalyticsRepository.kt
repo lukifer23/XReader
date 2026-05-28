@@ -75,6 +75,12 @@ data class AnalyticsExportResult(
     val readingSessions: Int,
 )
 
+data class AnalyticsCsvExportResult(
+    val csv: String,
+    val ranges: Int,
+    val readingSessions: Int,
+)
+
 class AnalyticsRepository(
     private val bookDao: BookDao,
     private val readingRepository: ReadingRepository,
@@ -96,6 +102,22 @@ class AnalyticsRepository(
                 exportedAt = clock.millis(),
                 summaries = summaries
             ).toString(2),
+            ranges = summaries.size,
+            readingSessions = sessions.size
+        )
+    }
+
+    suspend fun exportSummariesCsv(): AnalyticsCsvExportResult {
+        val books = bookDao.booksForBackup()
+        val sessions = readingRepository.allSessions()
+        val summaries = AnalyticsRange.entries.map { range ->
+            AnalyticsCalculator.summarize(books, sessions, clock, range)
+        }
+        return AnalyticsCsvExportResult(
+            csv = AnalyticsExportCsv.build(
+                exportedAt = clock.millis(),
+                summaries = summaries
+            ),
             ranges = summaries.size,
             readingSessions = sessions.size
         )
@@ -173,6 +195,152 @@ internal object AnalyticsExportJson {
         put(name, value ?: JSONObject.NULL)
 
     private const val EXPORT_FORMAT = "com.xreader.analytics.v1"
+}
+
+internal object AnalyticsExportCsv {
+    fun build(
+        exportedAt: Long,
+        summaries: List<AnalyticsSummary>,
+    ): String {
+        val rows = mutableListOf<List<Any?>>()
+        rows += HEADER
+        summaries.forEach { summary ->
+            rows += listOf(
+                "summary",
+                exportedAt,
+                summary.range.name,
+                summary.range.label,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                summary.totalBooks,
+                summary.finishedBooks,
+                summary.activeMillis,
+                summary.wordsRead,
+                summary.averageWpm,
+                summary.sessions,
+                summary.currentStreakDays,
+                summary.bestStreakDays
+            )
+            summary.activityBuckets.forEach { bucket ->
+                rows += listOf(
+                    "activity",
+                    exportedAt,
+                    summary.range.name,
+                    summary.range.label,
+                    bucket.startMillis,
+                    bucket.granularity.name,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    bucket.activeMillis,
+                    bucket.wordsRead,
+                    null,
+                    bucket.sessions,
+                    null,
+                    null
+                )
+            }
+            summary.byBook.forEach { row ->
+                rows += listOf(
+                    "book",
+                    exportedAt,
+                    summary.range.name,
+                    summary.range.label,
+                    null,
+                    null,
+                    row.book.title,
+                    row.book.author,
+                    row.book.series,
+                    row.book.genre,
+                    row.book.year,
+                    null,
+                    null,
+                    row.activeMillis,
+                    row.wordsRead,
+                    row.averageWpm,
+                    row.sessions,
+                    null,
+                    null
+                )
+            }
+            summary.byAuthor.forEach { row ->
+                rows += groupRow("author", exportedAt, summary, row)
+            }
+            summary.byGenre.forEach { row ->
+                rows += groupRow("genre", exportedAt, summary, row)
+            }
+        }
+        return rows.joinToString("\n") { row -> row.joinToString(",") { it.csvCell() } } + "\n"
+    }
+
+    private fun groupRow(
+        type: String,
+        exportedAt: Long,
+        summary: AnalyticsSummary,
+        row: GroupAnalytics,
+    ): List<Any?> =
+        listOf(
+            type,
+            exportedAt,
+            summary.range.name,
+            summary.range.label,
+            null,
+            null,
+            row.label,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            row.activeMillis,
+            row.wordsRead,
+            row.averageWpm,
+            row.sessions,
+            null,
+            null
+        )
+
+    private fun Any?.csvCell(): String {
+        val value = this?.toString().orEmpty()
+        val escaped = value.replace("\"", "\"\"")
+        return if (escaped.any { it == ',' || it == '"' || it == '\n' || it == '\r' }) {
+            "\"$escaped\""
+        } else {
+            escaped
+        }
+    }
+
+    private val HEADER = listOf(
+        "record_type",
+        "exported_at",
+        "range",
+        "range_label",
+        "bucket_start_millis",
+        "bucket_granularity",
+        "label_or_title",
+        "author",
+        "series",
+        "genre",
+        "year",
+        "total_books",
+        "finished_books",
+        "active_millis",
+        "words_read",
+        "average_wpm",
+        "sessions",
+        "current_streak_days",
+        "best_streak_days"
+    )
 }
 
 internal object AnalyticsCalculator {
