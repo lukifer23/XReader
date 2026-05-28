@@ -1,10 +1,12 @@
 package com.xreader.app.settings
 
 import android.content.Context
+import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.xreader.app.data.ReaderTheme
@@ -13,7 +15,10 @@ import kotlinx.coroutines.flow.map
 
 private val Context.readerSettingsDataStore by preferencesDataStore("reader_settings")
 
-class SettingsRepository(private val context: Context) {
+class SettingsRepository(
+    context: Context,
+    private val dataStore: DataStore<Preferences> = context.readerSettingsDataStore,
+) {
     private object Keys {
         val theme = stringPreferencesKey("theme")
         val fontScale = floatPreferencesKey("font_scale")
@@ -32,7 +37,7 @@ class SettingsRepository(private val context: Context) {
     }
 
     val settings: Flow<ReaderSettings> =
-        context.readerSettingsDataStore.data.map { prefs ->
+        dataStore.data.map { prefs ->
             ReaderSettings(
                 theme = prefs[Keys.theme]?.let { runCatching { ReaderTheme.valueOf(it) }.getOrNull() }
                     ?: ReaderTheme.LIGHT,
@@ -53,7 +58,7 @@ class SettingsRepository(private val context: Context) {
         }
 
     val librarySettings: Flow<LibrarySettings> =
-        context.readerSettingsDataStore.data.map { prefs ->
+        dataStore.data.map { prefs ->
             LibrarySettings(
                 sort = prefs[Keys.librarySort]?.let { runCatching { LibrarySort.valueOf(it) }.getOrNull() }
                     ?: LibrarySort.RECENT,
@@ -63,55 +68,55 @@ class SettingsRepository(private val context: Context) {
         }
 
     suspend fun setTheme(theme: ReaderTheme) {
-        context.readerSettingsDataStore.edit { it[Keys.theme] = theme.name }
+        dataStore.edit { it[Keys.theme] = theme.name }
     }
 
     suspend fun setFontScale(value: Float) {
-        context.readerSettingsDataStore.edit { it[Keys.fontScale] = value.coerceIn(0.75f, 1.65f) }
+        dataStore.edit { it[Keys.fontScale] = value.coerceIn(0.75f, 1.65f) }
     }
 
     suspend fun setLineHeight(value: Float) {
-        context.readerSettingsDataStore.edit { it[Keys.lineHeight] = value.coerceIn(1.1f, 2.0f) }
+        dataStore.edit { it[Keys.lineHeight] = value.coerceIn(1.1f, 2.0f) }
     }
 
     suspend fun setMarginScale(value: Float) {
-        context.readerSettingsDataStore.edit { it[Keys.marginScale] = value.coerceIn(0.35f, 1.8f) }
+        dataStore.edit { it[Keys.marginScale] = value.coerceIn(0.35f, 1.8f) }
     }
 
     suspend fun setFontFamily(value: ReaderFontFamily) {
-        context.readerSettingsDataStore.edit { it[Keys.fontFamily] = value.name }
+        dataStore.edit { it[Keys.fontFamily] = value.name }
     }
 
     suspend fun setTapZonesEnabled(value: Boolean) {
-        context.readerSettingsDataStore.edit { it[Keys.tapZonesEnabled] = value }
+        dataStore.edit { it[Keys.tapZonesEnabled] = value }
     }
 
     suspend fun setPageTurnAnimations(value: Boolean) {
-        context.readerSettingsDataStore.edit { it[Keys.pageTurnAnimations] = value }
+        dataStore.edit { it[Keys.pageTurnAnimations] = value }
     }
 
     suspend fun setFullScreen(value: Boolean) {
-        context.readerSettingsDataStore.edit { it[Keys.fullScreen] = value }
+        dataStore.edit { it[Keys.fullScreen] = value }
     }
 
     suspend fun setPublisherStyles(value: Boolean) {
-        context.readerSettingsDataStore.edit { it[Keys.publisherStyles] = value }
+        dataStore.edit { it[Keys.publisherStyles] = value }
     }
 
     suspend fun setTextAlign(value: ReaderTextAlign) {
-        context.readerSettingsDataStore.edit { it[Keys.textAlign] = value.name }
+        dataStore.edit { it[Keys.textAlign] = value.name }
     }
 
     suspend fun setPdfFit(value: ReaderPdfFit) {
-        context.readerSettingsDataStore.edit { it[Keys.pdfFit] = value.name }
+        dataStore.edit { it[Keys.pdfFit] = value.name }
     }
 
     suspend fun setLibrarySort(value: LibrarySort) {
-        context.readerSettingsDataStore.edit { it[Keys.librarySort] = value.name }
+        dataStore.edit { it[Keys.librarySort] = value.name }
     }
 
     suspend fun setLibraryDensity(value: LibraryDensity) {
-        context.readerSettingsDataStore.edit { it[Keys.libraryDensity] = value.name }
+        dataStore.edit { it[Keys.libraryDensity] = value.name }
     }
 
     private fun readerFontFamily(value: String?): ReaderFontFamily? =

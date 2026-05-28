@@ -27,13 +27,14 @@ import java.util.concurrent.atomic.AtomicBoolean
 class AppContainer(
     context: Context,
     val applicationScope: CoroutineScope,
+    private val databaseOverride: XReaderDatabase? = null,
 ) {
     private val appContext = context.applicationContext
     private val readerServiceWarmupStarted = AtomicBoolean(false)
     private val readerWebViewWarmupStarted = AtomicBoolean(false)
 
     val database: XReaderDatabase by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
-        XReaderDatabase.get(appContext)
+        databaseOverride ?: XReaderDatabase.get(appContext)
     }
     val readiumRuntime: ReadiumRuntime by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         ReadiumRuntime(appContext)

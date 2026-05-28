@@ -30,7 +30,7 @@ Initial public repository snapshot.
 - Reading analytics for active time, WPM estimate, streaks, and book/author/genre summaries.
 - Manual Settings action to repair covers, metadata, and search indexes from stored library files.
 - Modern adaptive app icon.
-- Unit and instrumented test coverage for core parsing, indexing, dictionary, and analytics behavior.
+- Unit and instrumented test coverage for core parsing, indexing, dictionary, analytics, settings persistence, and maintenance repair behavior.
 
 ### Known Limits
 
