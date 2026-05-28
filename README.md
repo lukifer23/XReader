@@ -21,6 +21,7 @@ Implemented:
 - Swipe, tap-zone, hardware-key, TOC, search-result, bookmark, and scrubber navigation.
 - Reader themes: light, dark, sepia, and OLED black.
 - Reader typography controls: font size, line height, margins, alignment, publisher styles, PDF fit, fullscreen, page animation toggle, real Readium/CSS-resolvable font choices, and per-book appearance overrides.
+- Read aloud from the current reading position through Android TextToSpeech using local indexed book text.
 - Grouped Settings screen for reader appearance, typography, reading behavior, library display, and maintenance.
 - Bookmarks, highlights, notes, global notes, in-book annotation lists, local notes/bookmark JSON export/import, and library metadata/progress backup.
 - Offline English dictionary backed by bundled Princeton WordNet data.

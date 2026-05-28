@@ -18,6 +18,7 @@ import com.xreader.app.repository.LibraryBackupService
 import com.xreader.app.repository.LibraryRepository
 import com.xreader.app.repository.ReadingRepository
 import com.xreader.app.settings.SettingsRepository
+import com.xreader.app.tts.ReadAloudEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -76,6 +77,9 @@ class AppContainer(
     }
     val analyticsExportService: AnalyticsExportService by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         AnalyticsExportService(appContext, analyticsRepository)
+    }
+    val readAloudEngine: ReadAloudEngine by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        ReadAloudEngine(appContext, applicationScope)
     }
 
     fun warmReaderPath() {

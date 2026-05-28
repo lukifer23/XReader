@@ -21,6 +21,9 @@ import com.xreader.app.settings.ReaderPdfFit
 import com.xreader.app.settings.ReaderSettings
 import com.xreader.app.settings.ReaderTextAlign
 import com.xreader.app.settings.withBookAppearance
+import com.xreader.app.tts.ReadAloudChunk
+import com.xreader.app.tts.ReadAloudPlanner
+import com.xreader.app.tts.ReadAloudState
 import kotlin.math.roundToInt
 import kotlinx.coroutines.async
 import kotlinx.coroutines.Job
@@ -56,6 +59,7 @@ data class ReaderUiState(
     val noteDraftOpen: Boolean = false,
     val pendingNoteLocator: String? = null,
     val pendingNoteQuote: String? = null,
+    val readAloud: ReadAloudState = ReadAloudState(),
 )
 
 class ReaderViewModel(
@@ -85,6 +89,19 @@ class ReaderViewModel(
                     it.copy(
                         settings = settings,
                         bookAppearanceEnabled = bookAppearanceEnabled
+                    )
+                }
+            }
+        }
+        viewModelScope.launch {
+            container.readAloudEngine.state.collect { readAloud ->
+                _uiState.update {
+                    it.copy(
+                        readAloud = if (readAloud.activeBookId == null || readAloud.activeBookId == bookId) {
+                            readAloud
+                        } else {
+                            ReadAloudState()
+                        }
                     )
                 }
             }
@@ -286,6 +303,28 @@ class ReaderViewModel(
         }
     }
 
+    fun toggleReadAloud() {
+        val readAloud = _uiState.value.readAloud
+        if (readAloud.playing || readAloud.initializing) {
+            container.readAloudEngine.stop(bookId)
+            return
+        }
+        viewModelScope.launch {
+            val publication = _uiState.value.publication ?: return@launch
+            val rows = container.libraryRepository.indexedRowsForBook(bookId)
+            val chunks = readAloudChunks(publication, rows)
+            container.readAloudEngine.play(
+                bookId = bookId,
+                chunks = chunks,
+                currentUnit = _uiState.value.currentUnit
+            )
+        }
+    }
+
+    fun clearReadAloudMessage() {
+        container.readAloudEngine.clearMessage(bookId)
+    }
+
     fun setSearchQuery(value: String) {
         _uiState.update { it.copy(searchQuery = value) }
     }
@@ -472,6 +511,7 @@ class ReaderViewModel(
     fun flushSession() {
         if (readerClosed) return
         readerClosed = true
+        container.readAloudEngine.stop(bookId)
         saveJob?.cancel()
         val flush = tracker?.flush()
         val finalState = flush?.state ?: lastReadingState ?: _uiState.value.state
@@ -539,6 +579,30 @@ class ReaderViewModel(
                 title = row.heading,
                 snippet = row.snippet(query),
                 locatorJson = publication.positions.getOrNull(positionIndex)?.toJSON()?.toString() ?: row.locator
+            )
+        }
+    }
+
+    private fun readAloudChunks(
+        publication: OpenPublication,
+        rows: List<SearchIndexEntity>,
+    ): List<ReadAloudChunk> {
+        if (rows.isEmpty()) {
+            return ReadAloudPlanner.chunksFromUnits(publication.units)
+        }
+        val chunks = ReadAloudPlanner.chunksFromRows(rows)
+        val positions = publication.positions
+        val lastIndexedUnit = chunks.maxOfOrNull { it.unitIndex }?.coerceAtLeast(1) ?: 1
+        val lastPositionIndex = (positions.size - 1).coerceAtLeast(0)
+        return chunks.map { chunk ->
+            val positionIndex = if (lastPositionIndex == 0) {
+                0
+            } else {
+                (lastPositionIndex * (chunk.unitIndex.toDouble() / lastIndexedUnit.toDouble())).roundToInt()
+            }
+            chunk.copy(
+                unitIndex = positionIndex,
+                locator = positions.getOrNull(positionIndex)?.toJSON()?.toString() ?: chunk.locator
             )
         }
     }

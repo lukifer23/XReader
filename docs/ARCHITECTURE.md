@@ -74,6 +74,8 @@ Manual metadata edits can optionally apply the edited genre and series name to o
 - scrollbar cleanup for nested Readium/WebView content
 - reader preferences for theme, typography, PDF fit, fullscreen, page-turn animation behavior, and per-book appearance overrides
 
+Read aloud is handled by `ReadAloudEngine`, a small wrapper around Android `TextToSpeech`. `ReaderViewModel` builds speech chunks from the app's local search index, maps those chunks back to nearest Readium positions, and keeps Compose limited to a play/stop control plus error feedback.
+
 ## Settings
 
 Reader and library settings are persisted with DataStore. Settings include:

@@ -30,6 +30,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.automirrored.filled.NoteAdd
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
@@ -40,6 +41,7 @@ import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -56,6 +58,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -86,6 +89,7 @@ import com.xreader.app.settings.ReaderFontFamily
 import com.xreader.app.settings.ReaderPdfFit
 import com.xreader.app.settings.ReaderSettings
 import com.xreader.app.settings.ReaderTextAlign
+import com.xreader.app.tts.ReadAloudState
 import kotlin.math.roundToInt
 
 @Composable
@@ -153,7 +157,9 @@ internal fun ReaderRoute(
         onPageTurnAnimations = viewModel::setPageTurnAnimations,
         onTextAlign = viewModel::setTextAlign,
         onPdfFit = viewModel::setPdfFit,
-        onBookAppearanceEnabled = viewModel::setBookAppearanceEnabled
+        onBookAppearanceEnabled = viewModel::setBookAppearanceEnabled,
+        onToggleReadAloud = viewModel::toggleReadAloud,
+        onClearReadAloudMessage = viewModel::clearReadAloudMessage
     )
 }
 
@@ -187,6 +193,8 @@ internal fun ReaderScreen(
     onTextAlign: (ReaderTextAlign) -> Unit,
     onPdfFit: (ReaderPdfFit) -> Unit,
     onBookAppearanceEnabled: (Boolean) -> Unit,
+    onToggleReadAloud: () -> Unit,
+    onClearReadAloudMessage: () -> Unit,
 ) {
     val publication = state.publication as? OpenPublication.Readium ?: return
     val units = publication.units
@@ -214,6 +222,12 @@ internal fun ReaderScreen(
             state.noteDraftOpen -> onCloseNote()
             state.chromeVisible -> onToggleChrome()
             else -> onBack()
+        }
+    }
+
+    LaunchedEffect(state.readAloud.currentLocator) {
+        if (state.readAloud.playing) {
+            state.readAloud.currentLocator?.let { pagingController.goToLocator(it) }
         }
     }
 
@@ -261,6 +275,8 @@ internal fun ReaderScreen(
                 onToggleTheme = onToggleTheme,
                 fullScreen = state.settings.fullScreen,
                 onToggleFullScreen = onToggleFullScreen,
+                readAloud = state.readAloud,
+                onToggleReadAloud = onToggleReadAloud,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .zIndex(2f)
@@ -292,6 +308,9 @@ internal fun ReaderScreen(
     }
     if (state.noteDraftOpen) {
         NoteDialog(onDismiss = onCloseNote, onSave = onAddNote)
+    }
+    state.readAloud.message?.let { message ->
+        ReadAloudMessageDialog(message = message, onDismiss = onClearReadAloudMessage)
     }
     if (navigationOpen) {
         ReaderNavigationDialog(
@@ -408,6 +427,8 @@ internal fun ReaderBottomBar(
     onToggleTheme: () -> Unit,
     fullScreen: Boolean,
     onToggleFullScreen: () -> Unit,
+    readAloud: ReadAloudState,
+    onToggleReadAloud: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var sliderValue by remember(progress) { mutableFloatStateOf(progress.toFloat().coerceIn(0f, 1f)) }
@@ -428,6 +449,7 @@ internal fun ReaderBottomBar(
         ) {
             ThemeToggleButton(theme = theme, onClick = onToggleTheme)
             FullScreenToggleButton(fullScreen = fullScreen, onClick = onToggleFullScreen)
+            ReadAloudButton(readAloud = readAloud, onClick = onToggleReadAloud)
             IconButton(onClick = onPrevious, modifier = Modifier.size(44.dp)) {
                 Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous page")
             }
@@ -447,6 +469,27 @@ internal fun ReaderBottomBar(
             }
         }
     }
+}
+
+@Composable
+private fun ReadAloudButton(readAloud: ReadAloudState, onClick: () -> Unit) {
+    IconButton(onClick = onClick, modifier = Modifier.size(44.dp)) {
+        when {
+            readAloud.initializing -> CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+            readAloud.playing -> Icon(Icons.Filled.Stop, contentDescription = "Stop read aloud")
+            else -> Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = "Read aloud")
+        }
+    }
+}
+
+@Composable
+private fun ReadAloudMessageDialog(message: String, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Read aloud") },
+        text = { Text(message) },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } }
+    )
 }
 
 @Composable
