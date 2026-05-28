@@ -152,7 +152,8 @@ internal fun ReaderRoute(
         onPublisherStyles = viewModel::setPublisherStyles,
         onPageTurnAnimations = viewModel::setPageTurnAnimations,
         onTextAlign = viewModel::setTextAlign,
-        onPdfFit = viewModel::setPdfFit
+        onPdfFit = viewModel::setPdfFit,
+        onBookAppearanceEnabled = viewModel::setBookAppearanceEnabled
     )
 }
 
@@ -185,6 +186,7 @@ internal fun ReaderScreen(
     onPageTurnAnimations: (Boolean) -> Unit,
     onTextAlign: (ReaderTextAlign) -> Unit,
     onPdfFit: (ReaderPdfFit) -> Unit,
+    onBookAppearanceEnabled: (Boolean) -> Unit,
 ) {
     val publication = state.publication as? OpenPublication.Readium ?: return
     val units = publication.units
@@ -309,6 +311,7 @@ internal fun ReaderScreen(
     if (readerSettingsOpen) {
         ReaderQuickSettingsDialog(
             settings = state.settings,
+            bookAppearanceEnabled = state.bookAppearanceEnabled,
             onDismiss = { readerSettingsOpen = false },
             onFontScale = onFontScale,
             onLineHeight = onLineHeight,
@@ -317,7 +320,8 @@ internal fun ReaderScreen(
             onPublisherStyles = onPublisherStyles,
             onPageTurnAnimations = onPageTurnAnimations,
             onTextAlign = onTextAlign,
-            onPdfFit = onPdfFit
+            onPdfFit = onPdfFit,
+            onBookAppearanceEnabled = onBookAppearanceEnabled
         )
     }
 }
@@ -448,6 +452,7 @@ internal fun ReaderBottomBar(
 @Composable
 internal fun ReaderQuickSettingsDialog(
     settings: ReaderSettings,
+    bookAppearanceEnabled: Boolean,
     onDismiss: () -> Unit,
     onFontScale: (Float) -> Unit,
     onLineHeight: (Float) -> Unit,
@@ -457,6 +462,7 @@ internal fun ReaderQuickSettingsDialog(
     onPageTurnAnimations: (Boolean) -> Unit,
     onTextAlign: (ReaderTextAlign) -> Unit,
     onPdfFit: (ReaderPdfFit) -> Unit,
+    onBookAppearanceEnabled: (Boolean) -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -469,6 +475,10 @@ internal fun ReaderQuickSettingsDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Book-specific appearance", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                    Switch(checked = bookAppearanceEnabled, onCheckedChange = onBookAppearanceEnabled)
+                }
                 SettingSlider("Font size", settings.fontScale, 0.75f..1.65f, onFontScale)
                 SettingSlider("Line height", settings.lineHeight, 1.1f..2.0f, onLineHeight)
                 SettingSlider("Margins", settings.marginScale, 0.35f..1.8f, onMarginScale)

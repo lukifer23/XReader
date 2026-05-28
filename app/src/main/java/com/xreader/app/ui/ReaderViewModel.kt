@@ -20,11 +20,13 @@ import com.xreader.app.settings.ReaderFontFamily
 import com.xreader.app.settings.ReaderPdfFit
 import com.xreader.app.settings.ReaderSettings
 import com.xreader.app.settings.ReaderTextAlign
+import com.xreader.app.settings.withBookAppearance
 import kotlin.math.roundToInt
 import kotlinx.coroutines.async
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -36,6 +38,7 @@ data class ReaderUiState(
     val book: BookEntity? = null,
     val publication: OpenPublication? = null,
     val settings: ReaderSettings = ReaderSettings(),
+    val bookAppearanceEnabled: Boolean = false,
     val state: ReadingStateEntity? = null,
     val annotations: List<AnnotationEntity> = emptyList(),
     val bookmarks: List<BookmarkEntity> = emptyList(),
@@ -72,8 +75,18 @@ class ReaderViewModel(
 
     init {
         viewModelScope.launch {
-            container.settingsRepository.settings.collect { settings ->
-                _uiState.update { it.copy(settings = settings) }
+            combine(
+                container.settingsRepository.settings,
+                container.settingsRepository.bookAppearance(bookId)
+            ) { global, bookAppearance ->
+                global.withBookAppearance(bookAppearance) to (bookAppearance != null)
+            }.collect { (settings, bookAppearanceEnabled) ->
+                _uiState.update {
+                    it.copy(
+                        settings = settings,
+                        bookAppearanceEnabled = bookAppearanceEnabled
+                    )
+                }
             }
         }
         viewModelScope.launch {
@@ -190,23 +203,53 @@ class ReaderViewModel(
     }
 
     fun setFontScale(value: Float) {
-        viewModelScope.launch { container.settingsRepository.setFontScale(value) }
+        viewModelScope.launch {
+            if (_uiState.value.bookAppearanceEnabled) {
+                container.settingsRepository.setBookFontScale(bookId, value)
+            } else {
+                container.settingsRepository.setFontScale(value)
+            }
+        }
     }
 
     fun setLineHeight(value: Float) {
-        viewModelScope.launch { container.settingsRepository.setLineHeight(value) }
+        viewModelScope.launch {
+            if (_uiState.value.bookAppearanceEnabled) {
+                container.settingsRepository.setBookLineHeight(bookId, value)
+            } else {
+                container.settingsRepository.setLineHeight(value)
+            }
+        }
     }
 
     fun setMarginScale(value: Float) {
-        viewModelScope.launch { container.settingsRepository.setMarginScale(value) }
+        viewModelScope.launch {
+            if (_uiState.value.bookAppearanceEnabled) {
+                container.settingsRepository.setBookMarginScale(bookId, value)
+            } else {
+                container.settingsRepository.setMarginScale(value)
+            }
+        }
     }
 
     fun setFontFamily(value: ReaderFontFamily) {
-        viewModelScope.launch { container.settingsRepository.setFontFamily(value) }
+        viewModelScope.launch {
+            if (_uiState.value.bookAppearanceEnabled) {
+                container.settingsRepository.setBookFontFamily(bookId, value)
+            } else {
+                container.settingsRepository.setFontFamily(value)
+            }
+        }
     }
 
     fun setPublisherStyles(value: Boolean) {
-        viewModelScope.launch { container.settingsRepository.setPublisherStyles(value) }
+        viewModelScope.launch {
+            if (_uiState.value.bookAppearanceEnabled) {
+                container.settingsRepository.setBookPublisherStyles(bookId, value)
+            } else {
+                container.settingsRepository.setPublisherStyles(value)
+            }
+        }
     }
 
     fun setPageTurnAnimations(value: Boolean) {
@@ -214,11 +257,33 @@ class ReaderViewModel(
     }
 
     fun setTextAlign(value: ReaderTextAlign) {
-        viewModelScope.launch { container.settingsRepository.setTextAlign(value) }
+        viewModelScope.launch {
+            if (_uiState.value.bookAppearanceEnabled) {
+                container.settingsRepository.setBookTextAlign(bookId, value)
+            } else {
+                container.settingsRepository.setTextAlign(value)
+            }
+        }
     }
 
     fun setPdfFit(value: ReaderPdfFit) {
-        viewModelScope.launch { container.settingsRepository.setPdfFit(value) }
+        viewModelScope.launch {
+            if (_uiState.value.bookAppearanceEnabled) {
+                container.settingsRepository.setBookPdfFit(bookId, value)
+            } else {
+                container.settingsRepository.setPdfFit(value)
+            }
+        }
+    }
+
+    fun setBookAppearanceEnabled(value: Boolean) {
+        viewModelScope.launch {
+            container.settingsRepository.setBookAppearanceEnabled(
+                bookId = bookId,
+                enabled = value,
+                seed = _uiState.value.settings
+            )
+        }
     }
 
     fun setSearchQuery(value: String) {

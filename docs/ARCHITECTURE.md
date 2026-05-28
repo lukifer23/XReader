@@ -72,7 +72,7 @@ Manual metadata edits can optionally apply the edited genre and series name to o
 - chrome toggle
 - selection actions for highlight, note, and dictionary lookup
 - scrollbar cleanup for nested Readium/WebView content
-- reader preferences for theme, typography, PDF fit, fullscreen, and page-turn animation behavior
+- reader preferences for theme, typography, PDF fit, fullscreen, page-turn animation behavior, and per-book appearance overrides
 
 ## Settings
 
@@ -92,6 +92,8 @@ Reader and library settings are persisted with DataStore. Settings include:
 - idle timeout
 - library sort
 - library density
+
+Per-book reader appearance overrides are also stored in DataStore, keyed by book id. They only override typography, publisher styles, alignment, and PDF fit. Theme, fullscreen, tap zones, page animations, and idle timeout stay global so reading behavior remains predictable across books.
 
 Font choices are limited to families that Android/Readium CSS can resolve or fall back from cleanly.
 

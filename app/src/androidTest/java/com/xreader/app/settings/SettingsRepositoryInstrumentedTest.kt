@@ -14,6 +14,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -72,5 +73,49 @@ class SettingsRepositoryInstrumentedTest {
         assertEquals(ReaderPdfFit.CONTAIN, readerSettings.pdfFit)
         assertEquals(LibrarySort.SERIES, librarySettings.sort)
         assertEquals(LibraryDensity.COMPACT, librarySettings.density)
+    }
+
+    @Test
+    fun persistsAndClearsBookAppearanceOverrides() = runBlocking {
+        val dataStore = PreferenceDataStoreFactory.create(
+            scope = dataStoreScope,
+            produceFile = {
+                root.mkdirs()
+                File(root, "book_appearance.preferences_pb")
+            }
+        )
+        val repository = SettingsRepository(context, dataStore)
+        val seed = ReaderSettings(
+            fontScale = 1.3f,
+            lineHeight = 1.55f,
+            marginScale = 0.9f,
+            fontFamily = ReaderFontFamily.HUMANIST,
+            publisherStyles = true,
+            textAlign = ReaderTextAlign.JUSTIFY,
+            pdfFit = ReaderPdfFit.CONTAIN
+        )
+
+        repository.setBookAppearanceEnabled(bookId = 42L, enabled = true, seed = seed)
+        repository.setBookFontScale(bookId = 42L, value = 4.0f)
+        repository.setBookLineHeight(bookId = 42L, value = 0.6f)
+        repository.setBookMarginScale(bookId = 42L, value = 3.0f)
+        repository.setBookFontFamily(bookId = 42L, value = ReaderFontFamily.ACCESSIBLE)
+        repository.setBookPublisherStyles(bookId = 42L, value = false)
+        repository.setBookTextAlign(bookId = 42L, value = ReaderTextAlign.START)
+        repository.setBookPdfFit(bookId = 42L, value = ReaderPdfFit.WIDTH)
+
+        val appearance = requireNotNull(repository.bookAppearance(42L).first())
+        assertEquals(1.65f, appearance.fontScale, 0.001f)
+        assertEquals(1.1f, appearance.lineHeight, 0.001f)
+        assertEquals(1.8f, appearance.marginScale, 0.001f)
+        assertEquals(ReaderFontFamily.ACCESSIBLE, appearance.fontFamily)
+        assertFalse(appearance.publisherStyles)
+        assertEquals(ReaderTextAlign.START, appearance.textAlign)
+        assertEquals(ReaderPdfFit.WIDTH, appearance.pdfFit)
+        assertNull(repository.bookAppearance(7L).first())
+
+        repository.setBookAppearanceEnabled(bookId = 42L, enabled = false, seed = seed)
+
+        assertNull(repository.bookAppearance(42L).first())
     }
 }

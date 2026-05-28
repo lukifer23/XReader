@@ -39,3 +39,39 @@ data class ReaderSettings(
     val pdfFit: ReaderPdfFit = ReaderPdfFit.WIDTH,
     val idleTimeoutMillis: Long = 90_000L,
 )
+
+data class BookReaderAppearance(
+    val fontScale: Float,
+    val lineHeight: Float,
+    val marginScale: Float,
+    val fontFamily: ReaderFontFamily,
+    val publisherStyles: Boolean,
+    val textAlign: ReaderTextAlign,
+    val pdfFit: ReaderPdfFit,
+)
+
+fun ReaderSettings.bookAppearance(): BookReaderAppearance =
+    BookReaderAppearance(
+        fontScale = fontScale,
+        lineHeight = lineHeight,
+        marginScale = marginScale,
+        fontFamily = fontFamily,
+        publisherStyles = publisherStyles,
+        textAlign = textAlign,
+        pdfFit = pdfFit
+    )
+
+fun ReaderSettings.withBookAppearance(appearance: BookReaderAppearance?): ReaderSettings =
+    if (appearance == null) {
+        this
+    } else {
+        copy(
+            fontScale = appearance.fontScale,
+            lineHeight = appearance.lineHeight,
+            marginScale = appearance.marginScale,
+            fontFamily = appearance.fontFamily,
+            publisherStyles = appearance.publisherStyles,
+            textAlign = appearance.textAlign,
+            pdfFit = appearance.pdfFit
+        )
+    }

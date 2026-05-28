@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.Preferences.Key
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.xreader.app.data.ReaderTheme
@@ -36,6 +37,17 @@ class SettingsRepository(
         val libraryDensity = stringPreferencesKey("library_density")
     }
 
+    private data class BookAppearanceKeys(
+        val enabled: Key<Boolean>,
+        val fontScale: Key<Float>,
+        val lineHeight: Key<Float>,
+        val marginScale: Key<Float>,
+        val fontFamily: Key<String>,
+        val publisherStyles: Key<Boolean>,
+        val textAlign: Key<String>,
+        val pdfFit: Key<String>,
+    )
+
     val settings: Flow<ReaderSettings> =
         dataStore.data.map { prefs ->
             ReaderSettings(
@@ -56,6 +68,27 @@ class SettingsRepository(
                 idleTimeoutMillis = prefs[Keys.idleTimeoutMillis] ?: 90_000L
             )
         }
+
+    fun bookAppearance(bookId: Long): Flow<BookReaderAppearance?> {
+        val keys = bookAppearanceKeys(bookId)
+        return dataStore.data.map { prefs ->
+            if (prefs[keys.enabled] != true) {
+                null
+            } else {
+                BookReaderAppearance(
+                    fontScale = prefs[keys.fontScale]?.coerceIn(0.75f, 1.65f) ?: 1.18f,
+                    lineHeight = prefs[keys.lineHeight]?.coerceIn(1.1f, 2.0f) ?: 1.42f,
+                    marginScale = prefs[keys.marginScale]?.coerceIn(0.35f, 1.8f) ?: 0.52f,
+                    fontFamily = readerFontFamily(prefs[keys.fontFamily]) ?: ReaderFontFamily.DEFAULT,
+                    publisherStyles = prefs[keys.publisherStyles] ?: false,
+                    textAlign = prefs[keys.textAlign]?.let { runCatching { ReaderTextAlign.valueOf(it) }.getOrNull() }
+                        ?: ReaderTextAlign.START,
+                    pdfFit = prefs[keys.pdfFit]?.let { runCatching { ReaderPdfFit.valueOf(it) }.getOrNull() }
+                        ?: ReaderPdfFit.WIDTH
+                )
+            }
+        }
+    }
 
     val librarySettings: Flow<LibrarySettings> =
         dataStore.data.map { prefs ->
@@ -111,6 +144,59 @@ class SettingsRepository(
         dataStore.edit { it[Keys.pdfFit] = value.name }
     }
 
+    suspend fun setBookAppearanceEnabled(bookId: Long, enabled: Boolean, seed: ReaderSettings) {
+        val keys = bookAppearanceKeys(bookId)
+        dataStore.edit { prefs ->
+            if (enabled) {
+                prefs[keys.enabled] = true
+                prefs[keys.fontScale] = seed.fontScale.coerceIn(0.75f, 1.65f)
+                prefs[keys.lineHeight] = seed.lineHeight.coerceIn(1.1f, 2.0f)
+                prefs[keys.marginScale] = seed.marginScale.coerceIn(0.35f, 1.8f)
+                prefs[keys.fontFamily] = seed.fontFamily.name
+                prefs[keys.publisherStyles] = seed.publisherStyles
+                prefs[keys.textAlign] = seed.textAlign.name
+                prefs[keys.pdfFit] = seed.pdfFit.name
+            } else {
+                prefs.remove(keys.enabled)
+                prefs.remove(keys.fontScale)
+                prefs.remove(keys.lineHeight)
+                prefs.remove(keys.marginScale)
+                prefs.remove(keys.fontFamily)
+                prefs.remove(keys.publisherStyles)
+                prefs.remove(keys.textAlign)
+                prefs.remove(keys.pdfFit)
+            }
+        }
+    }
+
+    suspend fun setBookFontScale(bookId: Long, value: Float) {
+        dataStore.edit { it[bookAppearanceKeys(bookId).fontScale] = value.coerceIn(0.75f, 1.65f) }
+    }
+
+    suspend fun setBookLineHeight(bookId: Long, value: Float) {
+        dataStore.edit { it[bookAppearanceKeys(bookId).lineHeight] = value.coerceIn(1.1f, 2.0f) }
+    }
+
+    suspend fun setBookMarginScale(bookId: Long, value: Float) {
+        dataStore.edit { it[bookAppearanceKeys(bookId).marginScale] = value.coerceIn(0.35f, 1.8f) }
+    }
+
+    suspend fun setBookFontFamily(bookId: Long, value: ReaderFontFamily) {
+        dataStore.edit { it[bookAppearanceKeys(bookId).fontFamily] = value.name }
+    }
+
+    suspend fun setBookPublisherStyles(bookId: Long, value: Boolean) {
+        dataStore.edit { it[bookAppearanceKeys(bookId).publisherStyles] = value }
+    }
+
+    suspend fun setBookTextAlign(bookId: Long, value: ReaderTextAlign) {
+        dataStore.edit { it[bookAppearanceKeys(bookId).textAlign] = value.name }
+    }
+
+    suspend fun setBookPdfFit(bookId: Long, value: ReaderPdfFit) {
+        dataStore.edit { it[bookAppearanceKeys(bookId).pdfFit] = value.name }
+    }
+
     suspend fun setLibrarySort(value: LibrarySort) {
         dataStore.edit { it[Keys.librarySort] = value.name }
     }
@@ -125,4 +211,18 @@ class SettingsRepository(
             "DYSLEXIC" -> ReaderFontFamily.ACCESSIBLE
             else -> runCatching { ReaderFontFamily.valueOf(value) }.getOrNull()
         }
+
+    private fun bookAppearanceKeys(bookId: Long): BookAppearanceKeys {
+        val prefix = "book_${bookId}_appearance"
+        return BookAppearanceKeys(
+            enabled = booleanPreferencesKey("${prefix}_enabled"),
+            fontScale = floatPreferencesKey("${prefix}_font_scale"),
+            lineHeight = floatPreferencesKey("${prefix}_line_height"),
+            marginScale = floatPreferencesKey("${prefix}_margin_scale"),
+            fontFamily = stringPreferencesKey("${prefix}_font_family"),
+            publisherStyles = booleanPreferencesKey("${prefix}_publisher_styles"),
+            textAlign = stringPreferencesKey("${prefix}_text_align"),
+            pdfFit = stringPreferencesKey("${prefix}_pdf_fit")
+        )
+    }
 }

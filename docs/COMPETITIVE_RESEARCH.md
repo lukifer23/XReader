@@ -35,7 +35,7 @@ This is the working competitive map for XReader. It should drive implementation 
 | TTS | Not implemented. | Moon+, Librera, PocketBook, BookFusion, and others offer it. | High-value later feature if implemented with Android TTS controls and no reader jank. |
 | OPDS/catalogs | Not implemented. | Moon+, Librera, FBReader, PocketBook support OPDS. | Good optional later feature. |
 | PDF reflow/crop | PDF fit implemented; reflow/crop not implemented. | PocketBook/ReadEra have PDF comfort features. | Evaluate after reader polish. |
-| Custom user fonts | Built-in family choices implemented; user font import not implemented. | FBReader/Moon+ support user fonts. | Good reader-polish candidate. |
+| Custom user fonts | Built-in family choices and per-book appearance overrides implemented; user font import not implemented. | FBReader/Moon+ support user fonts. | User font import is a later reader-polish candidate. |
 | Bulk metadata cleanup | Matching-series genre/series cleanup implemented in the metadata editor. | Metadata quality is a recurring library pain. | Continue with broader bulk tools later. |
 
 ## High-Impact Gaps
@@ -53,6 +53,7 @@ The research points to several areas that matter more than raw feature count:
 - Opt-in matching-series metadata cleanup. From the metadata editor, changing a book's genre or series can now apply those two fields to other books by the same author that match the old or new series name. The operation is atomic and keeps per-book fields such as title, year, and series index untouched.
 - Range-aware reading stats. The stats screen now supports 7-day, 30-day, 13-week, and all-time ranges, with grouped analytics and activity buckets recalculated for the selected period.
 - Local reading stats export. The stats screen can export all analytics ranges to JSON through Android's document picker, keeping the workflow local and user-controlled.
+- Per-book reader appearance. Books can keep their own font, spacing, alignment, publisher-style, and PDF fit choices without changing global reading behavior.
 
 ## Product Rules From The Research
 
