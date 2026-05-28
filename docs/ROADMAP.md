@@ -7,7 +7,6 @@ This is the working product roadmap for the personal APK line. Items should appe
 - Split the large Compose UI file into smaller screen/components packages.
 - Add instrumented tests for the Settings repair action and reader preference persistence.
 - Add a first-run import-empty state that stays quiet but makes the initial path obvious.
-- Improve cover extraction coverage for unusual EPUB metadata layouts.
 - Add public-domain test fixtures for screenshots and instrumented reader QA.
 - Track startup and reader-open baseline history after each major UI, import, or Readium change.
 

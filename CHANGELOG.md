@@ -16,6 +16,7 @@ Initial public repository snapshot.
 - Persisted library sort and comfortable/compact density controls.
 - Readium locator persistence for resume.
 - Manual cover replacement from local image files.
+- EPUB cover discovery from OPF guide references and guide XHTML/HTML title pages.
 - Unified library search, sorting, density, and grouping controls to reduce duplicate chrome.
 - Per-book library health checks and targeted repair from the metadata dialog.
 - In-reader navigation by swipe, tap zones, hardware keys, TOC, bookmarks, search results, and progress scrubber.

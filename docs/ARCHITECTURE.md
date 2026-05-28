@@ -48,6 +48,8 @@ Search uses a normal table plus an FTS table. Book deletion removes search rows 
 6. Metadata, cover art, reading units, word counts, and searchable text are extracted.
 7. Book metadata and search rows are persisted in Room.
 
+EPUB cover extraction checks explicit OPF cover metadata, EPUB 3 `cover-image` properties, EPUB 2 guide cover references, guide XHTML/HTML title pages that point at image assets, and conservative manifest-image fallbacks.
+
 The manual Settings repair action and the per-book metadata repair action reuse this parsing/indexing path against stored private-library files. They refresh covers, metadata fields that are empty or safe to improve, word/page counts, and search rows. They preserve user-edited title and author values. Covers manually replaced from local image files are stored as app-private downsampled JPEGs and are not overwritten by repair.
 
 ## Reader Flow

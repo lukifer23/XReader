@@ -211,16 +211,68 @@ class EpubParser {
         manifest: Map<String, ManifestItem>,
     ): CoverImage? {
         val explicitCoverId = coverMetaId(opf)
-        val candidate = listOfNotNull(
+        listOfNotNull(
             explicitCoverId?.let(manifest::get),
-            manifest.values.firstOrNull { "cover-image" in it.properties },
+            manifest.values.firstOrNull { it.properties.any { property -> property.equals("cover-image", ignoreCase = true) } },
+        ).firstNotNullOfOrNull { coverFromManifestItem(zip, basePath, it) }?.let { return it }
+
+        guideCoverImage(zip, opf, basePath, manifest)?.let { return it }
+
+        return listOfNotNull(
             manifest.values.firstOrNull {
                 it.isSupportedImage() && (it.id.contains("cover", ignoreCase = true) || it.href.contains("cover", ignoreCase = true))
             },
             manifest.values.firstOrNull { it.isSupportedImage() }
-        ).firstOrNull { it.isSupportedImage() } ?: return null
+        ).firstNotNullOfOrNull { coverFromManifestItem(zip, basePath, it) }
+    }
 
-        val entryName = normalizeZipPath(basePath, candidate.href)
+    private fun guideCoverImage(
+        zip: ZipFile,
+        opf: Document,
+        basePath: String,
+        manifest: Map<String, ManifestItem>,
+    ): CoverImage? {
+        val nodes = opf.getElementsByTagName("reference")
+        for (index in 0 until nodes.length) {
+            val reference = nodes.item(index) as? Element ?: continue
+            if (!reference.getAttribute("type").equals("cover", ignoreCase = true)) continue
+            val href = reference.getAttribute("href").takeIf { it.isNotBlank() } ?: continue
+            val entryName = normalizeZipPath(basePath, href)
+            val manifestItem = manifest.values.firstOrNull { normalizeZipPath(basePath, it.href) == entryName }
+            if (manifestItem?.isSupportedImage() == true) {
+                coverFromManifestItem(zip, basePath, manifestItem)?.let { return it }
+            }
+            if (coverExtension(manifestItem?.mediaType.orEmpty(), href) != null) {
+                coverFromEntry(zip, entryName, manifestItem?.mediaType.orEmpty(), href)?.let { return it }
+            }
+            if (!isHtmlReference(manifestItem, href)) continue
+            val pageEntry = zip.getEntry(entryName) ?: continue
+            val imageHref = zip.getInputStream(pageEntry).use { coverImageHrefFromPage(it) } ?: continue
+            val pageBasePath = entryName.substringBeforeLast('/', missingDelimiterValue = "")
+            val imageEntryName = normalizeZipPath(pageBasePath, imageHref)
+            val imageManifestItem = manifest.values.firstOrNull { normalizeZipPath(basePath, it.href) == imageEntryName }
+            coverFromEntry(
+                zip = zip,
+                entryName = imageEntryName,
+                mediaType = imageManifestItem?.mediaType.orEmpty(),
+                href = imageManifestItem?.href ?: imageHref
+            )?.let { return it }
+        }
+        return null
+    }
+
+    private fun coverFromManifestItem(zip: ZipFile, basePath: String, item: ManifestItem): CoverImage? {
+        if (!item.isSupportedImage()) return null
+        val entryName = normalizeZipPath(basePath, item.href)
+        return coverFromEntry(zip, entryName, item.mediaType, item.href)
+    }
+
+    private fun coverFromEntry(
+        zip: ZipFile,
+        entryName: String,
+        mediaType: String,
+        href: String,
+    ): CoverImage? {
         val entry = zip.getEntry(entryName) ?: return null
         val size = entry.size
         if (size > MAX_COVER_BYTES) return null
@@ -230,8 +282,29 @@ class EpubParser {
             data
         }
         if (bytes.isEmpty()) return null
-        val extension = coverExtension(candidate.mediaType, candidate.href) ?: return null
+        val extension = coverExtension(mediaType, href) ?: return null
         return CoverImage(bytes, extension)
+    }
+
+    private fun isHtmlReference(item: ManifestItem?, href: String): Boolean {
+        val mediaType = item?.mediaType.orEmpty().lowercase(Locale.US)
+        return mediaType in HTML_MEDIA_TYPES || TextTools.extension(href.substringBefore('#')) in HTML_EXTENSIONS
+    }
+
+    private fun coverImageHrefFromPage(input: InputStream): String? {
+        val document = Jsoup.parse(input, null, "")
+        document.select("img[src]").firstOrNull()
+            ?.attr("src")
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?.let { return it }
+
+        for (element in document.getElementsByTag("image")) {
+            listOf("href", "xlink:href").firstNotNullOfOrNull { attribute ->
+                element.attr(attribute).trim().takeIf { it.isNotBlank() }
+            }?.let { return it }
+        }
+        return null
     }
 
     private fun coverMetaId(opf: Document): String? {
@@ -246,7 +319,7 @@ class EpubParser {
     }
 
     private fun ManifestItem.isSupportedImage(): Boolean =
-        mediaType in SUPPORTED_COVER_MEDIA_TYPES || coverExtension(mediaType, href) != null
+        mediaType.lowercase(Locale.US) in SUPPORTED_COVER_MEDIA_TYPES || coverExtension(mediaType, href) != null
 
     private fun coverExtension(mediaType: String, href: String): String? =
         when (mediaType.lowercase(Locale.US)) {
@@ -313,6 +386,8 @@ class EpubParser {
 
     companion object {
         private const val MAX_COVER_BYTES = 10 * 1024 * 1024L
+        private val HTML_EXTENSIONS = setOf("xhtml", "html", "htm")
+        private val HTML_MEDIA_TYPES = setOf("application/xhtml+xml", "text/html")
         private val SUPPORTED_COVER_MEDIA_TYPES = setOf("image/jpeg", "image/jpg", "image/png", "image/webp")
 
         fun extensionMediaType(extension: String): String =
