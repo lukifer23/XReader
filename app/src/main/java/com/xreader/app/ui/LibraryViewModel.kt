@@ -33,6 +33,19 @@ enum class LibraryGroup {
     FAVORITES,
 }
 
+enum class LibrarySort {
+    RECENT,
+    TITLE,
+    AUTHOR,
+    PROGRESS,
+    SERIES,
+}
+
+enum class LibraryDensity {
+    COMFORTABLE,
+    COMPACT,
+}
+
 data class BookListItem(
     val book: BookEntity,
     val state: ReadingStateEntity?,
@@ -41,6 +54,8 @@ data class BookListItem(
 data class LibraryUiState(
     val query: String = "",
     val group: LibraryGroup = LibraryGroup.BOOKS,
+    val sort: LibrarySort = LibrarySort.RECENT,
+    val density: LibraryDensity = LibraryDensity.COMFORTABLE,
     val books: List<BookListItem> = emptyList(),
     val importing: Boolean = false,
     val message: String? = null,
@@ -52,6 +67,8 @@ data class LibraryUiState(
 class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     private val query = MutableStateFlow("")
     private val group = MutableStateFlow(LibraryGroup.BOOKS)
+    private val sort = MutableStateFlow(LibrarySort.RECENT)
+    private val density = MutableStateFlow(LibraryDensity.COMFORTABLE)
     private val importing = MutableStateFlow(false)
     private val message = MutableStateFlow<String?>(null)
     private val searchResults = MutableStateFlow<List<com.xreader.app.data.SearchIndexEntity>>(emptyList())
@@ -59,21 +76,34 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     private val books = query.flatMapLatest { container.libraryRepository.observeBooks(it) }
     private val states = container.readingRepository.observeStates()
 
-    private data class LibraryChromeState(
+    private data class LibrarySelectionState(
         val query: String,
         val group: LibraryGroup,
+        val sort: LibrarySort,
+        val density: LibraryDensity,
+    )
+
+    private data class LibraryChromeState(
+        val selection: LibrarySelectionState,
         val importing: Boolean,
         val message: String?,
         val searchResults: List<com.xreader.app.data.SearchIndexEntity>,
     )
 
-    private val chromeState = combine(query, group, importing, message, searchResults) {
+    private val selectionState = combine(query, group, sort, density) {
             currentQuery,
             currentGroup,
+            currentSort,
+            currentDensity ->
+        LibrarySelectionState(currentQuery, currentGroup, currentSort, currentDensity)
+    }
+
+    private val chromeState = combine(selectionState, importing, message, searchResults) {
+            selection,
             currentImporting,
             currentMessage,
             currentResults ->
-        LibraryChromeState(currentQuery, currentGroup, currentImporting, currentMessage, currentResults)
+        LibraryChromeState(selection, currentImporting, currentMessage, currentResults)
     }
 
     private val bookItems = combine(books, states) { currentBooks, currentStates ->
@@ -83,10 +113,13 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
 
     val uiState: StateFlow<LibraryUiState> =
         combine(chromeState, bookItems) { chrome, items ->
+            val selection = chrome.selection
             LibraryUiState(
-                query = chrome.query,
-                group = chrome.group,
-                books = items.filteredBy(chrome.group),
+                query = selection.query,
+                group = selection.group,
+                sort = selection.sort,
+                density = selection.density,
+                books = items.filteredBy(selection.group).sortedFor(selection.sort),
                 importing = chrome.importing,
                 message = chrome.message,
                 librarySearchResults = chrome.searchResults
@@ -101,6 +134,16 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
 
     fun setGroup(value: LibraryGroup) {
         group.value = value
+    }
+
+    fun setSort(value: LibrarySort) {
+        sort.value = value
+    }
+
+    fun toggleDensity() {
+        density.update {
+            if (it == LibraryDensity.COMFORTABLE) LibraryDensity.COMPACT else LibraryDensity.COMFORTABLE
+        }
     }
 
     fun clearMessage() {
@@ -173,6 +216,35 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
             LibraryGroup.FAVORITES -> filter { it.book.favorite }
             else -> this
         }
+
+    private fun List<BookListItem>.sortedFor(sort: LibrarySort): List<BookListItem> =
+        when (sort) {
+            LibrarySort.RECENT -> sortedWith(
+                compareByDescending<BookListItem> { it.recentTimestamp() }
+                    .thenBy { it.book.sortTitle.lowercase() }
+            )
+            LibrarySort.TITLE -> sortedWith(
+                compareBy<BookListItem> { it.book.sortTitle.lowercase() }
+                    .thenBy { it.book.author.lowercase() }
+            )
+            LibrarySort.AUTHOR -> sortedWith(
+                compareBy<BookListItem> { it.book.author.lowercase() }
+                    .thenBy { it.book.sortTitle.lowercase() }
+            )
+            LibrarySort.PROGRESS -> sortedWith(
+                compareByDescending<BookListItem> { it.state?.progress ?: 0.0 }
+                    .thenBy { it.book.sortTitle.lowercase() }
+            )
+            LibrarySort.SERIES -> sortedWith(
+                compareBy<BookListItem> { it.book.series?.lowercase() ?: it.book.sortTitle.lowercase() }
+                    .thenBy { it.book.seriesIndex ?: Double.MAX_VALUE }
+                    .thenBy { it.book.year ?: Int.MAX_VALUE }
+                    .thenBy { it.book.sortTitle.lowercase() }
+            )
+        }
+
+    private fun BookListItem.recentTimestamp(): Long =
+        state?.lastReadAt ?: book.lastOpenedAt ?: book.importedAt
 
     companion object {
         fun factory(container: AppContainer): ViewModelProvider.Factory =

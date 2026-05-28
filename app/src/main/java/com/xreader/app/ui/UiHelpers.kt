@@ -37,10 +37,15 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TooltipAnchorPosition
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
+import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
@@ -48,6 +53,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.toColorInt
@@ -96,21 +102,46 @@ internal fun LibraryBottomBar(
 @Composable
 internal fun ThemeToggleButton(theme: ReaderTheme, onClick: () -> Unit) {
     val dark = theme == ReaderTheme.DARK || theme == ReaderTheme.OLED
-    IconButton(onClick = onClick, modifier = Modifier.size(44.dp)) {
+    val label = if (dark) "Switch to light mode" else "Switch to dark mode"
+    TooltipIconButton(label = label, onClick = onClick, modifier = Modifier.size(44.dp)) {
         Icon(
             imageVector = if (dark) Icons.Filled.LightMode else Icons.Filled.DarkMode,
-            contentDescription = if (dark) "Switch to light mode" else "Switch to dark mode"
+            contentDescription = null
         )
     }
 }
 
 @Composable
 internal fun FullScreenToggleButton(fullScreen: Boolean, onClick: () -> Unit) {
-    IconButton(onClick = onClick, modifier = Modifier.size(44.dp)) {
+    val label = if (fullScreen) "Exit fullscreen" else "Enter fullscreen"
+    TooltipIconButton(label = label, onClick = onClick, modifier = Modifier.size(44.dp)) {
         Icon(
             imageVector = if (fullScreen) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen,
-            contentDescription = if (fullScreen) "Exit fullscreen" else "Enter fullscreen"
+            contentDescription = null
         )
+    }
+}
+
+@Composable
+internal fun TooltipIconButton(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    icon: @Composable () -> Unit,
+) {
+    TooltipBox(
+        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
+        tooltip = { PlainTooltip { Text(label) } },
+        state = rememberTooltipState()
+    ) {
+        IconButton(
+            onClick = onClick,
+            enabled = enabled,
+            modifier = modifier.semantics { contentDescription = label }
+        ) {
+            icon()
+        }
     }
 }
 
@@ -168,6 +199,15 @@ internal fun groupBooks(group: LibraryGroup, books: List<BookListItem>): Map<Str
 
 internal fun LibraryGroup.label(): String =
     name.lowercase().split('_').joinToString(" ") { it.replaceFirstChar(Char::titlecase) }
+
+internal fun LibrarySort.label(): String =
+    when (this) {
+        LibrarySort.RECENT -> "Recent first"
+        LibrarySort.TITLE -> "Title"
+        LibrarySort.AUTHOR -> "Author"
+        LibrarySort.PROGRESS -> "Progress"
+        LibrarySort.SERIES -> "Series"
+    }
 
 internal fun AnnotationKind.label(): String =
     name.lowercase().replaceFirstChar(Char::titlecase)

@@ -2,9 +2,9 @@
 
 package com.xreader.app.ui
 
-import android.app.Activity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -29,7 +29,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -37,7 +39,8 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.ViewAgenda
+import androidx.compose.material.icons.filled.ViewCompact
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -48,7 +51,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -68,9 +70,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -122,12 +121,11 @@ internal fun LibraryRoute(
             TopAppBar(
                 title = { Text("XReader", fontWeight = FontWeight.SemiBold) },
                 actions = {
-                    IconButton(
+                    TooltipIconButton(
+                        label = if (state.importing) "Importing books" else "Import books",
                         onClick = openImportPicker,
                         enabled = !state.importing,
-                        modifier = Modifier.semantics {
-                            contentDescription = if (state.importing) "Importing books" else "Import books"
-                        }
+                        modifier = Modifier.size(44.dp)
                     ) {
                         if (state.importing) {
                             CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
@@ -147,6 +145,8 @@ internal fun LibraryRoute(
             onQuery = viewModel::setQuery,
             onSearch = viewModel::searchLibrary,
             onGroup = viewModel::setGroup,
+            onSort = viewModel::setSort,
+            onToggleDensity = viewModel::toggleDensity,
             onImport = openImportPicker,
             onOpenBook = { openReaderAt(it, null) },
             onOpenSearchResult = openReaderAt,
@@ -165,6 +165,8 @@ internal fun LibraryScreen(
     onQuery: (String) -> Unit,
     onSearch: () -> Unit,
     onGroup: (LibraryGroup) -> Unit,
+    onSort: (LibrarySort) -> Unit,
+    onToggleDensity: () -> Unit,
     onImport: () -> Unit,
     onOpenBook: (Long) -> Unit,
     onOpenSearchResult: (Long, String?) -> Unit,
@@ -175,6 +177,7 @@ internal fun LibraryScreen(
 ) {
     var editing by remember { mutableStateOf<BookEntity?>(null) }
     var deleteCandidate by remember { mutableStateOf<BookEntity?>(null) }
+    var searchExpanded by remember { mutableStateOf(false) }
     val continueItem = remember(state.books, state.group) {
         if (state.group == LibraryGroup.BOOKS) {
             state.books
@@ -184,36 +187,49 @@ internal fun LibraryScreen(
             null
         }
     }
+    val displayBooks = remember(state.books, state.group, continueItem) {
+        if (state.group == LibraryGroup.BOOKS && continueItem != null) {
+            state.books.filterNot { it.book.id == continueItem.book.id }
+        } else {
+            state.books
+        }
+    }
+
+    LaunchedEffect(state.query, state.librarySearchResults) {
+        if (state.query.isNotBlank() || state.librarySearchResults.isNotEmpty()) {
+            searchExpanded = true
+        }
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .padding(horizontal = 16.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            OutlinedTextField(
-                value = state.query,
-                onValueChange = onQuery,
-                modifier = Modifier.weight(1f),
-                singleLine = true,
-                label = { Text("Search library") },
-                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                trailingIcon = {
-                    if (state.query.isNotBlank()) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            IconButton(onClick = { onQuery("") }) {
-                                Icon(Icons.Filled.Close, contentDescription = "Clear search")
-                            }
-                            IconButton(onClick = onSearch) {
-                                Icon(Icons.Filled.Search, contentDescription = "Search inside books")
-                            }
-                        }
+        LibraryActionRow(
+            state = state,
+            searchExpanded = searchExpanded,
+            onToggleSearch = {
+                if (searchExpanded && state.query.isNotBlank()) {
+                    onQuery("")
+                } else {
+                    searchExpanded = !searchExpanded
+                }
+            },
+            onSort = onSort,
+            onToggleDensity = onToggleDensity
+        )
+        AnimatedVisibility(visible = searchExpanded) {
+            LibrarySearchField(
+                query = state.query,
+                onQuery = onQuery,
+                onSearch = onSearch,
+                onCollapse = {
+                    if (state.query.isBlank()) {
+                        searchExpanded = false
+                    } else {
+                        onQuery("")
                     }
                 }
             )
@@ -225,11 +241,11 @@ internal fun LibraryScreen(
         if (state.books.isEmpty()) {
             EmptyLibrary(onImport = onImport)
         } else {
-            val grouped = groupBooks(state.group, state.books)
+            val grouped = groupBooks(state.group, displayBooks)
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 28.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(if (state.density == LibraryDensity.COMPACT) 8.dp else 10.dp)
             ) {
                 continueItem?.let { current ->
                     item {
@@ -259,6 +275,7 @@ internal fun LibraryScreen(
                     ) { item ->
                         BookRow(
                             item = item,
+                            density = state.density,
                             onOpen = { onOpenBook(item.book.id) },
                             onFavorite = { onToggleFavorite(item) },
                             onEdit = { editing = item.book },
@@ -302,18 +319,188 @@ internal fun LibraryScreen(
 }
 
 @Composable
+internal fun LibraryActionRow(
+    state: LibraryUiState,
+    searchExpanded: Boolean,
+    onToggleSearch: () -> Unit,
+    onSort: (LibrarySort) -> Unit,
+    onToggleDensity: () -> Unit,
+) {
+    var sortMenuOpen by remember { mutableStateOf(false) }
+    val bookCount = state.books.size
+    val inProgress = state.books.count { (it.state?.progress ?: 0.0) in 0.01..0.994 }
+    val finished = state.books.count { it.book.finished || (it.state?.progress ?: 0.0) >= 0.995 }
+    val countText = when (bookCount) {
+        0 -> "No books"
+        1 -> "1 book"
+        else -> "$bookCount books"
+    }
+    val statusText = listOfNotNull(
+        countText,
+        if (inProgress > 0) "$inProgress reading" else null,
+        if (finished > 0) "$finished finished" else null,
+        state.sort.label()
+    ).joinToString(" • ")
+    val searchLabel = when {
+        searchExpanded && state.query.isNotBlank() -> "Clear search"
+        searchExpanded -> "Hide search"
+        else -> "Search library"
+    }
+    val densityLabel =
+        if (state.density == LibraryDensity.COMPACT) "Use comfortable layout" else "Use compact layout"
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(state.group.label(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(
+                statusText,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        TooltipIconButton(
+            label = searchLabel,
+            onClick = onToggleSearch,
+            modifier = Modifier.size(44.dp)
+        ) {
+            Icon(if (searchExpanded) Icons.Filled.Close else Icons.Filled.Search, contentDescription = null)
+        }
+        Box {
+            TooltipIconButton(
+                label = "Sort library",
+                onClick = { sortMenuOpen = true },
+                modifier = Modifier.size(44.dp)
+            ) {
+                Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = null)
+            }
+            DropdownMenu(expanded = sortMenuOpen, onDismissRequest = { sortMenuOpen = false }) {
+                LibrarySort.entries.forEach { sort ->
+                    DropdownMenuItem(
+                        text = { Text(sort.label()) },
+                        leadingIcon = {
+                            if (sort == state.sort) {
+                                Icon(Icons.Filled.Check, contentDescription = null)
+                            }
+                        },
+                        onClick = {
+                            sortMenuOpen = false
+                            onSort(sort)
+                        }
+                    )
+                }
+            }
+        }
+        TooltipIconButton(
+            label = densityLabel,
+            onClick = onToggleDensity,
+            modifier = Modifier.size(44.dp)
+        ) {
+            Icon(
+                if (state.density == LibraryDensity.COMPACT) Icons.Filled.ViewAgenda else Icons.Filled.ViewCompact,
+                contentDescription = null
+            )
+        }
+    }
+}
+
+@Composable
+internal fun LibrarySearchField(
+    query: String,
+    onQuery: (String) -> Unit,
+    onSearch: () -> Unit,
+    onCollapse: () -> Unit,
+) {
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQuery,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 6.dp, bottom = 4.dp),
+        singleLine = true,
+        label = { Text("Search library") },
+        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+        trailingIcon = if (query.isNotBlank()) {
+            {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TooltipIconButton(
+                    label = "Search inside books",
+                    onClick = onSearch,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(Icons.Filled.Search, contentDescription = null)
+                }
+                TooltipIconButton(
+                    label = "Clear search",
+                    onClick = onCollapse,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(Icons.Filled.Close, contentDescription = null)
+                }
+            }
+            }
+        } else {
+            null
+        }
+    )
+}
+
+@Composable
 internal fun LibraryFilterRow(
+    selected: LibraryGroup,
+    onGroup: (LibraryGroup) -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        LibraryChipRail(
+            groups = listOf(
+                LibraryGroup.BOOKS,
+                LibraryGroup.AUTHORS,
+                LibraryGroup.SERIES,
+                LibraryGroup.GENRES,
+                LibraryGroup.YEARS
+            ),
+            selected = selected,
+            onGroup = onGroup
+        )
+        LibraryChipRail(
+            groups = listOf(
+                LibraryGroup.RECENT,
+                LibraryGroup.UNREAD,
+                LibraryGroup.IN_PROGRESS,
+                LibraryGroup.FINISHED,
+                LibraryGroup.FAVORITES
+            ),
+            selected = selected,
+            onGroup = onGroup
+        )
+    }
+}
+
+@Composable
+private fun LibraryChipRail(
+    groups: List<LibraryGroup>,
     selected: LibraryGroup,
     onGroup: (LibraryGroup) -> Unit,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(vertical = 10.dp),
+            .horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        LibraryGroup.entries.forEach { group ->
+        groups.forEach { group ->
             FilterChip(
                 selected = selected == group,
                 onClick = { onGroup(group) },
@@ -329,9 +516,10 @@ internal fun ContinueReadingCard(
     onOpen: () -> Unit,
 ) {
     val progress = item.state?.progress ?: 0.0
-    var menuOpen by remember(item.book.id) { mutableStateOf(false) }
+    val wpm = item.state?.estimatedWpm?.takeIf { it > 0 }
     Card(
         onClick = onOpen,
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(8.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
@@ -342,13 +530,24 @@ internal fun ContinueReadingCard(
         ) {
             BookCoverTile(item.book, width = 48.dp, height = 68.dp)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Continue", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                Text("Continue reading", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                 Text(item.book.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    item.book.author,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
                 LinearProgressIndicator(
                     progress = { progress.toFloat().coerceIn(0f, 1f) },
                     modifier = Modifier.fillMaxWidth()
                 )
-                Text("${(progress * 100).roundToInt()}% read", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    listOfNotNull("${(progress * 100).roundToInt()}% read", wpm?.let { "$it WPM" }).joinToString(" • "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
             Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -374,6 +573,7 @@ internal fun EmptyLibrary(onImport: () -> Unit) {
 @Composable
 internal fun BookRow(
     item: BookListItem,
+    density: LibraryDensity,
     onOpen: () -> Unit,
     onFavorite: () -> Unit,
     onEdit: () -> Unit,
@@ -381,19 +581,30 @@ internal fun BookRow(
 ) {
     val progress = item.state?.progress ?: 0.0
     var menuOpen by remember(item.book.id) { mutableStateOf(false) }
+    val compact = density == LibraryDensity.COMPACT
     Card(
         onClick = onOpen,
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(8.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Row(
-            modifier = Modifier.padding(14.dp),
+            modifier = Modifier.padding(if (compact) 10.dp else 14.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
+            horizontalArrangement = Arrangement.spacedBy(if (compact) 10.dp else 14.dp)
         ) {
-            BookCoverTile(item.book)
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                Text(item.book.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            BookCoverTile(
+                book = item.book,
+                width = if (compact) 44.dp else 58.dp,
+                height = if (compact) 62.dp else 82.dp
+            )
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(if (compact) 5.dp else 7.dp)) {
+                Text(
+                    item.book.title,
+                    style = if (compact) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleMedium,
+                    maxLines = if (compact) 1 else 2,
+                    overflow = TextOverflow.Ellipsis
+                )
                 Text(item.book.author, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 LinearProgressIndicator(
                     progress = { progress.toFloat().coerceIn(0f, 1f) },
@@ -404,15 +615,21 @@ internal fun BookRow(
                         Text(item.book.format.name, modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp), style = MaterialTheme.typography.bodySmall)
                     }
                     Text("${(progress * 100).roundToInt()}% read", style = MaterialTheme.typography.bodySmall)
-                    Text(wordCountLabel(item.book.wordCount), style = MaterialTheme.typography.bodySmall)
+                    if (!compact) {
+                        Text(wordCountLabel(item.book.wordCount), style = MaterialTheme.typography.bodySmall)
+                    }
                     item.book.genre?.let {
                         Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }
             Box {
-                IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(44.dp)) {
-                    Icon(Icons.Filled.MoreVert, contentDescription = "Book actions")
+                TooltipIconButton(
+                    label = "Book actions",
+                    onClick = { menuOpen = true },
+                    modifier = Modifier.size(44.dp)
+                ) {
+                    Icon(Icons.Filled.MoreVert, contentDescription = null)
                 }
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                     DropdownMenuItem(
@@ -455,20 +672,39 @@ internal fun SearchResultsStrip(
     results: List<com.xreader.app.data.SearchIndexEntity>,
     onOpenResult: (Long, String?) -> Unit,
 ) {
-    Column(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text("Text matches", style = MaterialTheme.typography.labelLarge)
-        results.take(4).forEach {
-            val snippet = it.body.replace(Regex("\\s+"), " ").trim().take(120)
-            Text(
-                text = "${it.heading}: $snippet",
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onOpenResult(it.bookId, "$SEARCH_UNIT_LOCATOR_PREFIX${it.unitIndex}") },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 8.dp),
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant
+    ) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Text matches", style = MaterialTheme.typography.labelLarge)
+            results.take(5).forEach {
+                val snippet = it.body.replace(Regex("\\s+"), " ").trim().take(140)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenResult(it.bookId, "$SEARCH_UNIT_LOCATOR_PREFIX${it.unitIndex}") },
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Text(
+                        text = it.heading,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = snippet,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
         }
     }
 }
