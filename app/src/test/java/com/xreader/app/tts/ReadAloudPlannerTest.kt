@@ -24,7 +24,7 @@ class ReadAloudPlannerTest {
     }
 
     @Test
-    fun startIndexUsesNearestChunkAtOrAfterCurrentUnit() {
+    fun startIndexUsesCurrentOrNearestEarlierChunk() {
         val chunks = listOf(
             ReadAloudChunk(unitIndex = 0, locator = "a", heading = "A", text = "A", wordCount = 1),
             ReadAloudChunk(unitIndex = 5, locator = "b", heading = "B", text = "B", wordCount = 1),
@@ -32,7 +32,9 @@ class ReadAloudPlannerTest {
         )
 
         assertEquals(0, ReadAloudPlanner.startIndex(chunks, currentUnit = 0))
-        assertEquals(1, ReadAloudPlanner.startIndex(chunks, currentUnit = 3))
+        assertEquals(0, ReadAloudPlanner.startIndex(chunks, currentUnit = 3))
+        assertEquals(1, ReadAloudPlanner.startIndex(chunks, currentUnit = 5))
+        assertEquals(1, ReadAloudPlanner.startIndex(chunks, currentUnit = 9))
         assertEquals(2, ReadAloudPlanner.startIndex(chunks, currentUnit = 99))
     }
 

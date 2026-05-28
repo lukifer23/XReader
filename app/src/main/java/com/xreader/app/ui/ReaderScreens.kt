@@ -158,10 +158,11 @@ internal fun ReaderRoute(
         onFontFamily = viewModel::setFontFamily,
         onPublisherStyles = viewModel::setPublisherStyles,
         onPageTurnAnimations = viewModel::setPageTurnAnimations,
+        onReadAloudRate = viewModel::setReadAloudRate,
         onTextAlign = viewModel::setTextAlign,
         onPdfFit = viewModel::setPdfFit,
         onBookAppearanceEnabled = viewModel::setBookAppearanceEnabled,
-        onToggleReadAloud = viewModel::toggleReadAloud,
+        onToggleReadAloud = { visibleUnit -> viewModel.toggleReadAloud(visibleUnit) },
         onClearReadAloudMessage = viewModel::clearReadAloudMessage
     )
 }
@@ -194,10 +195,11 @@ internal fun ReaderScreen(
     onFontFamily: (ReaderFontFamily) -> Unit,
     onPublisherStyles: (Boolean) -> Unit,
     onPageTurnAnimations: (Boolean) -> Unit,
+    onReadAloudRate: (Float) -> Unit,
     onTextAlign: (ReaderTextAlign) -> Unit,
     onPdfFit: (ReaderPdfFit) -> Unit,
     onBookAppearanceEnabled: (Boolean) -> Unit,
-    onToggleReadAloud: () -> Unit,
+    onToggleReadAloud: (Int) -> Unit,
     onClearReadAloudMessage: () -> Unit,
 ) {
     val publication = state.publication as? OpenPublication.Readium ?: return
@@ -280,7 +282,7 @@ internal fun ReaderScreen(
                 fullScreen = state.settings.fullScreen,
                 onToggleFullScreen = onToggleFullScreen,
                 readAloud = state.readAloud,
-                onToggleReadAloud = onToggleReadAloud,
+                onToggleReadAloud = { onToggleReadAloud(pagingController.currentPage) },
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .zIndex(2f)
@@ -343,6 +345,7 @@ internal fun ReaderScreen(
             onFontFamily = onFontFamily,
             onPublisherStyles = onPublisherStyles,
             onPageTurnAnimations = onPageTurnAnimations,
+            onReadAloudRate = onReadAloudRate,
             onTextAlign = onTextAlign,
             onPdfFit = onPdfFit,
             onBookAppearanceEnabled = onBookAppearanceEnabled
@@ -509,6 +512,7 @@ internal fun ReaderQuickSettingsDialog(
     onFontFamily: (ReaderFontFamily) -> Unit,
     onPublisherStyles: (Boolean) -> Unit,
     onPageTurnAnimations: (Boolean) -> Unit,
+    onReadAloudRate: (Float) -> Unit,
     onTextAlign: (ReaderTextAlign) -> Unit,
     onPdfFit: (ReaderPdfFit) -> Unit,
     onBookAppearanceEnabled: (Boolean) -> Unit,
@@ -580,6 +584,7 @@ internal fun ReaderQuickSettingsDialog(
                     Text("Page animations", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
                     Switch(checked = settings.pageTurnAnimations, onCheckedChange = onPageTurnAnimations)
                 }
+                SettingSlider("Read aloud speed", settings.readAloudRate, 0.7f..1.4f, onReadAloudRate)
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } }

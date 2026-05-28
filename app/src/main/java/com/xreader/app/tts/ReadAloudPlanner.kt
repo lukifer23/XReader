@@ -50,8 +50,10 @@ object ReadAloudPlanner {
 
     fun startIndex(chunks: List<ReadAloudChunk>, currentUnit: Int): Int {
         if (chunks.isEmpty()) return 0
-        val next = chunks.indexOfFirst { it.unitIndex >= currentUnit }
-        return if (next >= 0) next else chunks.lastIndex
+        val exact = chunks.indexOfFirst { it.unitIndex == currentUnit }
+        if (exact >= 0) return exact
+        val previous = chunks.indexOfLast { it.unitIndex < currentUnit }
+        return if (previous >= 0) previous else 0
     }
 
     fun splitForSpeech(text: String, maxLength: Int = DEFAULT_MAX_SPEECH_LENGTH): List<String> {

@@ -663,6 +663,7 @@ internal fun SettingsRoute(viewModel: SettingsViewModel, onBack: () -> Unit) {
                         checked = settings.pageTurnAnimations,
                         onCheckedChange = viewModel::setPageTurnAnimations
                     )
+                    SettingSlider("Read aloud speed", settings.readAloudRate, 0.7f..1.4f, viewModel::setReadAloudRate)
                 }
             }
             item {

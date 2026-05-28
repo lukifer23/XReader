@@ -49,6 +49,7 @@ data class ReaderSettings(
     val fontFamily: ReaderFontFamily = ReaderFontFamily.DEFAULT,
     val tapZonesEnabled: Boolean = true,
     val pageTurnAnimations: Boolean = true,
+    val readAloudRate: Float = 1.0f,
     val fullScreen: Boolean = false,
     val publisherStyles: Boolean = false,
     val textAlign: ReaderTextAlign = ReaderTextAlign.START,

@@ -74,6 +74,10 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch { container.settingsRepository.setPageTurnAnimations(value) }
     }
 
+    fun setReadAloudRate(value: Float) {
+        viewModelScope.launch { container.settingsRepository.setReadAloudRate(value) }
+    }
+
     fun setFullScreen(value: Boolean) {
         viewModelScope.launch { container.settingsRepository.setFullScreen(value) }
     }

@@ -40,7 +40,12 @@ class ReadAloudEngine(
     private var activeSpeech: ActiveSpeech? = null
     private var pendingUtteranceId: String? = null
 
-    suspend fun play(bookId: Long, chunks: List<ReadAloudChunk>, currentUnit: Int) {
+    suspend fun play(
+        bookId: Long,
+        chunks: List<ReadAloudChunk>,
+        currentUnit: Int,
+        speechRate: Float = DEFAULT_SPEECH_RATE,
+    ) {
         withContext(Dispatchers.Main.immediate) {
             if (chunks.isEmpty()) {
                 showMessage(bookId, "No readable text is indexed for this book. Repair the book from its details screen and try again.")
@@ -62,6 +67,7 @@ class ReadAloudEngine(
                 return@withContext
             }
 
+            setSpeechRateInternal(speechRate)
             val chunkIndex = ReadAloudPlanner.startIndex(chunks, currentUnit)
             val segments = ReadAloudPlanner.splitForSpeech(chunks[chunkIndex].text)
             if (segments.isEmpty()) {
@@ -76,6 +82,12 @@ class ReadAloudEngine(
                 segmentIndex = 0
             )
             speakCurrentSegment()
+        }
+    }
+
+    fun setSpeechRate(value: Float) {
+        scope.launch(Dispatchers.Main.immediate) {
+            setSpeechRateInternal(value)
         }
     }
 
@@ -141,6 +153,10 @@ class ReadAloudEngine(
         })
         tts = engine
         return true
+    }
+
+    private fun setSpeechRateInternal(value: Float) {
+        tts?.setSpeechRate(value.coerceIn(MIN_SPEECH_RATE, MAX_SPEECH_RATE))
     }
 
     private fun handleSpeechError(utteranceId: String?) {
@@ -228,5 +244,8 @@ class ReadAloudEngine(
 
     companion object {
         private const val TTS_INIT_TIMEOUT_MILLIS = 5_000L
+        private const val DEFAULT_SPEECH_RATE = 1.0f
+        private const val MIN_SPEECH_RATE = 0.7f
+        private const val MAX_SPEECH_RATE = 1.4f
     }
 }

@@ -92,6 +92,10 @@ class ReaderViewModel(
                         bookAppearanceEnabled = bookAppearanceEnabled
                     )
                 }
+                val readAloud = container.readAloudEngine.state.value
+                if (readAloud.activeBookId == bookId && (readAloud.playing || readAloud.initializing)) {
+                    container.readAloudEngine.setSpeechRate(settings.readAloudRate)
+                }
             }
         }
         viewModelScope.launch {
@@ -284,6 +288,11 @@ class ReaderViewModel(
         viewModelScope.launch { container.settingsRepository.setPageTurnAnimations(value) }
     }
 
+    fun setReadAloudRate(value: Float) {
+        viewModelScope.launch { container.settingsRepository.setReadAloudRate(value) }
+        container.readAloudEngine.setSpeechRate(value)
+    }
+
     fun setTextAlign(value: ReaderTextAlign) {
         viewModelScope.launch {
             if (_uiState.value.bookAppearanceEnabled) {
@@ -314,7 +323,7 @@ class ReaderViewModel(
         }
     }
 
-    fun toggleReadAloud() {
+    fun toggleReadAloud(visibleUnit: Int? = null) {
         val readAloud = _uiState.value.readAloud
         if (readAloud.playing || readAloud.initializing) {
             container.readAloudEngine.stop(bookId)
@@ -324,10 +333,12 @@ class ReaderViewModel(
             val publication = _uiState.value.publication ?: return@launch
             val rows = container.libraryRepository.indexedRowsForBook(bookId)
             val chunks = readAloudChunks(publication, rows)
+            val startUnit = visibleUnit?.coerceAtLeast(0) ?: _uiState.value.currentUnit
             container.readAloudEngine.play(
                 bookId = bookId,
                 chunks = chunks,
-                currentUnit = _uiState.value.currentUnit
+                currentUnit = startUnit,
+                speechRate = _uiState.value.settings.readAloudRate
             )
         }
     }
