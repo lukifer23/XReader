@@ -79,6 +79,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.xreader.app.AppContainer
 import com.xreader.app.data.BookEntity
 import com.xreader.app.data.ReaderTheme
+import com.xreader.app.settings.LibraryDensity
+import com.xreader.app.settings.LibrarySort
 import kotlin.math.roundToInt
 
 @Composable

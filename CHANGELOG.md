@@ -13,6 +13,7 @@ Initial public repository snapshot.
 - Duplicate detection by checksum.
 - Local Room database for books, reading state, sessions, notes, bookmarks, search, and dictionary entries.
 - Library organization, metadata editing, favorites, finished state, and progress display.
+- Persisted library sort and comfortable/compact density controls.
 - Readium locator persistence for resume.
 - In-reader navigation by swipe, tap zones, hardware keys, TOC, bookmarks, search results, and progress scrubber.
 - Reader themes, fullscreen mode, typography controls, PDF fit controls, page animation toggle, and real font-family options.

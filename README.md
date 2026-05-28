@@ -14,6 +14,7 @@ Implemented:
 - TXT import converted into a minimal EPUB package so text books use the same reader path.
 - Private app-library imports with checksum duplicate detection.
 - Library organization by books, authors, series, genres, years, recent, unread, in progress, finished, and favorites.
+- Persisted library sort and comfortable/compact density controls.
 - Metadata editing for title, author, year, genre, series, and series order.
 - Covers, metadata extraction, and a manual repair/reindex action.
 - Resume from persisted Readium locators with percent read and progress state.

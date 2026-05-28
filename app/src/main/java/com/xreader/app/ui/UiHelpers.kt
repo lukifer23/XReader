@@ -63,6 +63,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.xreader.app.data.AnnotationKind
 import com.xreader.app.data.ReaderTheme
+import com.xreader.app.settings.LibrarySort
 import kotlin.math.roundToInt
 
 @Composable

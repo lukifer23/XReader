@@ -10,6 +10,8 @@ import com.xreader.app.AppContainer
 import com.xreader.app.data.BookEntity
 import com.xreader.app.data.ReadingStateEntity
 import com.xreader.app.data.SearchIndexEntity
+import com.xreader.app.settings.LibraryDensity
+import com.xreader.app.settings.LibrarySort
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -17,7 +19,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 enum class LibraryGroup {
@@ -31,19 +32,6 @@ enum class LibraryGroup {
     IN_PROGRESS,
     FINISHED,
     FAVORITES,
-}
-
-enum class LibrarySort {
-    RECENT,
-    TITLE,
-    AUTHOR,
-    PROGRESS,
-    SERIES,
-}
-
-enum class LibraryDensity {
-    COMFORTABLE,
-    COMPACT,
 }
 
 data class BookListItem(
@@ -67,8 +55,6 @@ data class LibraryUiState(
 class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     private val query = MutableStateFlow("")
     private val group = MutableStateFlow(LibraryGroup.BOOKS)
-    private val sort = MutableStateFlow(LibrarySort.RECENT)
-    private val density = MutableStateFlow(LibraryDensity.COMFORTABLE)
     private val importing = MutableStateFlow(false)
     private val message = MutableStateFlow<String?>(null)
     private val searchResults = MutableStateFlow<List<com.xreader.app.data.SearchIndexEntity>>(emptyList())
@@ -90,12 +76,11 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         val searchResults: List<com.xreader.app.data.SearchIndexEntity>,
     )
 
-    private val selectionState = combine(query, group, sort, density) {
+    private val selectionState = combine(query, group, container.settingsRepository.librarySettings) {
             currentQuery,
             currentGroup,
-            currentSort,
-            currentDensity ->
-        LibrarySelectionState(currentQuery, currentGroup, currentSort, currentDensity)
+            librarySettings ->
+        LibrarySelectionState(currentQuery, currentGroup, librarySettings.sort, librarySettings.density)
     }
 
     private val chromeState = combine(selectionState, importing, message, searchResults) {
@@ -137,12 +122,19 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     fun setSort(value: LibrarySort) {
-        sort.value = value
+        viewModelScope.launch {
+            container.settingsRepository.setLibrarySort(value)
+        }
     }
 
     fun toggleDensity() {
-        density.update {
-            if (it == LibraryDensity.COMFORTABLE) LibraryDensity.COMPACT else LibraryDensity.COMFORTABLE
+        val next = if (uiState.value.density == LibraryDensity.COMFORTABLE) {
+            LibraryDensity.COMPACT
+        } else {
+            LibraryDensity.COMFORTABLE
+        }
+        viewModelScope.launch {
+            container.settingsRepository.setLibraryDensity(next)
         }
     }
 

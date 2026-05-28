@@ -27,6 +27,8 @@ class SettingsRepository(private val context: Context) {
         val textAlign = stringPreferencesKey("text_align")
         val pdfFit = stringPreferencesKey("pdf_fit")
         val idleTimeoutMillis = longPreferencesKey("idle_timeout_millis")
+        val librarySort = stringPreferencesKey("library_sort")
+        val libraryDensity = stringPreferencesKey("library_density")
     }
 
     val settings: Flow<ReaderSettings> =
@@ -47,6 +49,16 @@ class SettingsRepository(private val context: Context) {
                 pdfFit = prefs[Keys.pdfFit]?.let { runCatching { ReaderPdfFit.valueOf(it) }.getOrNull() }
                     ?: ReaderPdfFit.WIDTH,
                 idleTimeoutMillis = prefs[Keys.idleTimeoutMillis] ?: 90_000L
+            )
+        }
+
+    val librarySettings: Flow<LibrarySettings> =
+        context.readerSettingsDataStore.data.map { prefs ->
+            LibrarySettings(
+                sort = prefs[Keys.librarySort]?.let { runCatching { LibrarySort.valueOf(it) }.getOrNull() }
+                    ?: LibrarySort.RECENT,
+                density = prefs[Keys.libraryDensity]?.let { runCatching { LibraryDensity.valueOf(it) }.getOrNull() }
+                    ?: LibraryDensity.COMFORTABLE
             )
         }
 
@@ -92,6 +104,14 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setPdfFit(value: ReaderPdfFit) {
         context.readerSettingsDataStore.edit { it[Keys.pdfFit] = value.name }
+    }
+
+    suspend fun setLibrarySort(value: LibrarySort) {
+        context.readerSettingsDataStore.edit { it[Keys.librarySort] = value.name }
+    }
+
+    suspend fun setLibraryDensity(value: LibraryDensity) {
+        context.readerSettingsDataStore.edit { it[Keys.libraryDensity] = value.name }
     }
 
     private fun readerFontFamily(value: String?): ReaderFontFamily? =

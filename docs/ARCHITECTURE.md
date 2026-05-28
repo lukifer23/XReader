@@ -72,7 +72,7 @@ The manual Settings repair action reuses this parsing/indexing path against stor
 
 ## Settings
 
-Reader settings are persisted with DataStore. Settings include:
+Reader and library settings are persisted with DataStore. Settings include:
 
 - theme
 - font scale
@@ -86,6 +86,8 @@ Reader settings are persisted with DataStore. Settings include:
 - alignment
 - PDF fit
 - idle timeout
+- library sort
+- library density
 
 Font choices are limited to families that Android/Readium CSS can resolve or fall back from cleanly.
 

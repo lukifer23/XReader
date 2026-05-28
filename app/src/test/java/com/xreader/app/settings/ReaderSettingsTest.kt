@@ -13,6 +13,12 @@ class ReaderSettingsTest {
     }
 
     @Test
+    fun libraryDefaultsKeepHomeScreenPredictable() {
+        assertEquals(LibrarySort.RECENT, LibrarySettings().sort)
+        assertEquals(LibraryDensity.COMFORTABLE, LibrarySettings().density)
+    }
+
+    @Test
     fun fontFamiliesUseResolvableReadiumNames() {
         assertNull(ReaderFontFamily.DEFAULT.readiumName)
         assertEquals("serif", ReaderFontFamily.SERIF.readiumName)
