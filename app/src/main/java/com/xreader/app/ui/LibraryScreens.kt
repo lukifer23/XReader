@@ -210,13 +210,7 @@ internal fun LibraryScreen(
         LibraryActionRow(
             state = state,
             searchExpanded = searchExpanded,
-            onToggleSearch = {
-                if (searchExpanded && state.query.isNotBlank()) {
-                    onQuery("")
-                } else {
-                    searchExpanded = !searchExpanded
-                }
-            },
+            onToggleSearch = { searchExpanded = true },
             onSort = onSort,
             onToggleDensity = onToggleDensity
         )
@@ -341,11 +335,6 @@ internal fun LibraryActionRow(
         if (finished > 0) "$finished finished" else null,
         state.sort.label()
     ).joinToString(" • ")
-    val searchLabel = when {
-        searchExpanded && state.query.isNotBlank() -> "Clear search"
-        searchExpanded -> "Hide search"
-        else -> "Search library"
-    }
     val densityLabel =
         if (state.density == LibraryDensity.COMPACT) "Use comfortable layout" else "Use compact layout"
 
@@ -366,12 +355,14 @@ internal fun LibraryActionRow(
                 overflow = TextOverflow.Ellipsis
             )
         }
-        TooltipIconButton(
-            label = searchLabel,
-            onClick = onToggleSearch,
-            modifier = Modifier.size(44.dp)
-        ) {
-            Icon(if (searchExpanded) Icons.Filled.Close else Icons.Filled.Search, contentDescription = null)
+        if (!searchExpanded) {
+            TooltipIconButton(
+                label = "Search library",
+                onClick = onToggleSearch,
+                modifier = Modifier.size(44.dp)
+            ) {
+                Icon(Icons.Filled.Search, contentDescription = null)
+            }
         }
         Box {
             TooltipIconButton(
@@ -427,27 +418,25 @@ internal fun LibrarySearchField(
         singleLine = true,
         label = { Text("Search library") },
         leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-        trailingIcon = if (query.isNotBlank()) {
-            {
+        trailingIcon = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TooltipIconButton(
-                    label = "Search inside books",
-                    onClick = onSearch,
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(Icons.Filled.Search, contentDescription = null)
+                if (query.isNotBlank()) {
+                    TooltipIconButton(
+                        label = "Search inside books",
+                        onClick = onSearch,
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(Icons.Filled.Search, contentDescription = null)
+                    }
                 }
                 TooltipIconButton(
-                    label = "Clear search",
+                    label = if (query.isBlank()) "Hide search" else "Clear search",
                     onClick = onCollapse,
                     modifier = Modifier.size(40.dp)
                 ) {
                     Icon(Icons.Filled.Close, contentDescription = null)
                 }
             }
-            }
-        } else {
-            null
         }
     )
 }
@@ -457,50 +446,61 @@ internal fun LibraryFilterRow(
     selected: LibraryGroup,
     onGroup: (LibraryGroup) -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        LibraryChipRail(
-            groups = listOf(
-                LibraryGroup.BOOKS,
-                LibraryGroup.AUTHORS,
-                LibraryGroup.SERIES,
-                LibraryGroup.GENRES,
-                LibraryGroup.YEARS
-            ),
-            selected = selected,
-            onGroup = onGroup
-        )
-        LibraryChipRail(
-            groups = listOf(
-                LibraryGroup.RECENT,
-                LibraryGroup.UNREAD,
-                LibraryGroup.IN_PROGRESS,
-                LibraryGroup.FINISHED,
-                LibraryGroup.FAVORITES
-            ),
-            selected = selected,
-            onGroup = onGroup
+    var statusMenuOpen by remember { mutableStateOf(false) }
+    val primaryGroups = remember {
+        listOf(
+            LibraryGroup.AUTHORS,
+            LibraryGroup.SERIES,
+            LibraryGroup.GENRES,
+            LibraryGroup.YEARS
         )
     }
-}
-
-@Composable
-private fun LibraryChipRail(
-    groups: List<LibraryGroup>,
-    selected: LibraryGroup,
-    onGroup: (LibraryGroup) -> Unit,
-) {
+    val statusGroups = remember {
+        listOf(
+            LibraryGroup.RECENT,
+            LibraryGroup.UNREAD,
+            LibraryGroup.IN_PROGRESS,
+            LibraryGroup.FINISHED,
+            LibraryGroup.FAVORITES
+        )
+    }
+    val statusSelected = selected in statusGroups
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
+            .horizontalScroll(rememberScrollState())
+            .padding(vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        groups.forEach { group ->
+        FilterChip(
+            selected = selected == LibraryGroup.BOOKS,
+            onClick = { onGroup(LibraryGroup.BOOKS) },
+            label = { Text(LibraryGroup.BOOKS.label()) }
+        )
+        Box {
+            FilterChip(
+                selected = statusSelected,
+                onClick = { statusMenuOpen = true },
+                label = { Text(if (statusSelected) selected.label() else "Status") }
+            )
+            DropdownMenu(expanded = statusMenuOpen, onDismissRequest = { statusMenuOpen = false }) {
+                statusGroups.forEach { group ->
+                    DropdownMenuItem(
+                        text = { Text(group.label()) },
+                        leadingIcon = {
+                            if (selected == group) {
+                                Icon(Icons.Filled.Check, contentDescription = null)
+                            }
+                        },
+                        onClick = {
+                            statusMenuOpen = false
+                            onGroup(group)
+                        }
+                    )
+                }
+            }
+        }
+        primaryGroups.forEach { group ->
             FilterChip(
                 selected = selected == group,
                 onClick = { onGroup(group) },
