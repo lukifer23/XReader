@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.util.Log
 import android.webkit.WebView
+import com.xreader.app.analytics.AnalyticsExportService
 import com.xreader.app.analytics.AnalyticsRepository
 import com.xreader.app.data.XReaderDatabase
 import com.xreader.app.dictionary.DictionaryRepository
@@ -72,6 +73,9 @@ class AppContainer(
     }
     val analyticsRepository: AnalyticsRepository by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         AnalyticsRepository(database.books(), readingRepository)
+    }
+    val analyticsExportService: AnalyticsExportService by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        AnalyticsExportService(appContext, analyticsRepository)
     }
 
     fun warmReaderPath() {

@@ -12,6 +12,7 @@ class ReadingRepository(private val dao: ReadingDao) {
     suspend fun saveState(state: ReadingStateEntity) = dao.upsertState(state)
     suspend fun insertSession(session: ReadingSessionEntity): Long = dao.insertSession(session)
     fun observeSessions(): Flow<List<ReadingSessionEntity>> = dao.observeSessions()
+    suspend fun allSessions(): List<ReadingSessionEntity> = dao.allSessions()
     fun observeSessionsForBook(bookId: Long): Flow<List<ReadingSessionEntity>> =
         dao.observeSessionsForBook(bookId)
 }

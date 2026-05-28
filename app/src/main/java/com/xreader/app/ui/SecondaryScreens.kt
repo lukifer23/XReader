@@ -90,13 +90,39 @@ import java.util.Locale
 internal fun AnalyticsRoute(container: AppContainer, onBack: () -> Unit) {
     val viewModel: AnalyticsViewModel = viewModel(factory = AnalyticsViewModel.factory(container))
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) viewModel.exportAnalytics(uri)
+    }
+    LaunchedEffect(state.message) {
+        state.message?.let { message ->
+            snackbarHostState.showSnackbar(message)
+            viewModel.clearMessage()
+        }
+    }
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Reading stats") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = { exportLauncher.launch("xreader-reading-stats.json") },
+                        enabled = !state.exporting
+                    ) {
+                        if (state.exporting) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(Icons.Filled.FileDownload, contentDescription = "Export reading stats")
+                        }
                     }
                 }
             )

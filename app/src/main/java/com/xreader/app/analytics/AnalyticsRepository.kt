@@ -6,6 +6,8 @@ import com.xreader.app.data.ReadingSessionEntity
 import com.xreader.app.repository.ReadingRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import org.json.JSONArray
+import org.json.JSONObject
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
@@ -67,6 +69,12 @@ data class ActivityBucketAnalytics(
     val sessions: Int,
 )
 
+data class AnalyticsExportResult(
+    val json: String,
+    val ranges: Int,
+    val readingSessions: Int,
+)
+
 class AnalyticsRepository(
     private val bookDao: BookDao,
     private val readingRepository: ReadingRepository,
@@ -76,6 +84,95 @@ class AnalyticsRepository(
         combine(bookDao.observeBooks(""), readingRepository.observeSessions()) { books, sessions ->
             AnalyticsCalculator.summarize(books, sessions, clock, range)
         }
+
+    suspend fun exportSummariesJson(): AnalyticsExportResult {
+        val books = bookDao.booksForBackup()
+        val sessions = readingRepository.allSessions()
+        val summaries = AnalyticsRange.entries.map { range ->
+            AnalyticsCalculator.summarize(books, sessions, clock, range)
+        }
+        return AnalyticsExportResult(
+            json = AnalyticsExportJson.build(
+                exportedAt = clock.millis(),
+                summaries = summaries
+            ).toString(2),
+            ranges = summaries.size,
+            readingSessions = sessions.size
+        )
+    }
+}
+
+internal object AnalyticsExportJson {
+    fun build(
+        exportedAt: Long,
+        summaries: List<AnalyticsSummary>,
+    ): JSONObject =
+        JSONObject()
+            .put("format", EXPORT_FORMAT)
+            .put("version", 1)
+            .put("exportedAt", exportedAt)
+            .put(
+                "ranges",
+                JSONArray().also { array ->
+                    summaries.forEach { array.put(it.toJson()) }
+                }
+            )
+
+    private fun AnalyticsSummary.toJson(): JSONObject =
+        JSONObject()
+            .put("range", range.name)
+            .put("label", range.label)
+            .put("totalBooks", totalBooks)
+            .put("finishedBooks", finishedBooks)
+            .put("activeMillis", activeMillis)
+            .put("wordsRead", wordsRead)
+            .put("averageWpm", averageWpm)
+            .put("sessions", sessions)
+            .put("currentStreakDays", currentStreakDays)
+            .put("bestStreakDays", bestStreakDays)
+            .put(
+                "activity",
+                JSONArray().also { array ->
+                    activityBuckets.forEach { bucket ->
+                        array.put(
+                            JSONObject()
+                                .put("startMillis", bucket.startMillis)
+                                .put("granularity", bucket.granularity.name)
+                                .put("activeMillis", bucket.activeMillis)
+                                .put("wordsRead", bucket.wordsRead)
+                                .put("sessions", bucket.sessions)
+                        )
+                    }
+                }
+            )
+            .put("books", JSONArray().also { array -> byBook.forEach { array.put(it.toJson()) } })
+            .put("authors", JSONArray().also { array -> byAuthor.forEach { array.put(it.toJson()) } })
+            .put("genres", JSONArray().also { array -> byGenre.forEach { array.put(it.toJson()) } })
+
+    private fun BookAnalytics.toJson(): JSONObject =
+        JSONObject()
+            .put("title", book.title)
+            .put("author", book.author)
+            .putNullable("series", book.series)
+            .putNullable("genre", book.genre)
+            .putNullable("year", book.year)
+            .put("activeMillis", activeMillis)
+            .put("wordsRead", wordsRead)
+            .put("averageWpm", averageWpm)
+            .put("sessions", sessions)
+
+    private fun GroupAnalytics.toJson(): JSONObject =
+        JSONObject()
+            .put("label", label)
+            .put("activeMillis", activeMillis)
+            .put("wordsRead", wordsRead)
+            .put("averageWpm", averageWpm)
+            .put("sessions", sessions)
+
+    private fun JSONObject.putNullable(name: String, value: Any?): JSONObject =
+        put(name, value ?: JSONObject.NULL)
+
+    private const val EXPORT_FORMAT = "com.xreader.analytics.v1"
 }
 
 internal object AnalyticsCalculator {

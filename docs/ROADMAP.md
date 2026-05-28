@@ -7,7 +7,7 @@ This is the working product roadmap for the personal APK line. Items should appe
 - Split the large Compose UI file into smaller screen/components packages.
 - Add public-domain test fixtures for screenshots and instrumented reader QA.
 - Track startup and reader-open baseline history after each major UI, import, or Readium change.
-- Add export for reading analytics summaries.
+- Add optional CSV export for reading analytics summaries if JSON is not ergonomic enough in real use.
 
 ## Reader Polish
 
