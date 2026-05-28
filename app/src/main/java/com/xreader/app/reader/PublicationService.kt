@@ -67,9 +67,7 @@ class PublicationService(
                     publication = publication,
                     units = positions.toReadingUnits(book),
                     positions = positions,
-                    tableOfContents = traced("XReader:loadToc") {
-                        publication.tableOfContents.toNavigationItems(publication)
-                    }
+                    tableOfContents = emptyList()
                 )
             } catch (error: Throwable) {
                 publication.close()
@@ -77,6 +75,13 @@ class PublicationService(
             }
         }
     }
+
+    suspend fun tableOfContents(openPublication: OpenPublication.Readium): List<ReaderNavigationItem> =
+        withContext(Dispatchers.IO) {
+            traced("XReader:loadToc") {
+                openPublication.publication.tableOfContents.toNavigationItems(openPublication.publication)
+            }
+        }
 
     suspend fun search(openPublication: OpenPublication.Readium, query: String, limit: Int = 80): List<ReaderSearchResult> =
         withContext(Dispatchers.IO) {

@@ -13,6 +13,7 @@ import com.xreader.app.data.ReaderTheme
 import com.xreader.app.data.ReadingStateEntity
 import com.xreader.app.data.SearchIndexEntity
 import com.xreader.app.reader.OpenPublication
+import com.xreader.app.reader.ReaderNavigationItem
 import com.xreader.app.reader.ReaderSearchResult
 import com.xreader.app.reader.ReadingUnit
 import com.xreader.app.settings.ReaderFontFamily
@@ -20,13 +21,13 @@ import com.xreader.app.settings.ReaderPdfFit
 import com.xreader.app.settings.ReaderSettings
 import com.xreader.app.settings.ReaderTextAlign
 import kotlin.math.roundToInt
+import kotlinx.coroutines.async
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
-import org.json.JSONObject
 import org.readium.r2.shared.publication.Locator
 
 data class ReaderUiState(
@@ -38,6 +39,8 @@ data class ReaderUiState(
     val state: ReadingStateEntity? = null,
     val annotations: List<AnnotationEntity> = emptyList(),
     val bookmarks: List<BookmarkEntity> = emptyList(),
+    val tableOfContents: List<ReaderNavigationItem> = emptyList(),
+    val tableOfContentsLoading: Boolean = false,
     val searchQuery: String = "",
     val searchResults: List<ReaderSearchResult> = emptyList(),
     val searchRunning: Boolean = false,
@@ -65,6 +68,7 @@ class ReaderViewModel(
     private var saveJob: Job? = null
     private var lastReadingState: ReadingStateEntity? = null
     private var ignoreStoredStateUntilFirstLocator = initialLocatorOverride != null
+    private var deferredObserversStarted = false
 
     init {
         viewModelScope.launch {
@@ -72,6 +76,64 @@ class ReaderViewModel(
                 _uiState.update { it.copy(settings = settings) }
             }
         }
+        viewModelScope.launch {
+            runCatching {
+                val book = requireNotNull(container.libraryRepository.getBook(bookId)) { "Book not found" }
+                val savedState = async { container.readingRepository.getState(bookId) }
+                val publication = container.publicationService.open(book)
+                val units = publication.units
+                val saved = savedState.await()
+                val requestedLocator = initialLocatorOverride ?: saved?.locator
+                val maxIndexedUnit = if (requestedLocator?.searchUnitIndexOrNull() != null) {
+                    container.libraryRepository.maxIndexedUnitForBook(bookId).coerceAtLeast(1)
+                } else {
+                    1
+                }
+                val initialPosition = resolveInitialReaderPosition(
+                    initialLocatorOverride = initialLocatorOverride,
+                    saved = saved,
+                    positions = publication.positions,
+                    units = units,
+                    maxIndexedUnit = maxIndexedUnit
+                )
+                val activeTracker = createTracker(publication)
+                tracker = activeTracker
+                val jumpState = if (initialPosition.fromInitialOverride && initialPosition.locatorJson != null) {
+                    activeTracker.record(
+                        unit = initialPosition.unitIndex,
+                        locator = initialPosition.locatorJson,
+                        progressOverride = if (units.size <= 1) {
+                            1.0
+                        } else {
+                            initialPosition.unitIndex.toDouble() / (units.size - 1).toDouble()
+                        }
+                    )
+                } else {
+                    saved
+                }
+                lastReadingState = jumpState
+                _uiState.update {
+                    it.copy(
+                        loading = false,
+                        book = book,
+                        publication = publication,
+                        currentUnit = initialPosition.unitIndex,
+                        initialLocatorJson = initialPosition.locatorJson,
+                        state = jumpState ?: it.state
+                    )
+                }
+                startDeferredObservers()
+                loadTableOfContents(publication)
+                container.applicationScope.launch { container.libraryRepository.markOpened(bookId) }
+            }.onFailure { error ->
+                _uiState.update { it.copy(loading = false, error = error.message ?: "Could not open book") }
+            }
+        }
+    }
+
+    private fun startDeferredObservers() {
+        if (deferredObserversStarted) return
+        deferredObserversStarted = true
         viewModelScope.launch {
             container.annotationRepository.observeAnnotations(bookId).collect { annotations ->
                 _uiState.update { it.copy(annotations = annotations) }
@@ -89,62 +151,23 @@ class ReaderViewModel(
                 _uiState.update { it.copy(state = state, currentUnit = state?.currentUnit ?: it.currentUnit) }
             }
         }
+    }
+
+    private fun loadTableOfContents(publication: OpenPublication.Readium) {
+        _uiState.update { it.copy(tableOfContentsLoading = true) }
         viewModelScope.launch {
-            runCatching {
-                val book = requireNotNull(container.libraryRepository.getBook(bookId)) { "Book not found" }
-                container.libraryRepository.markOpened(bookId)
-                val publication = container.publicationService.open(book)
-                val units = publication.units
-                val saved = container.readingRepository.getState(bookId)
-                val requestedLocator = initialLocatorOverride ?: saved?.locator
-                val requestedReadiumLocator = requestedLocator?.toReadiumLocatorOrNull()
-                val requestedSearchUnit = requestedLocator?.searchUnitIndexOrNull()
-                val initialUnit = requestedReadiumLocator
-                    ?.let(publication::positionIndexFor)
-                    ?: requestedSearchUnit?.let { searchUnit ->
-                        val maxIndexedUnit = container.libraryRepository.maxIndexedUnitForBook(bookId).coerceAtLeast(1)
-                        val lastPositionIndex = publication.positions.lastIndex.coerceAtLeast(0)
-                        if (lastPositionIndex == 0) {
-                            0
-                        } else {
-                            (lastPositionIndex * (searchUnit.coerceAtLeast(0).toDouble() / maxIndexedUnit.toDouble())).roundToInt()
-                        }
-                    }
-                    ?: requestedLocator?.let { locatorToUnit(it, units) }
-                    ?: saved?.currentUnit
-                    ?: 0
-                val boundedInitialUnit = initialUnit.coerceIn(0, (units.size - 1).coerceAtLeast(0))
-                val initialLocator = requestedReadiumLocator?.toJSON()?.toString()
-                    ?: publication.positions.getOrNull(boundedInitialUnit)?.toJSON()?.toString()
-                    ?: requestedLocator
-                val activeTracker = createTracker(publication)
-                tracker = activeTracker
-                val jumpState = if (initialLocatorOverride != null && initialLocator != null) {
-                    activeTracker.record(
-                        unit = boundedInitialUnit,
-                        locator = initialLocator,
-                        progressOverride = if (units.size <= 1) {
-                            1.0
-                        } else {
-                            boundedInitialUnit.toDouble() / (units.size - 1).toDouble()
-                        }
-                    )
+            val tableOfContents = runCatching {
+                container.publicationService.tableOfContents(publication)
+            }.getOrDefault(emptyList())
+            _uiState.update { current ->
+                if (current.publication !== publication) {
+                    current
                 } else {
-                    saved
-                }
-                lastReadingState = jumpState
-                _uiState.update {
-                    it.copy(
-                        loading = false,
-                        book = book,
-                        publication = publication,
-                        currentUnit = boundedInitialUnit,
-                        initialLocatorJson = initialLocator,
-                        state = jumpState ?: it.state
+                    current.copy(
+                        tableOfContents = tableOfContents,
+                        tableOfContentsLoading = false
                     )
                 }
-            }.onFailure { error ->
-                _uiState.update { it.copy(loading = false, error = error.message ?: "Could not open book") }
             }
         }
     }
@@ -486,8 +509,3 @@ private fun SearchIndexEntity.snippet(query: String): String {
 
 private fun String.selectedQuote(): String =
     replace(Regex("\\s+"), " ").trim().take(800)
-
-private fun String.toReadiumLocatorOrNull(): Locator? {
-    if (isBlank() || !trimStart().startsWith("{")) return null
-    return runCatching { Locator.fromJSON(JSONObject(this)) }.getOrNull()
-}

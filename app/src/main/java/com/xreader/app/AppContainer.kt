@@ -26,7 +26,8 @@ class AppContainer(
     val applicationScope: CoroutineScope,
 ) {
     private val appContext = context.applicationContext
-    private val readerWarmupStarted = AtomicBoolean(false)
+    private val readerServiceWarmupStarted = AtomicBoolean(false)
+    private val readerWebViewWarmupStarted = AtomicBoolean(false)
 
     val database: XReaderDatabase by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         XReaderDatabase.get(appContext)
@@ -61,10 +62,21 @@ class AppContainer(
     }
 
     fun warmReaderPath() {
-        if (!readerWarmupStarted.compareAndSet(false, true)) return
-        applicationScope.launch {
+        warmReaderServices()
+        warmReaderWebView()
+    }
+
+    fun warmReaderServices() {
+        if (!readerServiceWarmupStarted.compareAndSet(false, true)) return
+        applicationScope.launch(Dispatchers.Default) {
             runCatching { publicationService }
                 .onFailure { Log.w("XReader", "Readium warmup failed", it) }
+        }
+    }
+
+    fun warmReaderWebView() {
+        if (!readerWebViewWarmupStarted.compareAndSet(false, true)) return
+        applicationScope.launch {
             withContext(Dispatchers.Main.immediate) {
                 runCatching {
                     WebView(appContext).destroy()

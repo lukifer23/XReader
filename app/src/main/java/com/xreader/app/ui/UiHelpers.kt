@@ -179,7 +179,8 @@ internal fun String.toAnnotationColor(): Color =
 internal fun ReaderTheme.label(): String =
     if (this == ReaderTheme.OLED) "OLED" else name.lowercase().replaceFirstChar(Char::titlecase)
 
-internal const val READER_PATH_WARMUP_DELAY_MS = 3_500L
+internal const val READER_SERVICE_WARMUP_DELAY_MS = 900L
+internal const val READER_WEBVIEW_WARMUP_DELAY_MS = 3_500L
 
 internal fun wordCountLabel(words: Int): String =
     if (words >= 1_000) "${(words / 1_000.0).roundToInt()}k words" else "$words words"

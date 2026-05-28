@@ -293,7 +293,8 @@ internal fun ReaderScreen(
     }
     if (navigationOpen) {
         ReaderNavigationDialog(
-            tableOfContents = publication.tableOfContents,
+            tableOfContents = state.tableOfContents,
+            tableOfContentsLoading = state.tableOfContentsLoading,
             bookmarks = state.bookmarks,
             annotations = state.annotations,
             onDismiss = { navigationOpen = false },
@@ -675,6 +676,7 @@ internal fun NoteDialog(onDismiss: () -> Unit, onSave: (String) -> Unit) {
 @Composable
 internal fun ReaderNavigationDialog(
     tableOfContents: List<ReaderNavigationItem>,
+    tableOfContentsLoading: Boolean,
     bookmarks: List<BookmarkEntity>,
     annotations: List<AnnotationEntity>,
     onDismiss: () -> Unit,
@@ -693,7 +695,14 @@ internal fun ReaderNavigationDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                if (tableOfContents.isEmpty()) {
+                if (tableOfContentsLoading) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                } else if (tableOfContents.isEmpty()) {
                     Text("No table of contents found.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else {
                     tableOfContents.forEach { item ->

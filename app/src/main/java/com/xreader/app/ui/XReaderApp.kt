@@ -34,8 +34,10 @@ fun XReaderApp(container: AppContainer) {
     val navController = rememberNavController()
     val activity = LocalContext.current.findActivity()
     LaunchedEffect(container) {
-        delay(READER_PATH_WARMUP_DELAY_MS)
-        container.warmReaderPath()
+        delay(READER_SERVICE_WARMUP_DELAY_MS)
+        container.warmReaderServices()
+        delay(READER_WEBVIEW_WARMUP_DELAY_MS - READER_SERVICE_WARMUP_DELAY_MS)
+        container.warmReaderWebView()
     }
     XReaderTheme(readerTheme = settings.theme) {
         AppSystemBars(activity = activity, theme = settings.theme)

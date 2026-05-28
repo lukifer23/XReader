@@ -65,3 +65,5 @@ Treat single-device numbers as local baselines, not universal claims. Record:
 - Reader-open frame capture: 37 frames, 8 janky frames, 90th percentile 93 ms, 4 missed vsync
 
 The reader-open capture confirms the tap opened the real EPUB reader. The capture window is fixed at roughly five seconds; use the frame data as the current jank baseline, not as a direct reader-open latency measurement.
+
+Follow-up code pass after this baseline moved table-of-contents construction and opened-at persistence off the initial reader-open path, deferred annotation/bookmark/state observers until the publication is ready, and split reader warmup into earlier Readium service warmup plus delayed WebView warmup. Re-run the adb baseline on the next connected-device pass before treating those changes as measured improvements.

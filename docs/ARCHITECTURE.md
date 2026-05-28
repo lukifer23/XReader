@@ -17,7 +17,7 @@ XReader is a single-module native Android app built around a local-first library
 
 ## Runtime Shape
 
-`XReaderApplication` owns an `AppContainer`. The container constructs the database, repositories, import services, reader services, dictionary repository, analytics repository, and shared application coroutine scope. Expensive reader initialization is kept out of app startup and warmed after the first screen is available.
+`XReaderApplication` owns an `AppContainer`. The container constructs the database, repositories, import services, reader services, dictionary repository, analytics repository, and shared application coroutine scope. Expensive reader initialization is kept out of app startup. Readium/PDF service setup is warmed shortly after the first screen, while WebView warmup stays delayed on the main thread to avoid stealing startup frames.
 
 The UI is Compose-first. ViewModels expose immutable state objects and one-shot actions. UI code delegates persistence, file access, parsing, and indexing to repositories and services.
 
@@ -56,7 +56,7 @@ The manual Settings repair action reuses this parsing/indexing path against stor
 
 - publication metadata
 - positions
-- table of contents
+- table of contents, loaded after the reader is visible
 - locators
 - search
 - reading units for local progress and fallback search
