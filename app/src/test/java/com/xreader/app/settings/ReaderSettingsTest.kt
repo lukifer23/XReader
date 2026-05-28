@@ -31,6 +31,29 @@ class ReaderSettingsTest {
     }
 
     @Test
+    fun spacingPresetsApplyOnlyTypographyDensity() {
+        val settings = ReaderSettings(
+            theme = com.xreader.app.data.ReaderTheme.OLED,
+            fontScale = 1.0f,
+            lineHeight = 1.2f,
+            marginScale = 0.4f,
+            fullScreen = true,
+            textAlign = ReaderTextAlign.JUSTIFY
+        )
+
+        val accessible = settings.withSpacingPreset(ReaderSpacingPreset.ACCESSIBLE)
+
+        assertEquals(com.xreader.app.data.ReaderTheme.OLED, accessible.theme)
+        assertTrue(accessible.fullScreen)
+        assertEquals(ReaderTextAlign.JUSTIFY, accessible.textAlign)
+        assertEquals(ReaderSpacingPreset.ACCESSIBLE.fontScale, accessible.fontScale, 0.001f)
+        assertEquals(ReaderSpacingPreset.ACCESSIBLE.lineHeight, accessible.lineHeight, 0.001f)
+        assertEquals(ReaderSpacingPreset.ACCESSIBLE.marginScale, accessible.marginScale, 0.001f)
+        assertEquals(ReaderSpacingPreset.ACCESSIBLE, accessible.spacingPresetOrNull())
+        assertNull(accessible.copy(fontScale = accessible.fontScale + 0.02f).spacingPresetOrNull())
+    }
+
+    @Test
     fun bookAppearanceOverridesOnlyReaderAppearanceFields() {
         val global = ReaderSettings(
             theme = com.xreader.app.data.ReaderTheme.OLED,

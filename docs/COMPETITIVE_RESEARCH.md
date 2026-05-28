@@ -35,7 +35,7 @@ This is the working competitive map for XReader. It should drive implementation 
 | TTS | Implemented as in-reader Android TextToSpeech read-aloud from local indexed book text. | Moon+, Librera, PocketBook, BookFusion, and others offer it. | Keep hardening voice behavior and device lifecycle handling. |
 | OPDS/catalogs | Not implemented. | Moon+, Librera, FBReader, PocketBook support OPDS. | Good optional later feature. |
 | PDF reflow/crop | PDF fit implemented; reflow/crop not implemented. | PocketBook/ReadEra have PDF comfort features. | Evaluate after reader polish. |
-| Custom user fonts | Built-in family choices and per-book appearance overrides implemented; user font import not implemented. | FBReader/Moon+ support user fonts. | User font import is a later reader-polish candidate. |
+| Custom user fonts | Built-in family choices, spacing presets, and per-book appearance overrides implemented; user font import not implemented. | FBReader/Moon+ support user fonts. | User font import is a later reader-polish candidate. |
 | Bulk metadata cleanup | Matching-series genre/series cleanup implemented in the metadata editor. | Metadata quality is a recurring library pain. | Continue with broader bulk tools later. |
 
 ## High-Impact Gaps
@@ -54,6 +54,7 @@ The research points to several areas that matter more than raw feature count:
 - Range-aware reading stats. The stats screen now supports 7-day, 30-day, 13-week, and all-time ranges, with grouped analytics and activity buckets recalculated for the selected period.
 - Local reading stats export. The stats screen can export all analytics ranges to CSV or JSON through Android's document picker, keeping the workflow local and user-controlled.
 - Per-book reader appearance. Books can keep their own font, spacing, alignment, publisher-style, and PDF fit choices without changing global reading behavior.
+- Reader spacing presets. Compact, comfort, and accessible presets provide fast setup while still using the same manual font, line-height, and margin controls.
 - Read aloud. The reader can speak forward from the current position through Android TextToSpeech using XReader's private full-text index, without cloud services or permanent reader chrome.
 
 ## Product Rules From The Research

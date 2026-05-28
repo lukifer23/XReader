@@ -88,7 +88,9 @@ import com.xreader.app.reader.ReaderNavigationItem
 import com.xreader.app.settings.ReaderFontFamily
 import com.xreader.app.settings.ReaderPdfFit
 import com.xreader.app.settings.ReaderSettings
+import com.xreader.app.settings.ReaderSpacingPreset
 import com.xreader.app.settings.ReaderTextAlign
+import com.xreader.app.settings.spacingPresetOrNull
 import com.xreader.app.tts.ReadAloudState
 import kotlin.math.roundToInt
 
@@ -152,6 +154,7 @@ internal fun ReaderRoute(
         onFontScale = viewModel::setFontScale,
         onLineHeight = viewModel::setLineHeight,
         onMarginScale = viewModel::setMarginScale,
+        onSpacingPreset = viewModel::setSpacingPreset,
         onFontFamily = viewModel::setFontFamily,
         onPublisherStyles = viewModel::setPublisherStyles,
         onPageTurnAnimations = viewModel::setPageTurnAnimations,
@@ -187,6 +190,7 @@ internal fun ReaderScreen(
     onFontScale: (Float) -> Unit,
     onLineHeight: (Float) -> Unit,
     onMarginScale: (Float) -> Unit,
+    onSpacingPreset: (ReaderSpacingPreset) -> Unit,
     onFontFamily: (ReaderFontFamily) -> Unit,
     onPublisherStyles: (Boolean) -> Unit,
     onPageTurnAnimations: (Boolean) -> Unit,
@@ -335,6 +339,7 @@ internal fun ReaderScreen(
             onFontScale = onFontScale,
             onLineHeight = onLineHeight,
             onMarginScale = onMarginScale,
+            onSpacingPreset = onSpacingPreset,
             onFontFamily = onFontFamily,
             onPublisherStyles = onPublisherStyles,
             onPageTurnAnimations = onPageTurnAnimations,
@@ -500,6 +505,7 @@ internal fun ReaderQuickSettingsDialog(
     onFontScale: (Float) -> Unit,
     onLineHeight: (Float) -> Unit,
     onMarginScale: (Float) -> Unit,
+    onSpacingPreset: (ReaderSpacingPreset) -> Unit,
     onFontFamily: (ReaderFontFamily) -> Unit,
     onPublisherStyles: (Boolean) -> Unit,
     onPageTurnAnimations: (Boolean) -> Unit,
@@ -521,6 +527,17 @@ internal fun ReaderQuickSettingsDialog(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Book-specific appearance", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
                     Switch(checked = bookAppearanceEnabled, onCheckedChange = onBookAppearanceEnabled)
+                }
+                Text("Spacing preset", style = MaterialTheme.typography.titleMedium)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val selectedPreset = settings.spacingPresetOrNull()
+                    ReaderSpacingPreset.entries.forEach { preset ->
+                        FilterChip(
+                            selected = selectedPreset == preset,
+                            onClick = { onSpacingPreset(preset) },
+                            label = { Text(preset.label) }
+                        )
+                    }
                 }
                 SettingSlider("Font size", settings.fontScale, 0.75f..1.65f, onFontScale)
                 SettingSlider("Line height", settings.lineHeight, 1.1f..2.0f, onLineHeight)

@@ -84,6 +84,7 @@ Reader and library settings are persisted with DataStore. Settings include:
 - font scale
 - line height
 - margin scale
+- compact, comfort, and accessible spacing presets that write the same typography fields
 - font family
 - tap zones
 - page animations

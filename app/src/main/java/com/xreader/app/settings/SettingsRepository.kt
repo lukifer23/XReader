@@ -116,6 +116,14 @@ class SettingsRepository(
         dataStore.edit { it[Keys.marginScale] = value.coerceIn(0.35f, 1.8f) }
     }
 
+    suspend fun setSpacingPreset(value: ReaderSpacingPreset) {
+        dataStore.edit {
+            it[Keys.fontScale] = value.fontScale
+            it[Keys.lineHeight] = value.lineHeight
+            it[Keys.marginScale] = value.marginScale
+        }
+    }
+
     suspend fun setFontFamily(value: ReaderFontFamily) {
         dataStore.edit { it[Keys.fontFamily] = value.name }
     }
@@ -179,6 +187,15 @@ class SettingsRepository(
 
     suspend fun setBookMarginScale(bookId: Long, value: Float) {
         dataStore.edit { it[bookAppearanceKeys(bookId).marginScale] = value.coerceIn(0.35f, 1.8f) }
+    }
+
+    suspend fun setBookSpacingPreset(bookId: Long, value: ReaderSpacingPreset) {
+        val keys = bookAppearanceKeys(bookId)
+        dataStore.edit {
+            it[keys.fontScale] = value.fontScale
+            it[keys.lineHeight] = value.lineHeight
+            it[keys.marginScale] = value.marginScale
+        }
     }
 
     suspend fun setBookFontFamily(bookId: Long, value: ReaderFontFamily) {

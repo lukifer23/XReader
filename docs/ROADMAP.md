@@ -13,7 +13,6 @@ This is the working product roadmap for the personal APK line. Items should appe
 - Evaluate page-turn animation styles supported by Readium and Android without adding custom fake page effects.
 - Harden read-aloud voice controls with voice/rate selection if device testing shows the single play/stop control is too limited.
 - Add a reader gesture calibration screen if Samsung/gesture-navigation edge conflicts remain visible.
-- Add more accessible spacing presets without crowding the normal reader controls.
 
 ## Library Polish
 

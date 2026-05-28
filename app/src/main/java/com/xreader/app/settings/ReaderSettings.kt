@@ -25,6 +25,22 @@ enum class ReaderFontFamily(
     MONOSPACE("Mono", "monospace"),
 }
 
+enum class ReaderSpacingPreset(
+    val label: String,
+    val fontScale: Float,
+    val lineHeight: Float,
+    val marginScale: Float,
+) {
+    COMPACT("Compact", 1.08f, 1.30f, 0.42f),
+    COMFORT("Comfort", 1.18f, 1.42f, 0.52f),
+    ACCESSIBLE("Accessible", 1.35f, 1.65f, 0.85f);
+
+    fun matches(settings: ReaderSettings): Boolean =
+        settings.fontScale.closeTo(fontScale) &&
+            settings.lineHeight.closeTo(lineHeight) &&
+            settings.marginScale.closeTo(marginScale)
+}
+
 data class ReaderSettings(
     val theme: ReaderTheme = ReaderTheme.LIGHT,
     val fontScale: Float = 1.18f,
@@ -39,6 +55,16 @@ data class ReaderSettings(
     val pdfFit: ReaderPdfFit = ReaderPdfFit.WIDTH,
     val idleTimeoutMillis: Long = 90_000L,
 )
+
+fun ReaderSettings.withSpacingPreset(preset: ReaderSpacingPreset): ReaderSettings =
+    copy(
+        fontScale = preset.fontScale,
+        lineHeight = preset.lineHeight,
+        marginScale = preset.marginScale
+    )
+
+fun ReaderSettings.spacingPresetOrNull(): ReaderSpacingPreset? =
+    ReaderSpacingPreset.entries.firstOrNull { it.matches(this) }
 
 data class BookReaderAppearance(
     val fontScale: Float,
@@ -75,3 +101,6 @@ fun ReaderSettings.withBookAppearance(appearance: BookReaderAppearance?): Reader
             pdfFit = appearance.pdfFit
         )
     }
+
+private fun Float.closeTo(other: Float): Boolean =
+    kotlin.math.abs(this - other) < 0.001f

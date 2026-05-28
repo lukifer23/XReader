@@ -23,6 +23,7 @@ Initial public repository snapshot.
 - Per-book library health checks and targeted repair from the metadata dialog.
 - In-reader navigation by swipe, tap zones, hardware keys, TOC, bookmarks, search results, and progress scrubber.
 - Reader themes, fullscreen mode, typography controls, PDF fit controls, page animation toggle, and real font-family options.
+- Compact, comfort, and accessible reader spacing presets for fast typography setup.
 - Per-book reader appearance overrides for font size, line height, margins, font family, publisher styles, alignment, and PDF fit.
 - In-reader read-aloud powered by Android TextToSpeech from XReader's local indexed book text.
 - Grouped Settings screen for reader appearance, typography, reading behavior, library display, and maintenance.

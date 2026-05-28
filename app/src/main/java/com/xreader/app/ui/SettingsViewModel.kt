@@ -12,6 +12,7 @@ import com.xreader.app.settings.LibrarySort
 import com.xreader.app.settings.ReaderFontFamily
 import com.xreader.app.settings.ReaderPdfFit
 import com.xreader.app.settings.ReaderSettings
+import com.xreader.app.settings.ReaderSpacingPreset
 import com.xreader.app.settings.ReaderTextAlign
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -55,6 +56,10 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     fun setMarginScale(value: Float) {
         viewModelScope.launch { container.settingsRepository.setMarginScale(value) }
+    }
+
+    fun setSpacingPreset(value: ReaderSpacingPreset) {
+        viewModelScope.launch { container.settingsRepository.setSpacingPreset(value) }
     }
 
     fun setFontFamily(value: ReaderFontFamily) {

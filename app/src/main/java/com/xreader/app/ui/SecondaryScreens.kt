@@ -82,7 +82,9 @@ import com.xreader.app.settings.LibraryDensity
 import com.xreader.app.settings.LibrarySort
 import com.xreader.app.settings.ReaderFontFamily
 import com.xreader.app.settings.ReaderPdfFit
+import com.xreader.app.settings.ReaderSpacingPreset
 import com.xreader.app.settings.ReaderTextAlign
+import com.xreader.app.settings.spacingPresetOrNull
 import java.text.DateFormat
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -606,6 +608,13 @@ internal fun SettingsRoute(viewModel: SettingsViewModel, onBack: () -> Unit) {
             }
             item {
                 SettingsSection("Typography") {
+                    SettingsChipGroup(
+                        title = "Spacing preset",
+                        options = ReaderSpacingPreset.entries,
+                        selected = settings.spacingPresetOrNull(),
+                        label = { it.label },
+                        onSelected = viewModel::setSpacingPreset
+                    )
                     SettingSlider("Font size", settings.fontScale, 0.75f..1.65f, viewModel::setFontScale)
                     SettingSlider("Line height", settings.lineHeight, 1.1f..2.0f, viewModel::setLineHeight)
                     SettingSlider("Margins", settings.marginScale, 0.35f..1.8f, viewModel::setMarginScale)
@@ -800,7 +809,7 @@ private fun SettingsToggleRow(
 private fun <T> SettingsChipGroup(
     title: String,
     options: List<T>,
-    selected: T,
+    selected: T?,
     label: (T) -> String,
     onSelected: (T) -> Unit,
 ) {
