@@ -22,7 +22,7 @@ Implemented:
 - Reader themes: light, dark, sepia, and OLED black.
 - Reader typography controls: font size, line height, margins, alignment, publisher styles, PDF fit, fullscreen, page animation toggle, and real Readium/CSS-resolvable font choices.
 - Grouped Settings screen for reader appearance, typography, reading behavior, library display, and maintenance.
-- Bookmarks, highlights, notes, global notes, in-book annotation lists, and local notes/bookmark JSON export/import.
+- Bookmarks, highlights, notes, global notes, in-book annotation lists, local notes/bookmark JSON export/import, and library metadata/progress backup.
 - Offline English dictionary backed by bundled Princeton WordNet data.
 - Local full-text search index for imported book text where extraction is supported.
 - Reading analytics for sessions, active reading time, progress, estimated WPM, streaks, and book/author/genre summaries.

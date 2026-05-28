@@ -24,6 +24,7 @@ Initial public repository snapshot.
 - Grouped Settings screen for reader appearance, typography, reading behavior, library display, and maintenance.
 - Notes, highlights, bookmarks, global notes view, and in-reader annotation navigation.
 - Local JSON export/import for notes, highlights, and bookmarks matched back to books by checksum.
+- Local JSON export/import for library catalog metadata, favorites, finished state, reading progress, and reading sessions matched back to imported books by checksum.
 - Offline English dictionary backed by Princeton WordNet.
 - Local full-text search with fallback from Readium search to the app search index.
 - Reading analytics for active time, WPM estimate, streaks, and book/author/genre summaries.

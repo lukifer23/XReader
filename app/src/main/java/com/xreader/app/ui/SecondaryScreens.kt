@@ -329,13 +329,21 @@ internal fun SettingsRoute(viewModel: SettingsViewModel, onBack: () -> Unit) {
     val backupMimeTypes = remember {
         arrayOf("application/json", "text/json", "text/plain", "application/octet-stream")
     }
-    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+    val exportNotesLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) viewModel.exportAnnotations(uri)
     }
-    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+    val importNotesLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) viewModel.importAnnotations(uri)
     }
+    val exportLibraryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) viewModel.exportLibrary(uri)
+    }
+    val importLibraryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) viewModel.importLibrary(uri)
+    }
     val maintenanceBusy = maintenance.repairingLibrary ||
+        maintenance.exportingLibrary ||
+        maintenance.importingLibrary ||
         maintenance.exportingAnnotations ||
         maintenance.importingAnnotations
     LaunchedEffect(maintenance.message) {
@@ -465,7 +473,37 @@ internal fun SettingsRoute(viewModel: SettingsViewModel, onBack: () -> Unit) {
                     }
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(
-                            onClick = { exportLauncher.launch("xreader-notes-bookmarks.json") },
+                            onClick = { exportLibraryLauncher.launch("xreader-library-metadata.json") },
+                            enabled = !maintenanceBusy
+                        ) {
+                            if (maintenance.exportingLibrary) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                )
+                            } else {
+                                Icon(Icons.Filled.FileDownload, contentDescription = null)
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            Text(if (maintenance.exportingLibrary) "Exporting library" else "Export library")
+                        }
+                        Button(
+                            onClick = { importLibraryLauncher.launch(backupMimeTypes) },
+                            enabled = !maintenanceBusy
+                        ) {
+                            if (maintenance.importingLibrary) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                )
+                            } else {
+                                Icon(Icons.Filled.FileUpload, contentDescription = null)
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            Text(if (maintenance.importingLibrary) "Importing library" else "Import library")
+                        }
+                        Button(
+                            onClick = { exportNotesLauncher.launch("xreader-notes-bookmarks.json") },
                             enabled = !maintenanceBusy
                         ) {
                             if (maintenance.exportingAnnotations) {
@@ -480,7 +518,7 @@ internal fun SettingsRoute(viewModel: SettingsViewModel, onBack: () -> Unit) {
                             Text(if (maintenance.exportingAnnotations) "Exporting notes" else "Export notes")
                         }
                         Button(
-                            onClick = { importLauncher.launch(backupMimeTypes) },
+                            onClick = { importNotesLauncher.launch(backupMimeTypes) },
                             enabled = !maintenanceBusy
                         ) {
                             if (maintenance.importingAnnotations) {

@@ -1,0 +1,278 @@
+package com.xreader.app.repository
+
+import com.xreader.app.core.TextTools
+import com.xreader.app.data.AuthorEntity
+import com.xreader.app.data.BookDao
+import com.xreader.app.data.GenreEntity
+import com.xreader.app.data.ReadingDao
+import com.xreader.app.data.ReadingSessionEntity
+import com.xreader.app.data.ReadingStateEntity
+import com.xreader.app.data.SeriesEntity
+import org.json.JSONArray
+import org.json.JSONObject
+import java.time.Clock
+import kotlin.math.max
+
+class LibraryBackupRepository(
+    private val bookDao: BookDao,
+    private val readingDao: ReadingDao,
+    private val clock: Clock = Clock.systemUTC(),
+) {
+    data class ExportResult(
+        val json: String,
+        val books: Int,
+        val readingStates: Int,
+        val readingSessions: Int,
+    )
+
+    data class ImportResult(
+        val booksUpdated: Int,
+        val readingStatesImported: Int,
+        val readingStatesSkipped: Int,
+        val readingSessionsImported: Int,
+        val readingSessionsSkipped: Int,
+        val missingBooks: Int,
+        val invalidItems: Int,
+    )
+
+    suspend fun exportBackupJson(): ExportResult {
+        val books = bookDao.booksForBackup()
+        val booksById = books.associateBy { it.id }
+        val states = readingDao.allStates()
+        val sessions = readingDao.allSessions()
+        val root = JSONObject()
+            .put("format", BACKUP_FORMAT)
+            .put("version", 1)
+            .put("exportedAt", clock.millis())
+            .put(
+                "books",
+                JSONArray().also { array ->
+                    books.forEach { book ->
+                        array.put(
+                            JSONObject()
+                                .put("checksum", book.checksum)
+                                .put("title", book.title)
+                                .put("author", book.author)
+                                .putNullable("series", book.series)
+                                .putNullable("seriesIndex", book.seriesIndex)
+                                .putNullable("genre", book.genre)
+                                .putNullable("year", book.year)
+                                .putNullable("description", book.description)
+                                .putNullable("language", book.language)
+                                .put("favorite", book.favorite)
+                                .put("finished", book.finished)
+                                .putNullable("lastOpenedAt", book.lastOpenedAt)
+                                .put("updatedAt", book.updatedAt)
+                        )
+                    }
+                }
+            )
+            .put(
+                "readingStates",
+                JSONArray().also { array ->
+                    states.forEach { state ->
+                        val book = booksById[state.bookId] ?: return@forEach
+                        array.put(
+                            JSONObject()
+                                .put("bookChecksum", book.checksum)
+                                .put("locator", state.locator)
+                                .put("progress", state.progress)
+                                .put("currentUnit", state.currentUnit)
+                                .put("totalUnits", state.totalUnits)
+                                .put("activeMillis", state.activeMillis)
+                                .put("estimatedWpm", state.estimatedWpm)
+                                .put("lastReadAt", state.lastReadAt)
+                                .putNullable("finishedAt", state.finishedAt)
+                        )
+                    }
+                }
+            )
+            .put(
+                "readingSessions",
+                JSONArray().also { array ->
+                    sessions.forEach { session ->
+                        val book = booksById[session.bookId] ?: return@forEach
+                        array.put(
+                            JSONObject()
+                                .put("bookChecksum", book.checksum)
+                                .put("startedAt", session.startedAt)
+                                .put("endedAt", session.endedAt)
+                                .put("activeMillis", session.activeMillis)
+                                .put("startUnit", session.startUnit)
+                                .put("endUnit", session.endUnit)
+                                .put("wordsRead", session.wordsRead)
+                                .put("wpm", session.wpm)
+                        )
+                    }
+                }
+            )
+        return ExportResult(
+            json = root.toString(2),
+            books = books.size,
+            readingStates = states.size,
+            readingSessions = sessions.size
+        )
+    }
+
+    suspend fun importBackupJson(json: String): ImportResult {
+        val root = JSONObject(json)
+        require(root.optString("format") == BACKUP_FORMAT) { "This is not an XReader library backup." }
+        val booksByChecksum = bookDao.booksForBackup().associateBy { it.checksum }
+        val missingChecksums = mutableSetOf<String>()
+        var booksUpdated = 0
+        var readingStatesImported = 0
+        var readingStatesSkipped = 0
+        var readingSessionsImported = 0
+        var readingSessionsSkipped = 0
+        var invalidItems = 0
+
+        val books = root.optJSONArray("books") ?: JSONArray()
+        for (index in 0 until books.length()) {
+            val item = books.optJSONObject(index) ?: run {
+                invalidItems += 1
+                continue
+            }
+            val checksum = item.optString("checksum").takeIf { it.isNotBlank() } ?: run {
+                invalidItems += 1
+                continue
+            }
+            val existing = booksByChecksum[checksum] ?: run {
+                missingChecksums += checksum
+                continue
+            }
+            val title = item.optString("title", existing.title).trim().ifBlank { existing.title }
+            val author = item.optString("author", existing.author).trim().ifBlank { existing.author }
+            val metadata = existing.copy(
+                title = title,
+                author = author,
+                sortTitle = TextTools.sortTitle(title),
+                series = item.optNullableString("series")?.trim()?.ifBlank { null },
+                seriesIndex = item.optNullableDouble("seriesIndex"),
+                genre = item.optNullableString("genre")?.trim()?.ifBlank { null },
+                year = item.optNullableInt("year"),
+                description = item.optNullableString("description")?.trim()?.ifBlank { null },
+                language = item.optNullableString("language")?.trim()?.ifBlank { null },
+                favorite = item.optBoolean("favorite", existing.favorite),
+                finished = item.optBoolean("finished", existing.finished),
+                lastOpenedAt = item.optNullableLong("lastOpenedAt") ?: existing.lastOpenedAt,
+                updatedAt = existing.updatedAt
+            )
+            if (metadata != existing) {
+                val updated = metadata.copy(updatedAt = max(clock.millis(), item.optLong("updatedAt", existing.updatedAt)))
+                bookDao.update(updated)
+                bookDao.insertAuthor(AuthorEntity(name = updated.author))
+                updated.genre?.let { bookDao.insertGenre(GenreEntity(name = it)) }
+                updated.series?.let { bookDao.insertSeries(SeriesEntity(name = it)) }
+                booksUpdated += 1
+            }
+        }
+
+        val states = root.optJSONArray("readingStates") ?: JSONArray()
+        for (index in 0 until states.length()) {
+            val item = states.optJSONObject(index) ?: run {
+                invalidItems += 1
+                continue
+            }
+            val checksum = item.optString("bookChecksum").takeIf { it.isNotBlank() } ?: run {
+                invalidItems += 1
+                continue
+            }
+            val book = booksByChecksum[checksum] ?: run {
+                missingChecksums += checksum
+                continue
+            }
+            val locator = item.optString("locator").takeIf { it.isNotBlank() } ?: run {
+                invalidItems += 1
+                continue
+            }
+            val imported = ReadingStateEntity(
+                bookId = book.id,
+                locator = locator,
+                progress = item.optDouble("progress", 0.0).coerceIn(0.0, 1.0),
+                currentUnit = item.optInt("currentUnit", 0).coerceAtLeast(0),
+                totalUnits = item.optInt("totalUnits", 0).coerceAtLeast(0),
+                activeMillis = item.optLong("activeMillis", 0L).coerceAtLeast(0L),
+                estimatedWpm = item.optInt("estimatedWpm", 0).coerceAtLeast(0),
+                lastReadAt = item.optLong("lastReadAt", clock.millis()),
+                finishedAt = item.optNullableLong("finishedAt")
+            )
+            val existing = readingDao.getState(book.id)
+            if (existing != null && existing.lastReadAt >= imported.lastReadAt) {
+                readingStatesSkipped += 1
+                continue
+            }
+            readingDao.upsertState(imported)
+            readingStatesImported += 1
+        }
+
+        val sessions = root.optJSONArray("readingSessions") ?: JSONArray()
+        for (index in 0 until sessions.length()) {
+            val item = sessions.optJSONObject(index) ?: run {
+                invalidItems += 1
+                continue
+            }
+            val checksum = item.optString("bookChecksum").takeIf { it.isNotBlank() } ?: run {
+                invalidItems += 1
+                continue
+            }
+            val book = booksByChecksum[checksum] ?: run {
+                missingChecksums += checksum
+                continue
+            }
+            val startedAt = item.optLong("startedAt", 0L)
+            val endedAt = item.optLong("endedAt", 0L)
+            val startUnit = item.optInt("startUnit", 0)
+            val endUnit = item.optInt("endUnit", startUnit)
+            if (startedAt <= 0L || endedAt < startedAt) {
+                invalidItems += 1
+                continue
+            }
+            if (readingDao.getSessionForImport(book.id, startedAt, endedAt, startUnit, endUnit) != null) {
+                readingSessionsSkipped += 1
+                continue
+            }
+            readingDao.insertSession(
+                ReadingSessionEntity(
+                    bookId = book.id,
+                    startedAt = startedAt,
+                    endedAt = endedAt,
+                    activeMillis = item.optLong("activeMillis", 0L).coerceAtLeast(0L),
+                    startUnit = startUnit.coerceAtLeast(0),
+                    endUnit = endUnit.coerceAtLeast(0),
+                    wordsRead = item.optInt("wordsRead", 0).coerceAtLeast(0),
+                    wpm = item.optInt("wpm", 0).coerceAtLeast(0)
+                )
+            )
+            readingSessionsImported += 1
+        }
+
+        return ImportResult(
+            booksUpdated = booksUpdated,
+            readingStatesImported = readingStatesImported,
+            readingStatesSkipped = readingStatesSkipped,
+            readingSessionsImported = readingSessionsImported,
+            readingSessionsSkipped = readingSessionsSkipped,
+            missingBooks = missingChecksums.size,
+            invalidItems = invalidItems
+        )
+    }
+
+    private fun JSONObject.putNullable(name: String, value: Any?): JSONObject =
+        put(name, value ?: JSONObject.NULL)
+
+    private fun JSONObject.optNullableString(name: String): String? =
+        if (!has(name) || isNull(name)) null else optString(name)
+
+    private fun JSONObject.optNullableLong(name: String): Long? =
+        if (!has(name) || isNull(name)) null else optLong(name)
+
+    private fun JSONObject.optNullableInt(name: String): Int? =
+        if (!has(name) || isNull(name)) null else optInt(name)
+
+    private fun JSONObject.optNullableDouble(name: String): Double? =
+        if (!has(name) || isNull(name)) null else optDouble(name)
+
+    private companion object {
+        const val BACKUP_FORMAT = "com.xreader.library-metadata.v1"
+    }
+}

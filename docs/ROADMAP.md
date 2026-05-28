@@ -21,7 +21,6 @@ This is the working product roadmap for the personal APK line. Items should appe
 
 - Add better bulk metadata operations for series and genre cleanup.
 - Add sort controls within each group.
-- Add backups for the Room metadata database, excluding imported book files unless explicitly selected.
 
 ## Later
 

@@ -12,6 +12,8 @@ import com.xreader.app.readium.ReadiumRuntime
 import com.xreader.app.reader.PublicationService
 import com.xreader.app.repository.AnnotationBackupService
 import com.xreader.app.repository.AnnotationRepository
+import com.xreader.app.repository.LibraryBackupRepository
+import com.xreader.app.repository.LibraryBackupService
 import com.xreader.app.repository.LibraryRepository
 import com.xreader.app.repository.ReadingRepository
 import com.xreader.app.settings.SettingsRepository
@@ -51,6 +53,12 @@ class AppContainer(
     }
     val annotationBackupService: AnnotationBackupService by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         AnnotationBackupService(appContext, annotationRepository)
+    }
+    private val libraryBackupRepository: LibraryBackupRepository by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        LibraryBackupRepository(database.books(), database.reading())
+    }
+    val libraryBackupService: LibraryBackupService by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        LibraryBackupService(appContext, libraryBackupRepository)
     }
     val dictionaryRepository: DictionaryRepository by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         DictionaryRepository(appContext, database.dictionary())

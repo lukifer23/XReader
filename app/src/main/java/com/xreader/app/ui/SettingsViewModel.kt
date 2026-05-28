@@ -22,6 +22,8 @@ import kotlinx.coroutines.launch
 
 data class SettingsMaintenanceUiState(
     val repairingLibrary: Boolean = false,
+    val exportingLibrary: Boolean = false,
+    val importingLibrary: Boolean = false,
     val exportingAnnotations: Boolean = false,
     val importingAnnotations: Boolean = false,
     val message: String? = null,
@@ -127,6 +129,34 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    fun exportLibrary(uri: Uri) {
+        if (_maintenance.value.isBusy()) return
+        viewModelScope.launch {
+            _maintenance.update { it.copy(exportingLibrary = true, message = null) }
+            val message = runCatching { container.libraryBackupService.exportTo(uri) }
+                .fold(
+                    onSuccess = {
+                        "Exported ${it.books} ${if (it.books == 1) "book" else "books"}, ${it.readingStates} progress states, and ${it.readingSessions} sessions"
+                    },
+                    onFailure = { it.message ?: "Library export failed" }
+                )
+            _maintenance.update { it.copy(exportingLibrary = false, message = message) }
+        }
+    }
+
+    fun importLibrary(uri: Uri) {
+        if (_maintenance.value.isBusy()) return
+        viewModelScope.launch {
+            _maintenance.update { it.copy(importingLibrary = true, message = null) }
+            val message = runCatching { container.libraryBackupService.importFrom(uri) }
+                .fold(
+                    onSuccess = { it.summaryMessage() },
+                    onFailure = { it.message ?: "Library import failed" }
+                )
+            _maintenance.update { it.copy(importingLibrary = false, message = message) }
+        }
+    }
+
     fun importAnnotations(uri: Uri) {
         if (_maintenance.value.isBusy()) return
         viewModelScope.launch {
@@ -166,8 +196,21 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         return if (details.isEmpty()) base else "$base; ${details.joinToString(", ")}"
     }
 
+    private fun com.xreader.app.repository.LibraryBackupRepository.ImportResult.summaryMessage(): String {
+        val changed = booksUpdated + readingStatesImported + readingSessionsImported
+        val skipped = readingStatesSkipped + readingSessionsSkipped
+        val base = "Imported $changed library ${if (changed == 1) "item" else "items"}"
+        val details = buildList {
+            if (booksUpdated > 0) add("$booksUpdated metadata updates")
+            if (skipped > 0) add("$skipped skipped")
+            if (missingBooks > 0) add("$missingBooks missing books")
+            if (invalidItems > 0) add("$invalidItems invalid")
+        }
+        return if (details.isEmpty()) base else "$base; ${details.joinToString(", ")}"
+    }
+
     private fun SettingsMaintenanceUiState.isBusy(): Boolean =
-        repairingLibrary || exportingAnnotations || importingAnnotations
+        repairingLibrary || exportingLibrary || importingLibrary || exportingAnnotations || importingAnnotations
 
     companion object {
         fun factory(container: AppContainer): ViewModelProvider.Factory =

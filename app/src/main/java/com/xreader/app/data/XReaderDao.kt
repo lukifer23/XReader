@@ -105,6 +105,9 @@ interface ReadingDao {
     @Query("SELECT * FROM reading_states")
     fun observeStates(): Flow<List<ReadingStateEntity>>
 
+    @Query("SELECT * FROM reading_states")
+    suspend fun allStates(): List<ReadingStateEntity>
+
     @Query("SELECT * FROM reading_states WHERE bookId = :bookId")
     suspend fun getState(bookId: Long): ReadingStateEntity?
 
@@ -116,6 +119,25 @@ interface ReadingDao {
 
     @Query("SELECT * FROM reading_sessions ORDER BY startedAt DESC")
     fun observeSessions(): Flow<List<ReadingSessionEntity>>
+
+    @Query("SELECT * FROM reading_sessions ORDER BY startedAt DESC")
+    suspend fun allSessions(): List<ReadingSessionEntity>
+
+    @Query(
+        """
+        SELECT * FROM reading_sessions
+        WHERE bookId = :bookId AND startedAt = :startedAt AND endedAt = :endedAt
+            AND startUnit = :startUnit AND endUnit = :endUnit
+        LIMIT 1
+        """
+    )
+    suspend fun getSessionForImport(
+        bookId: Long,
+        startedAt: Long,
+        endedAt: Long,
+        startUnit: Int,
+        endUnit: Int,
+    ): ReadingSessionEntity?
 
     @Query("SELECT * FROM reading_sessions WHERE bookId = :bookId ORDER BY startedAt DESC")
     fun observeSessionsForBook(bookId: Long): Flow<List<ReadingSessionEntity>>
