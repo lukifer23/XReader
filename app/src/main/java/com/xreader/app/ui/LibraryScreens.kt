@@ -5,7 +5,6 @@ package com.xreader.app.ui
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -227,21 +226,17 @@ internal fun LibraryScreen(
             .background(MaterialTheme.colorScheme.background)
             .padding(horizontal = 16.dp)
     ) {
-        AnimatedVisibility(visible = searchExpanded) {
+        if (searchExpanded) {
             LibrarySearchField(
                 query = state.query,
                 onQuery = onQuery,
                 onSearch = onSearch,
                 onCollapse = {
-                    if (state.query.isBlank()) {
-                        searchExpanded = false
-                    } else {
-                        onQuery("")
-                    }
+                    if (state.query.isNotBlank()) onQuery("")
+                    searchExpanded = false
                 }
             )
-        }
-        AnimatedVisibility(visible = !searchExpanded) {
+        } else {
             LibraryActionRow(
                 state = state,
                 onToggleSearch = { searchExpanded = true },
