@@ -17,6 +17,7 @@ Initial public repository snapshot.
 - Readium locator persistence for resume.
 - In-reader navigation by swipe, tap zones, hardware keys, TOC, bookmarks, search results, and progress scrubber.
 - Reader themes, fullscreen mode, typography controls, PDF fit controls, page animation toggle, and real font-family options.
+- Grouped Settings screen for reader appearance, typography, reading behavior, library display, and maintenance.
 - Notes, highlights, bookmarks, global notes view, and in-reader annotation navigation.
 - Offline English dictionary backed by Princeton WordNet.
 - Local full-text search with fallback from Readium search to the app search index.

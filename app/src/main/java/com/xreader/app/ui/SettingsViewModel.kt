@@ -5,6 +5,9 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.xreader.app.AppContainer
 import com.xreader.app.data.ReaderTheme
+import com.xreader.app.settings.LibraryDensity
+import com.xreader.app.settings.LibrarySettings
+import com.xreader.app.settings.LibrarySort
 import com.xreader.app.settings.ReaderFontFamily
 import com.xreader.app.settings.ReaderPdfFit
 import com.xreader.app.settings.ReaderSettings
@@ -25,6 +28,10 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     val settings: StateFlow<ReaderSettings> =
         container.settingsRepository.settings
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ReaderSettings())
+
+    val librarySettings: StateFlow<LibrarySettings> =
+        container.settingsRepository.librarySettings
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibrarySettings())
 
     private val _maintenance = MutableStateFlow(SettingsMaintenanceUiState())
     val maintenance: StateFlow<SettingsMaintenanceUiState> = _maintenance
@@ -71,6 +78,14 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     fun setPdfFit(value: ReaderPdfFit) {
         viewModelScope.launch { container.settingsRepository.setPdfFit(value) }
+    }
+
+    fun setLibrarySort(value: LibrarySort) {
+        viewModelScope.launch { container.settingsRepository.setLibrarySort(value) }
+    }
+
+    fun setLibraryDensity(value: LibraryDensity) {
+        viewModelScope.launch { container.settingsRepository.setLibraryDensity(value) }
     }
 
     fun toggleLightDark() {

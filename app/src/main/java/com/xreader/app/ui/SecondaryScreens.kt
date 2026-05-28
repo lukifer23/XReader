@@ -5,6 +5,7 @@ package com.xreader.app.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -25,9 +26,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -35,12 +34,12 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -56,18 +55,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.xreader.app.AppContainer
 import com.xreader.app.data.AnnotationEntity
 import com.xreader.app.data.AnnotationKind
 import com.xreader.app.data.ReaderTheme
+import com.xreader.app.settings.LibraryDensity
+import com.xreader.app.settings.LibrarySort
 import com.xreader.app.settings.ReaderFontFamily
 import com.xreader.app.settings.ReaderPdfFit
 import com.xreader.app.settings.ReaderTextAlign
@@ -321,6 +319,7 @@ internal fun EditAnnotationDialog(
 @Composable
 internal fun SettingsRoute(viewModel: SettingsViewModel, onBack: () -> Unit) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val librarySettings by viewModel.librarySettings.collectAsStateWithLifecycle()
     val maintenance by viewModel.maintenance.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(maintenance.message) {
@@ -333,7 +332,7 @@ internal fun SettingsRoute(viewModel: SettingsViewModel, onBack: () -> Unit) {
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("Reader settings") },
+                title = { Text("Settings") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -342,89 +341,172 @@ internal fun SettingsRoute(viewModel: SettingsViewModel, onBack: () -> Unit) {
             )
         }
     ) { padding ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
+                .background(MaterialTheme.colorScheme.background),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(22.dp)
         ) {
-            Text("Theme", style = MaterialTheme.typography.titleMedium)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                ReaderTheme.entries.forEach { theme ->
-                    FilterChip(
-                        selected = settings.theme == theme,
-                        onClick = { viewModel.setTheme(theme) },
-                        label = { Text(theme.label()) }
+            item {
+                SettingsSection("Appearance") {
+                    SettingsChipGroup(
+                        title = "Theme",
+                        options = ReaderTheme.entries,
+                        selected = settings.theme,
+                        label = { it.label() },
+                        onSelected = viewModel::setTheme
                     )
                 }
             }
-            SettingSlider("Font size", settings.fontScale, 0.75f..1.65f, viewModel::setFontScale)
-            SettingSlider("Line height", settings.lineHeight, 1.1f..2.0f, viewModel::setLineHeight)
-            SettingSlider("Margins", settings.marginScale, 0.35f..1.8f, viewModel::setMarginScale)
-            Text("Font", style = MaterialTheme.typography.titleMedium)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                ReaderFontFamily.entries.forEach { family ->
-                    FilterChip(
-                        selected = settings.fontFamily == family,
-                        onClick = { viewModel.setFontFamily(family) },
-                        label = { Text(family.label) }
+            item {
+                SettingsSection("Typography") {
+                    SettingSlider("Font size", settings.fontScale, 0.75f..1.65f, viewModel::setFontScale)
+                    SettingSlider("Line height", settings.lineHeight, 1.1f..2.0f, viewModel::setLineHeight)
+                    SettingSlider("Margins", settings.marginScale, 0.35f..1.8f, viewModel::setMarginScale)
+                    SettingsChipGroup(
+                        title = "Font",
+                        options = ReaderFontFamily.entries,
+                        selected = settings.fontFamily,
+                        label = { it.label },
+                        onSelected = viewModel::setFontFamily
+                    )
+                    SettingsChipGroup(
+                        title = "Alignment",
+                        options = ReaderTextAlign.entries,
+                        selected = settings.textAlign,
+                        label = { it.name.lowercase().replaceFirstChar(Char::titlecase) },
+                        onSelected = viewModel::setTextAlign
+                    )
+                    SettingsToggleRow(
+                        label = "Publisher styles",
+                        checked = settings.publisherStyles,
+                        onCheckedChange = viewModel::setPublisherStyles
                     )
                 }
             }
-            Text("Alignment", style = MaterialTheme.typography.titleMedium)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                ReaderTextAlign.entries.forEach { alignment ->
-                    FilterChip(
-                        selected = settings.textAlign == alignment,
-                        onClick = { viewModel.setTextAlign(alignment) },
-                        label = { Text(alignment.name.lowercase().replaceFirstChar(Char::titlecase)) }
+            item {
+                SettingsSection("Reading") {
+                    SettingsChipGroup(
+                        title = "PDF fit",
+                        options = ReaderPdfFit.entries,
+                        selected = settings.pdfFit,
+                        label = { it.name.lowercase().replaceFirstChar(Char::titlecase) },
+                        onSelected = viewModel::setPdfFit
+                    )
+                    SettingsToggleRow(
+                        label = "Fullscreen reading",
+                        checked = settings.fullScreen,
+                        onCheckedChange = viewModel::setFullScreen
+                    )
+                    SettingsToggleRow(
+                        label = "Tap zones",
+                        checked = settings.tapZonesEnabled,
+                        onCheckedChange = viewModel::setTapZonesEnabled
+                    )
+                    SettingsToggleRow(
+                        label = "Page animations",
+                        checked = settings.pageTurnAnimations,
+                        onCheckedChange = viewModel::setPageTurnAnimations
                     )
                 }
             }
-            Text("PDF fit", style = MaterialTheme.typography.titleMedium)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                ReaderPdfFit.entries.forEach { fit ->
-                    FilterChip(
-                        selected = settings.pdfFit == fit,
-                        onClick = { viewModel.setPdfFit(fit) },
-                        label = { Text(fit.name.lowercase().replaceFirstChar(Char::titlecase)) }
+            item {
+                SettingsSection("Library") {
+                    SettingsChipGroup(
+                        title = "Sort",
+                        options = LibrarySort.entries,
+                        selected = librarySettings.sort,
+                        label = { it.label() },
+                        onSelected = viewModel::setLibrarySort
+                    )
+                    SettingsChipGroup(
+                        title = "Density",
+                        options = LibraryDensity.entries,
+                        selected = librarySettings.density,
+                        label = { it.label() },
+                        onSelected = viewModel::setLibraryDensity
                     )
                 }
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Fullscreen reading", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-                Switch(checked = settings.fullScreen, onCheckedChange = viewModel::setFullScreen)
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Publisher styles", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-                Switch(checked = settings.publisherStyles, onCheckedChange = viewModel::setPublisherStyles)
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Tap zones", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-                Switch(checked = settings.tapZonesEnabled, onCheckedChange = viewModel::setTapZonesEnabled)
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Page animations", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-                Switch(checked = settings.pageTurnAnimations, onCheckedChange = viewModel::setPageTurnAnimations)
-            }
-            Text("Library maintenance", style = MaterialTheme.typography.titleMedium)
-            Button(
-                onClick = viewModel::repairLibrary,
-                enabled = !maintenance.repairingLibrary,
-            ) {
-                if (maintenance.repairingLibrary) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(18.dp),
-                        strokeWidth = 2.dp,
-                    )
-                } else {
-                    Icon(Icons.Filled.Search, contentDescription = null)
+            item {
+                SettingsSection("Maintenance") {
+                    Button(
+                        onClick = viewModel::repairLibrary,
+                        enabled = !maintenance.repairingLibrary,
+                    ) {
+                        if (maintenance.repairingLibrary) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            Icon(Icons.Filled.Search, contentDescription = null)
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Text(if (maintenance.repairingLibrary) "Repairing library" else "Repair covers and search")
+                    }
                 }
-                Spacer(Modifier.width(8.dp))
-                Text(if (maintenance.repairingLibrary) "Repairing library" else "Repair covers and search")
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsSection(
+    title: String,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text(
+            title,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.SemiBold
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
+    }
+}
+
+@Composable
+private fun SettingsToggleRow(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+            Switch(checked = checked, onCheckedChange = onCheckedChange)
+        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+    }
+}
+
+@Composable
+private fun <T> SettingsChipGroup(
+    title: String,
+    options: List<T>,
+    selected: T,
+    label: (T) -> String,
+    onSelected: (T) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(title, style = MaterialTheme.typography.titleSmall)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            options.forEach { option ->
+                FilterChip(
+                    selected = selected == option,
+                    onClick = { onSelected(option) },
+                    label = { Text(label(option)) }
+                )
             }
         }
     }

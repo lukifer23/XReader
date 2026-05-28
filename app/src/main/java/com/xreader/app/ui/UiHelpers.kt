@@ -210,6 +210,9 @@ internal fun LibrarySort.label(): String =
         LibrarySort.SERIES -> "Series"
     }
 
+internal fun com.xreader.app.settings.LibraryDensity.label(): String =
+    name.lowercase().replaceFirstChar(Char::titlecase)
+
 internal fun AnnotationKind.label(): String =
     name.lowercase().replaceFirstChar(Char::titlecase)
 

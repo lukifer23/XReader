@@ -21,6 +21,7 @@ Implemented:
 - Swipe, tap-zone, hardware-key, TOC, search-result, bookmark, and scrubber navigation.
 - Reader themes: light, dark, sepia, and OLED black.
 - Reader typography controls: font size, line height, margins, alignment, publisher styles, PDF fit, fullscreen, page animation toggle, and real Readium/CSS-resolvable font choices.
+- Grouped Settings screen for reader appearance, typography, reading behavior, library display, and maintenance.
 - Bookmarks, highlights, notes, global notes, and in-book annotation lists.
 - Offline English dictionary backed by bundled Princeton WordNet data.
 - Local full-text search index for imported book text where extraction is supported.
