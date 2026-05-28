@@ -71,6 +71,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -152,6 +153,10 @@ internal fun LibraryRoute(
             onOpenBook = { openReaderAt(it, null) },
             onOpenSearchResult = openReaderAt,
             onToggleFavorite = viewModel::toggleFavorite,
+            onShowAll = {
+                viewModel.setQuery("")
+                viewModel.setGroup(LibraryGroup.BOOKS)
+            },
             onUpdateMetadata = viewModel::updateMetadata,
             onReplaceCover = viewModel::replaceCover,
             onRefreshBookHealth = viewModel::refreshBookHealth,
@@ -175,6 +180,7 @@ internal fun LibraryScreen(
     onOpenBook: (Long) -> Unit,
     onOpenSearchResult: (Long, String?) -> Unit,
     onToggleFavorite: (BookListItem) -> Unit,
+    onShowAll: () -> Unit,
     onUpdateMetadata: (BookEntity, String, String, Int?, String?, String?, Double?) -> Unit,
     onReplaceCover: (BookEntity, Uri) -> Unit,
     onRefreshBookHealth: (Long) -> Unit,
@@ -249,7 +255,14 @@ internal fun LibraryScreen(
             SearchResultsStrip(state.librarySearchResults, onOpenSearchResult)
         }
         if (state.books.isEmpty()) {
-            EmptyLibrary(onImport = onImport)
+            LibraryEmptyState(
+                copy = state.emptyStateCopy(),
+                onImport = onImport,
+                onShowAll = {
+                    searchExpanded = false
+                    onShowAll()
+                }
+            )
         } else {
             val grouped = groupBooks(state.group, displayBooks)
             LazyColumn(
@@ -539,17 +552,92 @@ internal fun ContinueReadingCard(
     }
 }
 
+internal data class LibraryEmptyStateCopy(
+    val title: String,
+    val body: String,
+    val primaryAction: String,
+    val importsBooks: Boolean,
+)
+
+internal fun LibraryUiState.emptyStateCopy(): LibraryEmptyStateCopy =
+    when {
+        totalBookCount == 0 -> LibraryEmptyStateCopy(
+            title = "Build your library",
+            body = "Import EPUB, PDF, or TXT files from this device.",
+            primaryAction = "Import books",
+            importsBooks = true
+        )
+        query.isNotBlank() && matchedBookCount == 0 -> LibraryEmptyStateCopy(
+            title = "No matching books",
+            body = "No titles, authors, series, or genres match \"${query.trim().take(48)}\".",
+            primaryAction = "Show all",
+            importsBooks = false
+        )
+        query.isNotBlank() -> LibraryEmptyStateCopy(
+            title = "No matches in ${group.label()}",
+            body = "Clear search and filters to see the rest of your library.",
+            primaryAction = "Show all",
+            importsBooks = false
+        )
+        group == LibraryGroup.FAVORITES -> LibraryEmptyStateCopy(
+            title = "No favorites yet",
+            body = "Favorites will appear here.",
+            primaryAction = "Show all",
+            importsBooks = false
+        )
+        group == LibraryGroup.IN_PROGRESS -> LibraryEmptyStateCopy(
+            title = "Nothing in progress",
+            body = "Books you start reading will appear here.",
+            primaryAction = "Show all",
+            importsBooks = false
+        )
+        group == LibraryGroup.FINISHED -> LibraryEmptyStateCopy(
+            title = "No finished books",
+            body = "Finished books will appear here.",
+            primaryAction = "Show all",
+            importsBooks = false
+        )
+        group == LibraryGroup.UNREAD -> LibraryEmptyStateCopy(
+            title = "No unread books",
+            body = "The rest of your library is still available.",
+            primaryAction = "Show all",
+            importsBooks = false
+        )
+        else -> LibraryEmptyStateCopy(
+            title = "Nothing here",
+            body = "Switch filters to see the rest of your library.",
+            primaryAction = "Show all",
+            importsBooks = false
+        )
+    }
+
 @Composable
-internal fun EmptyLibrary(onImport: () -> Unit) {
+internal fun LibraryEmptyState(
+    copy: LibraryEmptyStateCopy,
+    onImport: () -> Unit,
+    onShowAll: () -> Unit,
+) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null, modifier = Modifier.size(56.dp))
-            Text("Import EPUB, PDF, or TXT books", style = MaterialTheme.typography.titleMedium)
-            Text("Files are copied into private app storage.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Button(onClick = onImport) {
-                Icon(Icons.Filled.Add, contentDescription = null)
+            Text(copy.title, style = MaterialTheme.typography.titleMedium)
+            Text(
+                copy.body,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 24.dp)
+            )
+            Button(onClick = if (copy.importsBooks) onImport else onShowAll) {
+                Icon(
+                    if (copy.importsBooks) Icons.Filled.Add else Icons.Filled.Search,
+                    contentDescription = null
+                )
                 Spacer(Modifier.width(6.dp))
-                Text("Import books")
+                Text(copy.primaryAction)
             }
         }
     }

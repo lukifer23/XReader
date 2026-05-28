@@ -51,6 +51,8 @@ data class LibraryUiState(
     val sort: LibrarySort = LibrarySort.RECENT,
     val density: LibraryDensity = LibraryDensity.COMFORTABLE,
     val books: List<BookListItem> = emptyList(),
+    val matchedBookCount: Int = 0,
+    val totalBookCount: Int = 0,
     val importing: Boolean = false,
     val message: String? = null,
     val librarySearchResults: List<com.xreader.app.data.SearchIndexEntity> = emptyList(),
@@ -69,7 +71,8 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     private val bookHealth = MutableStateFlow<Map<Long, BookHealthUiState>>(emptyMap())
     private val repairingBookIds = MutableStateFlow<Set<Long>>(emptySet())
 
-    private val books = query.flatMapLatest { container.libraryRepository.observeBooks(it) }
+    private val queriedBooks = query.flatMapLatest { container.libraryRepository.observeBooks(it) }
+    private val allBooks = container.libraryRepository.observeBooks("")
     private val states = container.readingRepository.observeStates()
 
     private data class LibrarySelectionState(
@@ -101,20 +104,31 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         LibraryChromeState(selection, currentImporting, currentMessage, currentResults)
     }
 
-    private val bookItems = combine(books, states) { currentBooks, currentStates ->
+    private data class LibraryBooksState(
+        val queriedItems: List<BookListItem>,
+        val allItems: List<BookListItem>,
+    )
+
+    private val bookItems = combine(queriedBooks, allBooks, states) { currentBooks, currentAllBooks, currentStates ->
         val statesByBook = currentStates.associateBy { it.bookId }
-        currentBooks.map { BookListItem(it, statesByBook[it.id]) }
+        LibraryBooksState(
+            queriedItems = currentBooks.map { BookListItem(it, statesByBook[it.id]) },
+            allItems = currentAllBooks.map { BookListItem(it, statesByBook[it.id]) }
+        )
     }
 
     val uiState: StateFlow<LibraryUiState> =
-        combine(chromeState, bookItems, bookHealth, repairingBookIds) { chrome, items, health, repairing ->
+        combine(chromeState, bookItems, bookHealth, repairingBookIds) { chrome, libraryBooks, health, repairing ->
             val selection = chrome.selection
+            val visibleBooks = libraryBooks.queriedItems.filteredBy(selection.group).sortedFor(selection.sort)
             LibraryUiState(
                 query = selection.query,
                 group = selection.group,
                 sort = selection.sort,
                 density = selection.density,
-                books = items.filteredBy(selection.group).sortedFor(selection.sort),
+                books = visibleBooks,
+                matchedBookCount = libraryBooks.queriedItems.size,
+                totalBookCount = libraryBooks.allItems.size,
                 importing = chrome.importing,
                 message = chrome.message,
                 librarySearchResults = chrome.searchResults,

@@ -14,6 +14,7 @@ Initial public repository snapshot.
 - Local Room database for books, reading state, sessions, notes, bookmarks, search, and dictionary entries.
 - Library organization, metadata editing, favorites, finished state, and progress display.
 - Persisted library sort and comfortable/compact density controls.
+- Quiet first-run import state plus distinct no-results states for search misses and empty library filters.
 - Readium locator persistence for resume.
 - Manual cover replacement from local image files.
 - EPUB cover discovery from OPF guide references and guide XHTML/HTML title pages.
