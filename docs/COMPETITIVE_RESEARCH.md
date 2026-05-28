@@ -31,7 +31,7 @@ This is the working competitive map for XReader. It should drive implementation 
 | Notes/highlights/bookmarks | Implemented with local export/import. | Table stakes in strong readers. | Add richer export targets later. |
 | Dictionary | Offline WordNet implemented. | Many rely on external dictionaries or online lookup. | Strong differentiator; keep improving morphology/phrase handling. |
 | Search | Local full-text index plus Readium fallback. | Common, but quality varies by format. | Keep hardening PDF/EPUB extraction. |
-| Analytics | Active reading, WPM, streaks, 14-day activity, book/author/genre summaries. | Moon+ and some ecosystems have stats. | Add weekly/monthly ranges later. |
+| Analytics | Active reading, WPM, streaks, range-aware activity, book/author/genre summaries. | Moon+ and some ecosystems have stats. | Continue improving trend evidence and export. |
 | TTS | Not implemented. | Moon+, Librera, PocketBook, BookFusion, and others offer it. | High-value later feature if implemented with Android TTS controls and no reader jank. |
 | OPDS/catalogs | Not implemented. | Moon+, Librera, FBReader, PocketBook support OPDS. | Good optional later feature. |
 | PDF reflow/crop | PDF fit implemented; reflow/crop not implemented. | PocketBook/ReadEra have PDF comfort features. | Evaluate after reader polish. |
@@ -48,9 +48,10 @@ The research points to several areas that matter more than raw feature count:
 - TTS, OPDS, and broader file formats are the largest parity gaps. They should land only as real optional workflows with device tests, not as visible menu promises.
 - Large-library performance needs continuous evidence. Competitors with folder/file-browser models show lag under thousands of books, so XReader should keep indexed Room queries, private copies, and startup/open baselines.
 
-## Patch From This Pass
+## Patches From This Research
 
-The first product patch from this research is opt-in matching-series metadata cleanup. From the metadata editor, changing a book's genre or series can now apply those two fields to other books by the same author that match the old or new series name. The operation is atomic and keeps per-book fields such as title, year, and series index untouched.
+- Opt-in matching-series metadata cleanup. From the metadata editor, changing a book's genre or series can now apply those two fields to other books by the same author that match the old or new series name. The operation is atomic and keeps per-book fields such as title, year, and series index untouched.
+- Range-aware reading stats. The stats screen now supports 7-day, 30-day, 13-week, and all-time ranges, with grouped analytics and activity buckets recalculated for the selected period.
 
 ## Product Rules From The Research
 

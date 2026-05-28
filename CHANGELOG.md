@@ -29,8 +29,8 @@ Initial public repository snapshot.
 - Local JSON export/import for library catalog metadata, favorites, finished state, reading progress, and reading sessions matched back to imported books by checksum.
 - Offline English dictionary backed by Princeton WordNet.
 - Local full-text search with fallback from Readium search to the app search index.
-- Reading analytics for active time, WPM estimate, streaks, and book/author/genre summaries.
-- Reading stats activity chart with 14-day history, current/best streaks, and optimized grouped session aggregation.
+- Reading analytics for active time, WPM estimate, streaks, range-aware activity, and book/author/genre summaries.
+- Reading stats activity chart with 7-day, 30-day, 13-week, and all-time ranges, current/best streaks, and optimized grouped session aggregation.
 - Manual Settings action to repair covers, metadata, and search indexes from stored library files.
 - Modern adaptive app icon.
 - Unit and instrumented test coverage for core parsing, indexing, dictionary, analytics, settings persistence, and maintenance repair behavior.

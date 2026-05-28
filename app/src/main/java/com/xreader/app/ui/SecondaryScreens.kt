@@ -71,8 +71,10 @@ import com.xreader.app.AppContainer
 import com.xreader.app.data.AnnotationEntity
 import com.xreader.app.data.AnnotationKind
 import com.xreader.app.data.ReaderTheme
+import com.xreader.app.analytics.ActivityBucketAnalytics
+import com.xreader.app.analytics.ActivityBucketGranularity
+import com.xreader.app.analytics.AnalyticsRange
 import com.xreader.app.analytics.BookAnalytics
-import com.xreader.app.analytics.DailyReadingAnalytics
 import com.xreader.app.analytics.GroupAnalytics
 import com.xreader.app.settings.LibraryDensity
 import com.xreader.app.settings.LibrarySort
@@ -111,6 +113,12 @@ internal fun AnalyticsRoute(container: AppContainer, onBack: () -> Unit) {
         ) {
             if (summary != null) {
                 item {
+                    AnalyticsRangeSelector(
+                        selectedRange = state.selectedRange,
+                        onRangeSelected = viewModel::setRange
+                    )
+                }
+                item {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         StatPill("Books", summary.totalBooks.toString())
                         StatPill("Finished", summary.finishedBooks.toString())
@@ -122,7 +130,11 @@ internal fun AnalyticsRoute(container: AppContainer, onBack: () -> Unit) {
                     }
                 }
                 item {
-                    ReadingActivityChart(summary.dailyActivity, summary.bestStreakDays)
+                    ReadingActivityChart(
+                        buckets = summary.activityBuckets,
+                        range = summary.range,
+                        bestStreakDays = summary.bestStreakDays
+                    )
                 }
                 if (summary.byAuthor.isNotEmpty()) {
                     item { AnalyticsSectionTitle("Authors") }
@@ -144,10 +156,26 @@ internal fun AnalyticsRoute(container: AppContainer, onBack: () -> Unit) {
                 }
                 if (summary.sessions == 0) {
                     item {
-                        Text("No reading sessions yet.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("No reading sessions in this range.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun AnalyticsRangeSelector(
+    selectedRange: AnalyticsRange,
+    onRangeSelected: (AnalyticsRange) -> Unit,
+) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        AnalyticsRange.entries.forEach { range ->
+            FilterChip(
+                selected = selectedRange == range,
+                onClick = { onRangeSelected(range) },
+                label = { Text(range.label) }
+            )
         }
     }
 }
@@ -163,12 +191,16 @@ private fun AnalyticsSectionTitle(title: String) {
 }
 
 @Composable
-private fun ReadingActivityChart(days: List<DailyReadingAnalytics>, bestStreakDays: Int) {
-    val maxActiveMillis = days.maxOfOrNull { it.activeMillis }?.coerceAtLeast(1L) ?: 1L
+private fun ReadingActivityChart(
+    buckets: List<ActivityBucketAnalytics>,
+    range: AnalyticsRange,
+    bestStreakDays: Int,
+) {
+    val maxActiveMillis = buckets.maxOfOrNull { it.activeMillis }?.coerceAtLeast(1L) ?: 1L
     Card(shape = RoundedCornerShape(8.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("Last 14 days", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(activityTitle(range, buckets), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text(
                     "Best streak ${bestStreakDays}d",
                     style = MaterialTheme.typography.labelMedium,
@@ -182,10 +214,11 @@ private fun ReadingActivityChart(days: List<DailyReadingAnalytics>, bestStreakDa
                 horizontalArrangement = Arrangement.spacedBy(5.dp),
                 verticalAlignment = Alignment.Bottom
             ) {
-                days.forEach { day ->
-                    DailyActivityBar(
-                        day = day,
+                buckets.forEachIndexed { index, bucket ->
+                    ActivityBucketBar(
+                        bucket = bucket,
                         maxActiveMillis = maxActiveMillis,
+                        showLabel = shouldShowActivityLabel(index, buckets),
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -195,13 +228,14 @@ private fun ReadingActivityChart(days: List<DailyReadingAnalytics>, bestStreakDa
 }
 
 @Composable
-private fun DailyActivityBar(
-    day: DailyReadingAnalytics,
+private fun ActivityBucketBar(
+    bucket: ActivityBucketAnalytics,
     maxActiveMillis: Long,
+    showLabel: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val activeFraction = (day.activeMillis.toFloat() / maxActiveMillis.toFloat()).coerceIn(0f, 1f)
-    val visibleFraction = if (day.activeMillis > 0L) activeFraction.coerceAtLeast(0.08f) else 0.03f
+    val activeFraction = (bucket.activeMillis.toFloat() / maxActiveMillis.toFloat()).coerceIn(0f, 1f)
+    val visibleFraction = if (bucket.activeMillis > 0L) activeFraction.coerceAtLeast(0.08f) else 0.03f
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(5.dp)) {
         Box(
             modifier = Modifier
@@ -214,7 +248,7 @@ private fun DailyActivityBar(
                     .fillMaxWidth(0.62f)
                     .fillMaxHeight(visibleFraction),
                 shape = RoundedCornerShape(topStart = 5.dp, topEnd = 5.dp),
-                color = if (day.activeMillis > 0L) {
+                color = if (bucket.activeMillis > 0L) {
                     MaterialTheme.colorScheme.primary
                 } else {
                     MaterialTheme.colorScheme.surfaceVariant
@@ -222,7 +256,7 @@ private fun DailyActivityBar(
             ) {}
         }
         Text(
-            formatShortDay(day.dayStartMillis),
+            if (showLabel) formatActivityBucket(bucket) else "",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1
@@ -731,5 +765,40 @@ private fun <T> SettingsChipGroup(
     }
 }
 
-private fun formatShortDay(millis: Long): String =
-    SimpleDateFormat("E", Locale.getDefault()).format(Date(millis))
+private fun activityTitle(
+    range: AnalyticsRange,
+    buckets: List<ActivityBucketAnalytics>,
+): String =
+    when (buckets.firstOrNull()?.granularity) {
+        ActivityBucketGranularity.DAY -> when (range) {
+            AnalyticsRange.WEEK -> "7-day activity"
+            AnalyticsRange.MONTH -> "30-day activity"
+            else -> "${range.label} activity"
+        }
+        ActivityBucketGranularity.WEEK -> "13-week activity"
+        ActivityBucketGranularity.MONTH -> "Monthly activity"
+        ActivityBucketGranularity.YEAR -> "Yearly activity"
+        null -> "${range.label} activity"
+    }
+
+private fun shouldShowActivityLabel(
+    index: Int,
+    buckets: List<ActivityBucketAnalytics>,
+): Boolean {
+    val lastIndex = buckets.lastIndex
+    if (lastIndex <= 13) return true
+    return when (buckets.getOrNull(index)?.granularity) {
+        ActivityBucketGranularity.DAY -> index == 0 || index == lastIndex || index % 5 == 0
+        else -> true
+    }
+}
+
+private fun formatActivityBucket(bucket: ActivityBucketAnalytics): String {
+    val pattern = when (bucket.granularity) {
+        ActivityBucketGranularity.DAY -> "E"
+        ActivityBucketGranularity.WEEK -> "M/d"
+        ActivityBucketGranularity.MONTH -> "MMM"
+        ActivityBucketGranularity.YEAR -> "yyyy"
+    }
+    return SimpleDateFormat(pattern, Locale.getDefault()).format(Date(bucket.startMillis))
+}

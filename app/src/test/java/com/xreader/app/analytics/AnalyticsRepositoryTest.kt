@@ -32,8 +32,10 @@ class AnalyticsRepositoryTest {
         assertEquals(4, summary.sessions)
         assertEquals(2, summary.currentStreakDays)
         assertEquals(2, summary.bestStreakDays)
-        assertEquals(14, summary.dailyActivity.size)
-        assertEquals(1_200_000L, summary.dailyActivity.last().activeMillis)
+        assertEquals(AnalyticsRange.MONTH, summary.range)
+        assertEquals(30, summary.activityBuckets.size)
+        assertEquals(ActivityBucketGranularity.DAY, summary.activityBuckets.last().granularity)
+        assertEquals(1_200_000L, summary.activityBuckets.last().activeMillis)
         assertEquals(2, summary.byBook.size)
         assertEquals("Red Rising", summary.byBook.first().book.title)
         assertEquals(1, summary.byAuthor.size)
@@ -54,6 +56,51 @@ class AnalyticsRepositoryTest {
         assertEquals(0, summary.currentStreakDays)
         assertEquals(1, summary.bestStreakDays)
         assertEquals("No genre", summary.byGenre.single().label)
+    }
+
+    @Test
+    fun rangeFiltersSessionTotalsAndGroupedStats() {
+        val books = listOf(
+            book(id = 1, title = "Recent Book", author = "Recent Author", genre = "Science Fiction"),
+            book(id = 2, title = "Old Book", author = "Old Author", genre = "Fantasy")
+        )
+        val sessions = listOf(
+            session(bookId = 1, startedAt = "2026-05-28T20:00:00Z", activeMillis = 600_000, wordsRead = 3_000),
+            session(bookId = 2, startedAt = "2026-04-01T20:00:00Z", activeMillis = 900_000, wordsRead = 4_500)
+        )
+
+        val weekSummary = AnalyticsCalculator.summarize(books, sessions, clock, AnalyticsRange.WEEK)
+        val allTimeSummary = AnalyticsCalculator.summarize(books, sessions, clock, AnalyticsRange.ALL_TIME)
+
+        assertEquals(1, weekSummary.sessions)
+        assertEquals(3_000, weekSummary.wordsRead)
+        assertEquals("Recent Book", weekSummary.byBook.single().book.title)
+        assertEquals("Recent Author", weekSummary.byAuthor.single().label)
+        assertEquals(7, weekSummary.activityBuckets.size)
+        assertEquals(ActivityBucketGranularity.DAY, weekSummary.activityBuckets.first().granularity)
+
+        assertEquals(2, allTimeSummary.sessions)
+        assertEquals(7_500, allTimeSummary.wordsRead)
+        assertEquals(2, allTimeSummary.byBook.size)
+        assertEquals(ActivityBucketGranularity.MONTH, allTimeSummary.activityBuckets.first().granularity)
+    }
+
+    @Test
+    fun quarterRangeUsesWeeklyActivityBuckets() {
+        val books = listOf(book(id = 1, title = "Range Book", author = "Author", genre = "Genre"))
+        val sessions = listOf(
+            session(bookId = 1, startedAt = "2026-03-05T20:00:00Z", activeMillis = 300_000, wordsRead = 1_000),
+            session(bookId = 1, startedAt = "2026-05-28T20:00:00Z", activeMillis = 600_000, wordsRead = 2_000)
+        )
+
+        val summary = AnalyticsCalculator.summarize(books, sessions, clock, AnalyticsRange.QUARTER)
+
+        assertEquals(AnalyticsRange.QUARTER, summary.range)
+        assertEquals(13, summary.activityBuckets.size)
+        assertEquals(ActivityBucketGranularity.WEEK, summary.activityBuckets.first().granularity)
+        assertEquals(2, summary.sessions)
+        assertEquals(3_000, summary.wordsRead)
+        assertEquals(2, summary.activityBuckets.count { it.sessions > 0 })
     }
 
     private fun book(
