@@ -54,16 +54,15 @@ Treat single-device numbers as local baselines, not universal claims. Record:
 
 ## Current Local Baseline
 
-2026-05-28 local debug baseline:
+2026-05-28 local debug baseline after reader warmup and analytics polish:
 
 - Device: Samsung SM-F966U, Android 16 / API 36
 - Library: three imported EPUBs, including one in-progress book with cover art
-- Command: `tools/perf_baseline.sh --iterations 7 --reader-tap 400 780 --display-id 4630946872173396372`
-- Artifact directory: `build/perf/20260528-102652/`
-- Startup total time: average 631.9 ms, median 631 ms, p90 646 ms
-- Startup frame capture: 9 frames, 6 janky frames, 90th percentile 200 ms, 2 missed vsync
-- Reader-open frame capture: 37 frames, 8 janky frames, 90th percentile 93 ms, 4 missed vsync
+- Command: `tools/perf_baseline.sh --serial RFCY90NPZBN --iterations 7 --reader-tap 400 780`
+- Artifact directory: `build/perf/20260528-134003/`
+- Startup total time: average 594.7 ms, median 590 ms, p90 612 ms
+- Startup frame capture: 8 frames, 4 janky frames, 90th percentile 200 ms, 2 missed vsync
+- Reader-open frame capture: 45 frames, 6 janky frames, 90th percentile 24 ms, 1 missed vsync
+- Simpleperf startup artifact: `build/perf/20260528-134003/simpleperf-startup/`
 
-The reader-open capture confirms the tap opened the real EPUB reader. The capture window is fixed at roughly five seconds; use the frame data as the current jank baseline, not as a direct reader-open latency measurement.
-
-Follow-up code pass after this baseline moved table-of-contents construction and opened-at persistence off the initial reader-open path, deferred annotation/bookmark/state observers until the publication is ready, and split reader warmup into earlier Readium service warmup plus delayed WebView warmup. Re-run the adb baseline on the next connected-device pass before treating those changes as measured improvements.
+The reader-open capture confirms the tap opened the real EPUB reader. The capture window is fixed at roughly five seconds; use the frame data as the current jank baseline, not as a direct reader-open latency measurement. The startup Simpleperf capture is dominated by cold debug APK dex/class loading, verification, and JIT activity rather than a clear app-owned startup hotspot. Treat startup jank improvements as requiring release/profileable build measurement or a baseline-profile pass, not just one debug Simpleperf run.

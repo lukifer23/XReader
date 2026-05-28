@@ -25,7 +25,7 @@ Implemented:
 - Bookmarks, highlights, notes, global notes, in-book annotation lists, local notes/bookmark JSON export/import, and library metadata/progress backup.
 - Offline English dictionary backed by bundled Princeton WordNet data.
 - Local full-text search index for imported book text where extraction is supported.
-- Reading analytics for sessions, active reading time, progress, estimated WPM, streaks, and book/author/genre summaries.
+- Reading analytics for sessions, active reading time, progress, estimated WPM, 14-day activity, streaks, and book/author/genre summaries.
 
 Not implemented in the UI:
 

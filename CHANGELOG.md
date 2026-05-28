@@ -29,6 +29,7 @@ Initial public repository snapshot.
 - Offline English dictionary backed by Princeton WordNet.
 - Local full-text search with fallback from Readium search to the app search index.
 - Reading analytics for active time, WPM estimate, streaks, and book/author/genre summaries.
+- Reading stats activity chart with 14-day history, current/best streaks, and optimized grouped session aggregation.
 - Manual Settings action to repair covers, metadata, and search indexes from stored library files.
 - Modern adaptive app icon.
 - Unit and instrumented test coverage for core parsing, indexing, dictionary, analytics, settings persistence, and maintenance repair behavior.

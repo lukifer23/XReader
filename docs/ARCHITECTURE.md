@@ -101,7 +101,7 @@ Settings also exposes local JSON backup and restore through Android's Storage Ac
 
 ## Analytics
 
-`ReadingAnalyticsTracker` tracks foreground active reading sessions. It uses reading movement and idle timeout rules to estimate active time, words traversed, WPM, completion, streaks, and summary statistics. The reader avoids popups or gamified interruptions during reading.
+`ReadingAnalyticsTracker` tracks foreground active reading sessions. It uses reading movement and idle timeout rules to estimate active time, words traversed, WPM, and completion. `AnalyticsRepository` aggregates those sessions into 14-day activity, current/best streaks, and book, author, and genre summaries without adding popups or gamified interruptions during reading.
 
 ## Validation
 

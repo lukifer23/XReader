@@ -6,14 +6,17 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -68,13 +71,18 @@ import com.xreader.app.AppContainer
 import com.xreader.app.data.AnnotationEntity
 import com.xreader.app.data.AnnotationKind
 import com.xreader.app.data.ReaderTheme
+import com.xreader.app.analytics.BookAnalytics
+import com.xreader.app.analytics.DailyReadingAnalytics
+import com.xreader.app.analytics.GroupAnalytics
 import com.xreader.app.settings.LibraryDensity
 import com.xreader.app.settings.LibrarySort
 import com.xreader.app.settings.ReaderFontFamily
 import com.xreader.app.settings.ReaderPdfFit
 import com.xreader.app.settings.ReaderTextAlign
 import java.text.DateFormat
+import java.text.SimpleDateFormat
 import java.util.Date
+import java.util.Locale
 
 @Composable
 internal fun AnalyticsRoute(container: AppContainer, onBack: () -> Unit) {
@@ -107,20 +115,145 @@ internal fun AnalyticsRoute(container: AppContainer, onBack: () -> Unit) {
                         StatPill("Books", summary.totalBooks.toString())
                         StatPill("Finished", summary.finishedBooks.toString())
                         StatPill("Sessions", summary.sessions.toString())
+                        StatPill("Streak", "${summary.currentStreakDays}d")
                         StatPill("WPM", summary.averageWpm.toString())
                         StatPill("Time", formatDuration(summary.activeMillis))
                         StatPill("Words", summary.wordsRead.toString())
                     }
                 }
+                item {
+                    ReadingActivityChart(summary.dailyActivity, summary.bestStreakDays)
+                }
+                if (summary.byAuthor.isNotEmpty()) {
+                    item { AnalyticsSectionTitle("Authors") }
+                    items(summary.byAuthor, key = { it.label }) { row ->
+                        GroupAnalyticsRow(row)
+                    }
+                }
+                if (summary.byGenre.isNotEmpty()) {
+                    item { AnalyticsSectionTitle("Genres") }
+                    items(summary.byGenre, key = { it.label }) { row ->
+                        GroupAnalyticsRow(row)
+                    }
+                }
+                if (summary.byBook.isNotEmpty()) {
+                    item { AnalyticsSectionTitle("Books") }
+                }
                 items(summary.byBook, key = { it.book.id }) { row ->
-                    Card(shape = RoundedCornerShape(8.dp)) {
-                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                            Text(row.book.title, style = MaterialTheme.typography.titleMedium)
-                            Text("${row.sessions} sessions, ${formatDuration(row.activeMillis)}, ${row.wordsRead} words, ${row.averageWpm} WPM")
-                        }
+                    BookAnalyticsRow(row)
+                }
+                if (summary.sessions == 0) {
+                    item {
+                        Text("No reading sessions yet.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun AnalyticsSectionTitle(title: String) {
+    Text(
+        title,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.padding(top = 8.dp)
+    )
+}
+
+@Composable
+private fun ReadingActivityChart(days: List<DailyReadingAnalytics>, bestStreakDays: Int) {
+    val maxActiveMillis = days.maxOfOrNull { it.activeMillis }?.coerceAtLeast(1L) ?: 1L
+    Card(shape = RoundedCornerShape(8.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("Last 14 days", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "Best streak ${bestStreakDays}d",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(132.dp),
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                verticalAlignment = Alignment.Bottom
+            ) {
+                days.forEach { day ->
+                    DailyActivityBar(
+                        day = day,
+                        maxActiveMillis = maxActiveMillis,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DailyActivityBar(
+    day: DailyReadingAnalytics,
+    maxActiveMillis: Long,
+    modifier: Modifier = Modifier,
+) {
+    val activeFraction = (day.activeMillis.toFloat() / maxActiveMillis.toFloat()).coerceIn(0f, 1f)
+    val visibleFraction = if (day.activeMillis > 0L) activeFraction.coerceAtLeast(0.08f) else 0.03f
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth(0.62f)
+                    .fillMaxHeight(visibleFraction),
+                shape = RoundedCornerShape(topStart = 5.dp, topEnd = 5.dp),
+                color = if (day.activeMillis > 0L) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.surfaceVariant
+                }
+            ) {}
+        }
+        Text(
+            formatShortDay(day.dayStartMillis),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1
+        )
+    }
+}
+
+@Composable
+private fun GroupAnalyticsRow(row: GroupAnalytics) {
+    Card(shape = RoundedCornerShape(8.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Text(row.label, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                "${row.sessions} sessions, ${formatDuration(row.activeMillis)}, ${row.wordsRead} words, ${row.averageWpm} WPM",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
+    }
+}
+
+@Composable
+private fun BookAnalyticsRow(row: BookAnalytics) {
+    Card(shape = RoundedCornerShape(8.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Text(row.book.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                "${row.sessions} sessions, ${formatDuration(row.activeMillis)}, ${row.wordsRead} words, ${row.averageWpm} WPM",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyMedium
+            )
         }
     }
 }
@@ -597,3 +730,6 @@ private fun <T> SettingsChipGroup(
         }
     }
 }
+
+private fun formatShortDay(millis: Long): String =
+    SimpleDateFormat("E", Locale.getDefault()).format(Date(millis))
