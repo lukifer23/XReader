@@ -60,4 +60,34 @@ class ImportServiceInstrumentedTest {
         val searchResults = db.search().searchBook(result.bookId, "normalizedBody:smoke*")
         assertTrue(searchResults.any { it.body.contains("smoke", ignoreCase = true) })
     }
+
+    @Test
+    fun reportsHealthAndRepairsSingleBookSearchIndex() = runBlocking {
+        val source = File(root, "source/xreader_repair.txt").apply {
+            parentFile?.mkdirs()
+            writeText(
+                """
+                XReader repair test
+
+                The repair action should rebuild searchable private book text.
+                """.trimIndent()
+            )
+        }
+        val service = ImportService(context, db)
+        val result = service.import(Uri.fromFile(source))
+
+        val initialHealth = service.bookHealth(result.bookId)
+        assertTrue(initialHealth.fileAvailable)
+        assertTrue(initialHealth.searchRows > 0)
+
+        db.search().deleteFtsForBook(result.bookId.toString())
+        db.search().deleteForBook(result.bookId)
+        assertEquals(0, service.bookHealth(result.bookId).searchRows)
+
+        val repair = service.repairBook(result.bookId)
+
+        assertFalse(repair.failed)
+        assertTrue(repair.searchRows > 0)
+        assertEquals(repair.searchRows, service.bookHealth(result.bookId).searchRows)
+    }
 }

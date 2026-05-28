@@ -43,6 +43,21 @@ class ImportService(
         val failed: Int,
     )
 
+    data class BookRepairResult(
+        val bookId: Long,
+        val coverUpdated: Boolean,
+        val metadataUpdated: Boolean,
+        val searchRows: Int,
+        val failed: Boolean,
+    )
+
+    data class BookHealth(
+        val bookId: Long,
+        val fileAvailable: Boolean,
+        val coverAvailable: Boolean,
+        val searchRows: Int,
+    )
+
     private val epubParser = EpubParser()
     private val txtConverter = TxtToEpubConverter()
     private val pdfTools = PdfTools(context)
@@ -170,38 +185,8 @@ class ImportService(
         var failed = 0
         bookDao.booksForMaintenance(limit).forEach { book ->
             scanned += 1
-            val file = File(context.filesDir, book.filePath)
-            if (!file.exists()) {
-                failed += 1
-                return@forEach
-            }
-            val outcome = runCatching {
-                val parsed = parseStoredBook(
-                    file = file,
-                    format = book.format,
-                    fallbackTitle = book.title,
-                    fallbackAuthor = book.author
-                )
-                val refreshedCoverPath = if (book.coverImagePath?.contains("-custom-") == true) {
-                    null
-                } else {
-                    parsed.coverImage?.let { writeCover(book.checksum, it) }
-                }
-                val rows = parsed.units.toSearchRows(book.id)
-                val updated = book.repairedCopy(parsed, refreshedCoverPath, file.length())
-                val changedMetadata = updated != book
-                database.withTransaction {
-                    if (changedMetadata) bookDao.update(updated)
-                    updated.genre?.let { bookDao.insertGenre(com.xreader.app.data.GenreEntity(name = it)) }
-                    updated.series?.let { bookDao.insertSeries(com.xreader.app.data.SeriesEntity(name = it)) }
-                    searchDao.replaceForBook(book.id, rows)
-                }
-                RepairBookOutcome(
-                    coverUpdated = refreshedCoverPath != null,
-                    metadataUpdated = changedMetadata,
-                    searchRows = rows.size
-                )
-            }.getOrElse {
+            val outcome = repairBookInternal(book)
+            if (outcome.failed) {
                 failed += 1
                 return@forEach
             }
@@ -217,6 +202,28 @@ class ImportService(
             metadataUpdated = metadataUpdated,
             searchRows = searchRows,
             failed = failed
+        )
+    }
+
+    suspend fun repairBook(bookId: Long): BookRepairResult = withContext(Dispatchers.IO) {
+        val book = bookDao.getBook(bookId) ?: error("Book not found.")
+        val outcome = repairBookInternal(book)
+        if (!outcome.failed) {
+            inferMissingSeriesFromTitlesInternal()
+            normalizeSeriesOrderInternal()
+        }
+        outcome
+    }
+
+    suspend fun bookHealth(bookId: Long): BookHealth = withContext(Dispatchers.IO) {
+        val book = bookDao.getBook(bookId) ?: error("Book not found.")
+        BookHealth(
+            bookId = book.id,
+            fileAvailable = File(context.filesDir, book.filePath).exists(),
+            coverAvailable = book.coverImagePath
+                ?.let { File(context.filesDir, it).exists() }
+                ?: false,
+            searchRows = searchDao.indexedRowCountForBook(book.id)
         )
     }
 
@@ -397,11 +404,55 @@ class ImportService(
         return if (repaired == this) this else repaired.copy(updatedAt = clock.millis())
     }
 
-    private data class RepairBookOutcome(
-        val coverUpdated: Boolean,
-        val metadataUpdated: Boolean,
-        val searchRows: Int,
-    )
+    private suspend fun repairBookInternal(book: BookEntity): BookRepairResult {
+        val file = File(context.filesDir, book.filePath)
+        if (!file.exists()) {
+            return BookRepairResult(
+                bookId = book.id,
+                coverUpdated = false,
+                metadataUpdated = false,
+                searchRows = 0,
+                failed = true
+            )
+        }
+        return runCatching {
+            val parsed = parseStoredBook(
+                file = file,
+                format = book.format,
+                fallbackTitle = book.title,
+                fallbackAuthor = book.author
+            )
+            val refreshedCoverPath = if (book.coverImagePath?.contains("-custom-") == true) {
+                null
+            } else {
+                parsed.coverImage?.let { writeCover(book.checksum, it) }
+            }
+            val rows = parsed.units.toSearchRows(book.id)
+            val updated = book.repairedCopy(parsed, refreshedCoverPath, file.length())
+            val changedMetadata = updated != book
+            database.withTransaction {
+                if (changedMetadata) bookDao.update(updated)
+                updated.genre?.let { bookDao.insertGenre(com.xreader.app.data.GenreEntity(name = it)) }
+                updated.series?.let { bookDao.insertSeries(com.xreader.app.data.SeriesEntity(name = it)) }
+                searchDao.replaceForBook(book.id, rows)
+            }
+            BookRepairResult(
+                bookId = book.id,
+                coverUpdated = refreshedCoverPath != null,
+                metadataUpdated = changedMetadata,
+                searchRows = rows.size,
+                failed = false
+            )
+        }.getOrElse {
+            BookRepairResult(
+                bookId = book.id,
+                coverUpdated = false,
+                metadataUpdated = false,
+                searchRows = 0,
+                failed = true
+            )
+        }
+    }
 
     private data class ParsedImport(
         val title: String,

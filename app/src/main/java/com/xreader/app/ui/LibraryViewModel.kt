@@ -39,6 +39,12 @@ data class BookListItem(
     val state: ReadingStateEntity?,
 )
 
+data class BookHealthUiState(
+    val fileAvailable: Boolean,
+    val coverAvailable: Boolean,
+    val searchRows: Int,
+)
+
 data class LibraryUiState(
     val query: String = "",
     val group: LibraryGroup = LibraryGroup.BOOKS,
@@ -48,6 +54,8 @@ data class LibraryUiState(
     val importing: Boolean = false,
     val message: String? = null,
     val librarySearchResults: List<com.xreader.app.data.SearchIndexEntity> = emptyList(),
+    val bookHealth: Map<Long, BookHealthUiState> = emptyMap(),
+    val repairingBookIds: Set<Long> = emptySet(),
 )
 
 @SuppressLint("LogNotTimber")
@@ -58,6 +66,8 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     private val importing = MutableStateFlow(false)
     private val message = MutableStateFlow<String?>(null)
     private val searchResults = MutableStateFlow<List<com.xreader.app.data.SearchIndexEntity>>(emptyList())
+    private val bookHealth = MutableStateFlow<Map<Long, BookHealthUiState>>(emptyMap())
+    private val repairingBookIds = MutableStateFlow<Set<Long>>(emptySet())
 
     private val books = query.flatMapLatest { container.libraryRepository.observeBooks(it) }
     private val states = container.readingRepository.observeStates()
@@ -97,7 +107,7 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     val uiState: StateFlow<LibraryUiState> =
-        combine(chromeState, bookItems) { chrome, items ->
+        combine(chromeState, bookItems, bookHealth, repairingBookIds) { chrome, items, health, repairing ->
             val selection = chrome.selection
             LibraryUiState(
                 query = selection.query,
@@ -107,7 +117,9 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
                 books = items.filteredBy(selection.group).sortedFor(selection.sort),
                 importing = chrome.importing,
                 message = chrome.message,
-                librarySearchResults = chrome.searchResults
+                librarySearchResults = chrome.searchResults,
+                bookHealth = health,
+                repairingBookIds = repairing
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState())
 
@@ -195,11 +207,50 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     fun replaceCover(book: BookEntity, uri: Uri) {
         viewModelScope.launch {
             runCatching { container.libraryRepository.replaceCover(book, uri) }
-                .onSuccess { message.value = "Updated cover" }
+                .onSuccess {
+                    refreshBookHealth(book.id)
+                    message.value = "Updated cover"
+                }
                 .onFailure { error ->
                     Log.e("XReader", "Cover replacement failed for ${book.id}", error)
                     message.value = error.message ?: "Cover update failed"
                 }
+        }
+    }
+
+    fun refreshBookHealth(bookId: Long) {
+        viewModelScope.launch {
+            runCatching { container.libraryRepository.bookHealth(bookId) }
+                .onSuccess { health ->
+                    bookHealth.value = bookHealth.value + (
+                        bookId to BookHealthUiState(
+                            fileAvailable = health.fileAvailable,
+                            coverAvailable = health.coverAvailable,
+                            searchRows = health.searchRows
+                        )
+                    )
+                }
+                .onFailure { error ->
+                    Log.e("XReader", "Book health check failed for $bookId", error)
+                    message.value = error.message ?: "Book health check failed"
+                }
+        }
+    }
+
+    fun repairBook(book: BookEntity) {
+        if (book.id in repairingBookIds.value) return
+        viewModelScope.launch {
+            repairingBookIds.value = repairingBookIds.value + book.id
+            val result = runCatching { container.libraryRepository.repairBook(book.id) }
+                .onSuccess { refreshBookHealth(book.id) }
+                .getOrElse { error ->
+                    Log.e("XReader", "Book repair failed for ${book.id}", error)
+                    message.value = error.message ?: "Book repair failed"
+                    repairingBookIds.value = repairingBookIds.value - book.id
+                    return@launch
+                }
+            message.value = result.summaryMessage(book)
+            repairingBookIds.value = repairingBookIds.value - book.id
         }
     }
 
@@ -248,6 +299,16 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
 
     private fun BookListItem.recentTimestamp(): Long =
         state?.lastReadAt ?: book.lastOpenedAt ?: book.importedAt
+
+    private fun com.xreader.app.importer.ImportService.BookRepairResult.summaryMessage(book: BookEntity): String {
+        if (failed) return "Could not repair ${book.title}"
+        val details = buildList {
+            if (coverUpdated) add("cover")
+            if (metadataUpdated) add("metadata")
+        }
+        val base = "Repaired ${book.title}; rebuilt $searchRows search rows"
+        return if (details.isEmpty()) base else "$base; updated ${details.joinToString(", ")}"
+    }
 
     companion object {
         fun factory(container: AppContainer): ViewModelProvider.Factory =

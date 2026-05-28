@@ -159,6 +159,9 @@ interface SearchDao {
     @Query("SELECT * FROM search_index WHERE bookId = :bookId ORDER BY unitIndex ASC")
     suspend fun indexedRowsForBook(bookId: Long): List<SearchIndexEntity>
 
+    @Query("SELECT COUNT(*) FROM search_index WHERE bookId = :bookId")
+    suspend fun indexedRowCountForBook(bookId: Long): Int
+
     @Query("SELECT MAX(unitIndex) FROM search_index WHERE bookId = :bookId")
     suspend fun maxUnitIndexForBook(bookId: Long): Int?
 

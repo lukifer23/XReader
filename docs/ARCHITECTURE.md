@@ -48,7 +48,7 @@ Search uses a normal table plus an FTS table. Book deletion removes search rows 
 6. Metadata, cover art, reading units, word counts, and searchable text are extracted.
 7. Book metadata and search rows are persisted in Room.
 
-The manual Settings repair action reuses this parsing/indexing path against stored private-library files. It refreshes covers, metadata fields that are empty or safe to improve, word/page counts, and search rows. It preserves user-edited title and author values. Covers manually replaced from local image files are stored as app-private downsampled JPEGs and are not overwritten by repair.
+The manual Settings repair action and the per-book metadata repair action reuse this parsing/indexing path against stored private-library files. They refresh covers, metadata fields that are empty or safe to improve, word/page counts, and search rows. They preserve user-edited title and author values. Covers manually replaced from local image files are stored as app-private downsampled JPEGs and are not overwritten by repair.
 
 ## Reader Flow
 

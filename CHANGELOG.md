@@ -17,6 +17,7 @@ Initial public repository snapshot.
 - Readium locator persistence for resume.
 - Manual cover replacement from local image files.
 - Unified library search, sorting, density, and grouping controls to reduce duplicate chrome.
+- Per-book library health checks and targeted repair from the metadata dialog.
 - In-reader navigation by swipe, tap zones, hardware keys, TOC, bookmarks, search results, and progress scrubber.
 - Reader themes, fullscreen mode, typography controls, PDF fit controls, page animation toggle, and real font-family options.
 - Grouped Settings screen for reader appearance, typography, reading behavior, library display, and maintenance.

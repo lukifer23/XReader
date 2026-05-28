@@ -16,7 +16,7 @@ Implemented:
 - Library organization by books, authors, series, genres, years, recent, unread, in progress, finished, and favorites.
 - Persisted library sort and comfortable/compact density controls.
 - Metadata editing for title, author, year, genre, series, and series order.
-- Covers, metadata extraction, manual cover replacement, and a repair/reindex action.
+- Covers, metadata extraction, manual cover replacement, per-book health checks, and repair/reindex actions.
 - Resume from persisted Readium locators with percent read and progress state.
 - Swipe, tap-zone, hardware-key, TOC, search-result, bookmark, and scrubber navigation.
 - Reader themes: light, dark, sepia, and OLED black.

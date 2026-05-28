@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material.icons.filled.ViewCompact
@@ -154,6 +155,8 @@ internal fun LibraryRoute(
             onToggleFavorite = viewModel::toggleFavorite,
             onUpdateMetadata = viewModel::updateMetadata,
             onReplaceCover = viewModel::replaceCover,
+            onRefreshBookHealth = viewModel::refreshBookHealth,
+            onRepairBook = viewModel::repairBook,
             onDeleteBook = viewModel::deleteBook,
             modifier = Modifier.padding(padding)
         )
@@ -175,6 +178,8 @@ internal fun LibraryScreen(
     onToggleFavorite: (BookListItem) -> Unit,
     onUpdateMetadata: (BookEntity, String, String, Int?, String?, String?, Double?) -> Unit,
     onReplaceCover: (BookEntity, Uri) -> Unit,
+    onRefreshBookHealth: (Long) -> Unit,
+    onRepairBook: (BookEntity) -> Unit,
     onDeleteBook: (BookEntity) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -297,9 +302,16 @@ internal fun LibraryScreen(
         }
     }
     editing?.let { book ->
+        LaunchedEffect(book.id) {
+            onRefreshBookHealth(book.id)
+        }
         BookMetadataDialog(
             book = book,
+            health = state.bookHealth[book.id],
+            repairing = book.id in state.repairingBookIds,
             onDismiss = { editing = null },
+            onRefreshHealth = { onRefreshBookHealth(book.id) },
+            onRepairBook = { onRepairBook(book) },
             onReplaceCover = {
                 coverTarget = book
                 coverLauncher.launch(supportedCoverMimeTypes)
@@ -690,7 +702,11 @@ internal fun SearchResultsStrip(
 @Composable
 internal fun BookMetadataDialog(
     book: BookEntity,
+    health: BookHealthUiState?,
+    repairing: Boolean,
     onDismiss: () -> Unit,
+    onRefreshHealth: () -> Unit,
+    onRepairBook: () -> Unit,
     onReplaceCover: () -> Unit,
     onSave: (String, String, Int?, String?, String?, Double?) -> Unit,
 ) {
@@ -722,6 +738,13 @@ internal fun BookMetadataDialog(
                         }
                     }
                 }
+                BookHealthPanel(
+                    book = book,
+                    health = health,
+                    repairing = repairing,
+                    onRefresh = onRefreshHealth,
+                    onRepair = onRepairBook
+                )
                 OutlinedTextField(title, { title = it }, label = { Text("Title") }, singleLine = true)
                 OutlinedTextField(author, { author = it }, label = { Text("Author") }, singleLine = true)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -750,4 +773,73 @@ internal fun BookMetadataDialog(
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
+}
+
+@Composable
+internal fun BookHealthPanel(
+    book: BookEntity,
+    health: BookHealthUiState?,
+    repairing: Boolean,
+    onRefresh: () -> Unit,
+    onRepair: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Library health", style = MaterialTheme.typography.titleSmall)
+                TooltipIconButton(
+                    label = "Refresh book health",
+                    onClick = onRefresh,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(Icons.Filled.Refresh, contentDescription = null)
+                }
+            }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                HealthPill("File", health?.let { if (it.fileAvailable) "Ready" else "Missing" } ?: "Checking")
+                HealthPill("Cover", health?.let { if (it.coverAvailable) "Ready" else "Missing" } ?: "Checking")
+                HealthPill("Search", health?.let { "${it.searchRows} chunks" } ?: "Checking")
+                HealthPill("Words", wordCountLabel(book.wordCount))
+                HealthPill("Size", fileSizeLabel(book.fileSizeBytes))
+                book.pageCount?.let { HealthPill("Pages", it.toString()) }
+            }
+            TextButton(onClick = onRepair, enabled = !repairing) {
+                if (repairing) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                } else {
+                    Icon(Icons.Filled.Refresh, contentDescription = null)
+                }
+                Spacer(Modifier.width(6.dp))
+                Text(if (repairing) "Repairing book" else "Repair this book")
+            }
+        }
+    }
+}
+
+@Composable
+private fun HealthPill(label: String, value: String) {
+    Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surface) {
+        Column(Modifier.padding(horizontal = 10.dp, vertical = 7.dp)) {
+            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(value, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+private fun fileSizeLabel(bytes: Long): String {
+    val kb = bytes / 1024.0
+    val mb = kb / 1024.0
+    return if (mb >= 1.0) {
+        "%.1f MB".format(mb)
+    } else {
+        "${kb.roundToInt().coerceAtLeast(1)} KB"
+    }
 }
