@@ -563,6 +563,12 @@ class ReaderViewModel(
         }
     }
 
+    fun updateAnnotationNote(annotation: AnnotationEntity, note: String) {
+        viewModelScope.launch {
+            container.annotationRepository.updateNote(annotation, note)
+        }
+    }
+
     fun addHighlight(color: String = "#F2C94C") {
         val unit = currentReadingUnit() ?: return
         viewModelScope.launch {

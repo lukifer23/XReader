@@ -111,6 +111,27 @@ class AnnotationRepositoryInstrumentedTest {
         assertFalse(exported.markdown.contains("library/books"))
     }
 
+    @Test
+    fun updateNoteTrimsTextAndKeepsAnnotationIdentity() = runBlocking {
+        val bookId = sourceDb.books().insert(testBook(id = 0, title = "Source title"))
+        val repository = AnnotationRepository(sourceDb.annotations(), sourceDb.books(), clock)
+        val noteId = repository.addNote(
+            bookId = bookId,
+            locator = "loc-1",
+            quote = "Important quote",
+            note = "Original"
+        )
+        val annotation = sourceDb.annotations().allAnnotations().single { it.id == noteId }
+
+        repository.updateNote(annotation, "  Updated note  ")
+
+        val updated = sourceDb.annotations().allAnnotations().single { it.id == noteId }
+        assertEquals(bookId, updated.bookId)
+        assertEquals("loc-1", updated.locator)
+        assertEquals("Important quote", updated.quote)
+        assertEquals("Updated note", updated.note)
+    }
+
     private fun testBook(id: Long, title: String): BookEntity =
         BookEntity(
             id = id,

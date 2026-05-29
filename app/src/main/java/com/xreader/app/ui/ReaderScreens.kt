@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -148,6 +149,7 @@ internal fun ReaderRoute(
         onOpenNote = viewModel::openNoteDraft,
         onCloseNote = viewModel::closeNoteDraft,
         onAddNote = viewModel::addNote,
+        onUpdateAnnotationNote = viewModel::updateAnnotationNote,
         onBookmark = viewModel::toggleBookmark,
         onDeleteBookmark = viewModel::deleteBookmark,
         onDeleteAnnotation = viewModel::deleteAnnotation,
@@ -190,6 +192,7 @@ internal fun ReaderScreen(
     onOpenNote: (Int, String?) -> Unit,
     onCloseNote: () -> Unit,
     onAddNote: (String) -> Unit,
+    onUpdateAnnotationNote: (AnnotationEntity, String) -> Unit,
     onBookmark: (Int, String?) -> Unit,
     onDeleteBookmark: (Long) -> Unit,
     onDeleteAnnotation: (Long) -> Unit,
@@ -223,6 +226,7 @@ internal fun ReaderScreen(
     var searchOpen by remember(publication.book.id) { mutableStateOf(false) }
     var navigationOpen by remember(publication.book.id) { mutableStateOf(false) }
     var readerSettingsOpen by remember(publication.book.id) { mutableStateOf(false) }
+    var editingAnnotation by remember(publication.book.id) { mutableStateOf<AnnotationEntity?>(null) }
     val activity = LocalContext.current.findActivity()
 
     ReaderSystemBars(
@@ -237,6 +241,7 @@ internal fun ReaderScreen(
                 onClearSearch()
                 searchOpen = false
             }
+            editingAnnotation != null -> editingAnnotation = null
             navigationOpen -> navigationOpen = false
             readerSettingsOpen -> readerSettingsOpen = false
             state.dictionaryWord != null -> onCloseDictionary()
@@ -363,7 +368,21 @@ internal fun ReaderScreen(
                 navigationOpen = false
             },
             onDeleteBookmark = onDeleteBookmark,
-            onDeleteAnnotation = onDeleteAnnotation
+            onDeleteAnnotation = onDeleteAnnotation,
+            onEditAnnotation = { annotation ->
+                editingAnnotation = annotation
+                navigationOpen = false
+            }
+        )
+    }
+    editingAnnotation?.let { annotation ->
+        EditAnnotationDialog(
+            annotation = annotation,
+            onDismiss = { editingAnnotation = null },
+            onSave = { note ->
+                onUpdateAnnotationNote(annotation, note)
+                editingAnnotation = null
+            }
         )
     }
     if (readerSettingsOpen) {
@@ -828,6 +847,7 @@ internal fun ReaderNavigationDialog(
     onJump: (String) -> Unit,
     onDeleteBookmark: (Long) -> Unit,
     onDeleteAnnotation: (Long) -> Unit,
+    onEditAnnotation: (AnnotationEntity) -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -922,6 +942,9 @@ internal fun ReaderNavigationDialog(
                                 if (annotation.note.isNotBlank()) {
                                     Text(annotation.note, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
+                            }
+                            IconButton(onClick = { onEditAnnotation(annotation) }, modifier = Modifier.size(40.dp)) {
+                                Icon(Icons.Filled.Edit, contentDescription = "Edit annotation")
                             }
                             IconButton(onClick = { onDeleteAnnotation(annotation.id) }, modifier = Modifier.size(40.dp)) {
                                 Icon(Icons.Filled.Delete, contentDescription = "Delete annotation")

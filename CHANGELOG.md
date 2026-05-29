@@ -34,6 +34,7 @@ Initial public repository snapshot.
 - In-reader read-aloud powered by Android TextToSpeech from XReader's local indexed book text, anchored to the visible reader position with persisted speed, sleep timer, and installed offline voice controls.
 - Grouped Settings screen for reader appearance, typography, reading behavior, library display, and maintenance.
 - Notes, highlights, bookmarks, global notes view, and in-reader annotation navigation.
+- In-reader notes and highlights can be edited from the navigation sheet without leaving the book.
 - Human-readable Markdown export for notes, highlights, and bookmarks from the global notes screen.
 - Local JSON export/import for notes, highlights, and bookmarks matched back to books by checksum.
 - Local JSON export/import for library catalog metadata, favorites, finished state, reading progress, and reading sessions matched back to imported books by checksum.
