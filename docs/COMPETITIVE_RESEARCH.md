@@ -22,9 +22,9 @@ This is the working competitive map for XReader. It should drive implementation 
 
 | Capability | XReader Current | Major Competitors | Priority |
 | --- | --- | --- | --- |
-| EPUB/PDF/TXT/CBZ/FB2 reading | Implemented through Readium, TXT-to-EPUB import, CBZ-to-fixed-layout-EPUB import, and FB2-to-EPUB import. | All major readers cover EPUB/PDF/TXT; broad readers often include comics/image archives and FB2. | Keep hardening. |
+| EPUB/PDF/TXT/CBZ/FB2/RTF reading | Implemented through Readium, TXT-to-EPUB import, CBZ-to-fixed-layout-EPUB import, FB2-to-EPUB import, and RTF-to-EPUB import. | All major readers cover EPUB/PDF/TXT; broad readers often include comics/image archives, FB2, and RTF. | Keep hardening. |
 | MOBI/AZW3 | Not implemented in UI. | Common in Moon+, ReadEra, PocketBook, FBReader. | Later, only with real local conversion. |
-| DJVU/CBR/DOC/RTF/ODT | Not implemented. | Broad-format apps cover many of these. | Later; avoid format sprawl before the current reader path is excellent. |
+| DJVU/CBR/DOC/ODT | Not implemented. | Broad-format apps cover many of these. | Later; avoid format sprawl before the current reader path is excellent. |
 | No ads/no account | Implemented. | ReadEra and Lithium lead here; Moon+ free has ads; sync apps require accounts. | Preserve. |
 | Private app library | Implemented with SAF file/folder copies and checksum duplicates. | Some apps scan folders or request broad file access. | Preserve SAF-only imports and private copies. |
 | Resume/progress | Implemented with Readium locators and sessions. | Table stakes; sync apps add cloud resume. | Keep testing across restarts and screen sizes. |
@@ -33,7 +33,7 @@ This is the working competitive map for XReader. It should drive implementation 
 | Dictionary | Offline WordNet implemented with common possessive, plural, irregular plural, and inflected-form lookup. | Many rely on external dictionaries or online lookup. | Strong differentiator; keep improving morphology/phrase handling. |
 | Search | Local full-text index plus Readium fallback. | Common, but quality varies by format. | Keep hardening PDF/EPUB extraction. |
 | Analytics | Active reading, WPM, streaks, range-aware activity, book/author/genre summaries, and local CSV/JSON export. | Moon+ and some ecosystems have stats. | Continue improving trend evidence and long-library performance. |
-| TTS | Implemented as in-reader Android TextToSpeech read-aloud from local indexed book text, starting from the visible reader position, persisting spoken position as playback advances, and supporting installed offline device voice selection, speed control, and a sleep timer. | Moon+, Librera, PocketBook, BookFusion, and others offer it. | Keep hardening lock-screen/background/headset lifecycle behavior; evaluate optional on-device neural TTS only if quality, latency, battery, position sync, and APK size justify it. |
+| TTS | Implemented as in-reader Android TextToSpeech read-aloud from page-aligned local indexed book text, starting from the visible reader position, persisting spoken position as playback advances, and supporting installed offline device voice selection, speed control, and a sleep timer. | Moon+, Librera, PocketBook, BookFusion, and others offer it. | Keep hardening lock-screen/background/headset lifecycle behavior; evaluate optional on-device neural TTS only if quality, latency, battery, position sync, and APK size justify it. |
 | OPDS/catalogs | Not implemented. | Moon+, Librera, FBReader, PocketBook support OPDS. | Good optional later feature. |
 | PDF reflow/crop | PDF fit implemented; reflow/crop not implemented. | PocketBook/ReadEra have PDF comfort features. | Evaluate after reader polish. |
 | Custom user fonts | Built-in family choices, spacing presets, and per-book appearance overrides implemented; user font import not implemented. | FBReader/Moon+ support user fonts. | User font import is a later reader-polish candidate. |
@@ -46,7 +46,7 @@ The research points to several areas that matter more than raw feature count:
 - Library correctness beats file scanning breadth. Lithium-style lost-book reports and Play Books upload friction reinforce XReader's app-private library copy model.
 - Reader controls need restraint. Moon+ and KOReader show the ceiling for power, but user pain clusters around too many exposed controls, hidden progress surfaces, and slowdown from heavy customization.
 - Metadata cleanup is not optional for real libraries. Series and genre drift makes browse views feel broken, even when every individual book imported successfully.
-- OPDS, broader file formats, on-device TTS quality, and PDF comfort tools are the largest remaining parity gaps. They should land only as real optional workflows with device tests, not as visible menu promises.
+- OPDS, remaining broad file formats, on-device TTS quality, and PDF comfort tools are the largest remaining parity gaps. They should land only as real optional workflows with device tests, not as visible menu promises.
 - Large-library performance needs continuous evidence. Competitors with folder/file-browser models show lag under thousands of books, so XReader should keep indexed Room queries, private copies, and startup/open baselines.
 
 ## Patches From This Research
@@ -56,11 +56,12 @@ The research points to several areas that matter more than raw feature count:
 - Local reading stats export. The stats screen can export all analytics ranges to CSV or JSON through Android's document picker, keeping the workflow local and user-controlled.
 - Per-book reader appearance. Books can keep their own font, spacing, alignment, publisher-style, and PDF fit choices without changing global reading behavior.
 - Reader spacing presets. Compact, comfort, and accessible presets provide fast setup while still using the same manual font, line-height, and margin controls.
-- Read aloud. The reader can speak forward from the visible position through Android TextToSpeech using XReader's private full-text index, persists its spoken locator as it advances, and supports installed offline device voice selection plus sleep timer controls without permanent reader chrome.
+- Read aloud. The reader can speak forward from the visible position through Android TextToSpeech using XReader's private full-text index split into Readium-position-sized speech chunks, persists its spoken locator as it advances, and supports installed offline device voice selection plus sleep timer controls without permanent reader chrome.
 - Calibrated tap zones. Reader taps now use compact, balanced, or wide presets with edge guards for gesture-navigation devices, keeping page-turn control predictable without adding permanent reader chrome.
 - Batch SAF import. The library can import multiple files or a whole SAF folder without broad storage permission, while preserving checksum duplicate handling.
 - CBZ import. Comic/image archives are converted locally into fixed-layout EPUB, sorted by natural page order, and read through the same private-library and Readium path instead of adding a parallel comic-reader surface.
 - FB2 import. FictionBook files, including `.fb2.zip`, are converted locally into EPUB with title, author, genre, year, series, chapter text, and embedded cover metadata preserved where available.
+- RTF import. Rich Text files convert locally into EPUB with extracted title/author metadata and searchable text, keeping the same private-library and Readium reader path.
 - Markdown notes export. Notes, highlights, and bookmarks can leave the app in a readable grouped document, while JSON remains the restore-oriented backup format.
 - Manual finished-state control. The book action menu can mark books finished or not finished, and library filters/counts/progress displays use one finished-state-aware classification.
 

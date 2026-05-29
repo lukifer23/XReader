@@ -71,6 +71,7 @@ class ImportService(
     private val txtConverter = TxtToEpubConverter()
     private val cbzConverter = CbzToEpubConverter()
     private val fb2Converter = Fb2ToEpubConverter()
+    private val rtfConverter = RtfToEpubConverter()
     private val pdfTools = PdfTools(context)
 
     suspend fun importMany(uris: List<Uri>): ImportBatchResult = withContext(Dispatchers.IO) {
@@ -131,6 +132,10 @@ class ImportService(
                 }
                 "fb2", "fb2.zip" -> {
                     fb2Converter.convert(tmp, stagedFile, sourceTitle(displayName, sourceExtension))
+                    null
+                }
+                "rtf" -> {
+                    rtfConverter.convert(tmp, stagedFile, sourceTitle(displayName, sourceExtension))
                     null
                 }
                 else -> {
@@ -708,11 +713,14 @@ class ImportService(
     }
 
     private companion object {
-        val SUPPORTED_BOOK_EXTENSIONS = setOf("epub", "pdf", "txt", "cbz", "fb2", "fb2.zip")
+        val SUPPORTED_BOOK_EXTENSIONS = setOf("epub", "pdf", "txt", "cbz", "fb2", "fb2.zip", "rtf")
         val SUPPORTED_BOOK_MIME_TYPES = setOf(
             "application/epub+zip",
             "application/pdf",
             "text/plain",
+            "application/rtf",
+            "text/rtf",
+            "application/x-rtf",
             "application/zip",
             "application/x-cbz",
             "application/vnd.comicbook+zip",

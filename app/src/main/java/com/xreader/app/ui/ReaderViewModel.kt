@@ -754,11 +754,12 @@ class ReaderViewModel(
         publication: OpenPublication,
         rows: List<SearchIndexEntity>,
     ): List<ReadAloudChunk> {
-        if (rows.isEmpty()) {
-            return ReadAloudPlanner.chunksFromUnits(publication.units)
+        val chunks = if (rows.isEmpty()) {
+            ReadAloudPlanner.chunksFromUnits(publication.units)
+        } else {
+            ReadAloudPlanner.chunksFromRows(rows)
         }
-        val chunks = ReadAloudPlanner.chunksFromRows(rows)
-        return ReadAloudPlanner.alignChunksToPositions(
+        return ReadAloudPlanner.pageAlignedChunks(
             chunks = chunks,
             positionLocators = publication.positions.map { it.toJSON().toString() }
         )

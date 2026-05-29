@@ -344,7 +344,7 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     private fun com.xreader.app.importer.ImportService.ImportBatchResult.summaryMessage(): String {
-        if (scanned == 0) return "No EPUB, PDF, or TXT files found"
+        if (scanned == 0) return "No EPUB, PDF, TXT, CBZ, FB2, or RTF files found"
         if (imported == 1 && duplicates == 0 && unsupported == 0 && failed == 0) return "Imported book"
         if (imported == 0 && duplicates == 1 && unsupported == 0 && failed == 0) return "Already in library"
         val parts = buildList {

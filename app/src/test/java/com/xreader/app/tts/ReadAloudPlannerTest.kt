@@ -120,6 +120,55 @@ class ReadAloudPlannerTest {
     }
 
     @Test
+    fun pageAlignedChunksSplitLongIndexedTextAcrossReaderPositions() {
+        val text = (1..100).joinToString(" ") { "word$it" }
+        val chunks = listOf(
+            ReadAloudChunk(unitIndex = 0, locator = "epub:single-file:0", heading = "Single file", text = text, wordCount = 100)
+        )
+        val positions = (1..10).map { page ->
+            locator(position = page, progression = (page - 1) / 9.0)
+        }
+
+        val pageChunks = ReadAloudPlanner.pageAlignedChunks(chunks, positions)
+
+        assertEquals(10, pageChunks.size)
+        assertEquals(5, pageChunks[5].unitIndex)
+        assertEquals(positions[5], pageChunks[5].locator)
+        assertTrue(pageChunks[5].text.startsWith("word51"))
+        assertTrue(pageChunks[5].text.endsWith("word60"))
+        assertEquals(
+            5,
+            ReadAloudPlanner.startIndex(
+                chunks = pageChunks,
+                currentUnit = 0,
+                currentLocator = positions[5]
+            )
+        )
+    }
+
+    @Test
+    fun pageAlignedChunksPersistNearestEarlierPositionWhenPageIsSparse() {
+        val chunks = listOf(
+            ReadAloudChunk(unitIndex = 0, locator = "epub:chapter-1:0", heading = "One", text = "alpha beta gamma", wordCount = 3)
+        )
+        val positions = (1..6).map { page ->
+            locator(position = page, progression = (page - 1) / 5.0)
+        }
+
+        val pageChunks = ReadAloudPlanner.pageAlignedChunks(chunks, positions)
+
+        assertTrue(pageChunks.size < positions.size)
+        assertEquals(
+            pageChunks.lastIndex,
+            ReadAloudPlanner.startIndex(
+                chunks = pageChunks,
+                currentUnit = 5,
+                currentLocator = positions.last()
+            )
+        )
+    }
+
+    @Test
     fun splitForSpeechRespectsMaxLength() {
         val text = (1..80).joinToString(" ") { "sentence$it." }
         val segments = ReadAloudPlanner.splitForSpeech(text, maxLength = 60)

@@ -43,7 +43,7 @@ Search uses a normal table plus an FTS table. Book deletion removes search rows 
 1. Android Storage Access Framework returns one or more document URIs, or a folder tree URI.
 2. `ImportService` copies the selected file to a temporary app cache file.
 3. The file checksum is calculated to prevent duplicate imports.
-4. TXT files are converted into a minimal EPUB package, CBZ files are converted into fixed-layout EPUB packages, and FB2 / `.fb2.zip` files are converted into EPUB packages.
+4. TXT files are converted into a minimal EPUB package, CBZ files are converted into fixed-layout EPUB packages, FB2 / `.fb2.zip` files are converted into EPUB packages, and RTF files are converted into EPUB packages with extracted text and basic metadata.
 5. EPUB/PDF files and converted EPUB outputs are copied into app-owned private library storage.
 6. Metadata, cover art, reading units, word counts, and searchable text are extracted.
 7. Book metadata and search rows are persisted in Room.
@@ -52,7 +52,7 @@ EPUB cover extraction checks explicit OPF cover metadata, EPUB 3 `cover-image` p
 
 The manual Settings repair action and the per-book metadata repair action reuse this parsing/indexing path against stored private-library files. They refresh covers, metadata fields that are empty or safe to improve, word/page counts, and search rows. They preserve user-edited title and author values. Covers manually replaced from local image files are stored as app-private downsampled JPEGs and are not overwritten by repair.
 
-Folder imports walk SAF document trees recursively, filter to EPUB, PDF, TXT, CBZ, FB2, and `.fb2.zip` documents, and summarize imported, duplicate, unsupported, and failed files. They do not require broad all-files access.
+Folder imports walk SAF document trees recursively, filter to EPUB, PDF, TXT, CBZ, FB2, `.fb2.zip`, and RTF documents, and summarize imported, duplicate, unsupported, and failed files. They do not require broad all-files access.
 
 Manual metadata edits can optionally apply the edited genre and series name to other books by the same author that match the old or new series name. The bulk cleanup runs in a Room transaction and keeps per-book fields such as title, year, and series index isolated to each book.
 
@@ -78,7 +78,7 @@ Manual metadata edits can optionally apply the edited genre and series name to o
 - scrollbar cleanup for nested Readium/WebView content
 - reader preferences for theme, typography, PDF fit, fullscreen, tap-zone sizing, page-turn animation behavior, and per-book appearance overrides
 
-Read aloud is handled by `ReadAloudEngine`, a small wrapper around Android `TextToSpeech`. `ReaderViewModel` builds speech chunks from the app's local search index, maps those chunks back to Readium positions by reading-order word progress, starts from the visible reader position or nearest earlier chunk, persists the spoken locator as playback advances, and keeps Compose limited to play/stop, speed, sleep timer, installed offline voice selection, and error feedback. Playback owns Android audio focus while speaking, releases it on stop/shutdown, and stops with a clear message when another app or system event takes focus.
+Read aloud is handled by `ReadAloudEngine`, a small wrapper around Android `TextToSpeech`. `ReaderViewModel` builds speech chunks from the app's local search index, splits them into Readium-position-sized chunks by reading-order word progress, starts from the visible reader position or nearest earlier position, persists the spoken locator as playback advances, and keeps Compose limited to play/stop, speed, sleep timer, installed offline voice selection, and error feedback. Playback owns Android audio focus while speaking, releases it on stop/shutdown, and stops with a clear message when another app or system event takes focus.
 
 ## Settings
 

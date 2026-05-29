@@ -70,6 +70,65 @@ object ReadAloudPlanner {
         }
     }
 
+    fun pageAlignedChunks(
+        chunks: List<ReadAloudChunk>,
+        positionLocators: List<String>,
+    ): List<ReadAloudChunk> {
+        if (chunks.isEmpty() || positionLocators.isEmpty()) return chunks
+        val sources = wordSliceSources(chunks)
+        if (sources.isEmpty()) return alignChunksToPositions(chunks, positionLocators)
+
+        val totalWords = sources.last().endWordExclusive.coerceAtLeast(1)
+        val positionCount = positionLocators.size
+        val result = mutableListOf<ReadAloudChunk>()
+        var sourceCursor = 0
+
+        positionLocators.forEachIndexed { positionIndex, locator ->
+            val startWord = ((totalWords.toLong() * positionIndex) / positionCount).toInt()
+            val endWord = ((totalWords.toLong() * (positionIndex + 1)) / positionCount).toInt()
+            if (endWord <= startWord) return@forEachIndexed
+
+            while (sourceCursor < sources.lastIndex && sources[sourceCursor].endWordExclusive <= startWord) {
+                sourceCursor += 1
+            }
+
+            var cursor = sourceCursor
+            var heading = "Position ${positionIndex + 1}"
+            var wordCount = 0
+            val parts = mutableListOf<String>()
+
+            while (cursor < sources.size) {
+                val source = sources[cursor]
+                if (source.startWord >= endWord) break
+                val from = (startWord.coerceAtLeast(source.startWord) - source.startWord)
+                    .coerceIn(0, source.words.size)
+                val to = (endWord.coerceAtMost(source.endWordExclusive) - source.startWord)
+                    .coerceIn(0, source.words.size)
+                if (from < to) {
+                    if (parts.isEmpty()) {
+                        heading = source.chunk.heading.ifBlank { heading }
+                    }
+                    parts += source.words.subList(from, to).joinToString(" ")
+                    wordCount += to - from
+                }
+                cursor += 1
+            }
+
+            val text = cleanSpeechText(parts.joinToString(" "))
+            if (text.isNotBlank()) {
+                result += ReadAloudChunk(
+                    unitIndex = positionIndex,
+                    locator = locator,
+                    heading = heading,
+                    text = text,
+                    wordCount = wordCount.coerceAtLeast(1)
+                )
+            }
+        }
+
+        return result.ifEmpty { alignChunksToPositions(chunks, positionLocators) }
+    }
+
     fun startIndex(
         chunks: List<ReadAloudChunk>,
         currentUnit: Int,
@@ -147,6 +206,37 @@ object ReadAloudPlanner {
 
     private fun wordCount(text: String): Int =
         text.split(Regex("\\s+")).count { it.any(Char::isLetterOrDigit) }
+
+    private fun wordSliceSources(chunks: List<ReadAloudChunk>): List<WordSliceSource> {
+        var cursor = 0
+        return chunks.mapNotNull { chunk ->
+            val words = speechWords(chunk.text)
+            if (words.isEmpty()) {
+                null
+            } else {
+                val source = WordSliceSource(
+                    chunk = chunk,
+                    words = words,
+                    startWord = cursor,
+                    endWordExclusive = cursor + words.size
+                )
+                cursor += words.size
+                source
+            }
+        }
+    }
+
+    private fun speechWords(text: String): List<String> =
+        cleanSpeechText(text)
+            .split(Regex("\\s+"))
+            .filter { it.any(Char::isLetterOrDigit) }
+
+    private data class WordSliceSource(
+        val chunk: ReadAloudChunk,
+        val words: List<String>,
+        val startWord: Int,
+        val endWordExclusive: Int,
+    )
 
     private fun locatorStartIndex(
         chunks: List<ReadAloudChunk>,

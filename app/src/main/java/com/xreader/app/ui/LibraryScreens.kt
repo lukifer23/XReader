@@ -103,6 +103,9 @@ internal fun LibraryRoute(
             "application/epub+zip",
             "application/pdf",
             "text/plain",
+            "application/rtf",
+            "text/rtf",
+            "application/x-rtf",
             "application/zip",
             "application/x-cbz",
             "application/vnd.comicbook+zip",
@@ -608,7 +611,7 @@ internal fun LibraryUiState.emptyStateCopy(): LibraryEmptyStateCopy =
     when {
         totalBookCount == 0 -> LibraryEmptyStateCopy(
             title = "Build your library",
-            body = "Import EPUB, PDF, or TXT files from this device.",
+            body = "Import EPUB, PDF, TXT, CBZ, FB2, or RTF files from this device.",
             primaryAction = "Import books",
             importsBooks = true
         )

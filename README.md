@@ -14,6 +14,7 @@ Implemented:
 - TXT import converted into a minimal EPUB package so text books use the same reader path.
 - CBZ import converted into fixed-layout EPUB so comic/image archives use the same private-library and reader path.
 - FB2 and zipped `.fb2.zip` import converted into EPUB with FictionBook metadata, chapters, series, and embedded cover support.
+- RTF import converted into EPUB with title/author metadata and searchable text extraction.
 - Private app-library imports from selected files or SAF folders, with checksum duplicate detection.
 - Library organization by books, authors, series, genres, years, recent, unread, in progress, finished, and favorites, with group-aware ordering.
 - Persisted library sort and comfortable/compact density controls that apply in grouped and ungrouped views.
@@ -24,7 +25,7 @@ Implemented:
 - Swipe, calibrated tap-zone, hardware-key, TOC, search-result, bookmark, and scrubber navigation.
 - Reader themes: light, dark, sepia, and OLED black.
 - Reader typography and behavior controls: spacing presets, font size, line height, margins, alignment, publisher styles, PDF fit, fullscreen, page animation toggle, tap-zone sizing, real Readium/CSS-resolvable font choices, and per-book appearance overrides.
-- Read aloud from the visible reading position through Android TextToSpeech using local indexed book text, with persisted spoken position, speech speed, sleep timer, and installed offline voice selection.
+- Read aloud from the visible reading position through Android TextToSpeech using page-aligned local indexed book text, with persisted spoken position, speech speed, sleep timer, and installed offline voice selection.
 - Grouped Settings screen for reader appearance, typography, reading behavior, library display, and maintenance.
 - Bookmarks, highlights, notes, global notes, in-book annotation lists, human-readable Markdown notes export, local notes/bookmark JSON export/import, and library metadata/progress backup.
 - Offline English dictionary backed by bundled Princeton WordNet data, with common plural, possessive, and inflected-form lookup.
@@ -35,7 +36,7 @@ Implemented:
 Not implemented in the UI:
 
 - MOBI/AZW3 conversion.
-- CBR/DJVU/DOC/RTF/ODT import.
+- CBR/DJVU/DOC/ODT import.
 - DRM handling.
 - Cloud sync.
 - Ads, subscriptions, or social features.

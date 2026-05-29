@@ -11,6 +11,7 @@ Initial public repository snapshot.
 - TXT import converted into minimal EPUB packages.
 - CBZ import converted into fixed-layout EPUB packages.
 - FB2 and zipped `.fb2.zip` import converted into EPUB packages with FictionBook metadata and embedded cover support.
+- RTF import converted into EPUB packages with title/author metadata and searchable text extraction.
 - SAF-based private library imports.
 - Batch file and folder import through Android's Storage Access Framework.
 - Duplicate detection by checksum.
@@ -35,7 +36,7 @@ Initial public repository snapshot.
 - Reader themes, fullscreen mode, typography controls, PDF fit controls, page animation toggle, configurable tap-zone sizing, and real font-family options.
 - Compact, comfort, and accessible reader spacing presets for fast typography setup.
 - Per-book reader appearance overrides for font size, line height, margins, font family, publisher styles, alignment, and PDF fit.
-- In-reader read-aloud powered by Android TextToSpeech from XReader's local indexed book text, anchored to the visible reader position with persisted speed, sleep timer, audio-focus handling, and installed offline voice controls.
+- In-reader read-aloud powered by Android TextToSpeech from XReader's page-aligned local indexed book text, anchored to the visible reader position with persisted speed, sleep timer, audio-focus handling, and installed offline voice controls.
 - Grouped Settings screen for reader appearance, typography, reading behavior, library display, and maintenance.
 - Notes, highlights, bookmarks, global notes view, and in-reader annotation navigation.
 - In-reader notes and highlights can be edited from the navigation sheet without leaving the book.
@@ -56,6 +57,6 @@ Initial public repository snapshot.
 ### Known Limits
 
 - MOBI/AZW3 conversion is not implemented.
-- CBR/DJVU/DOC/RTF/ODT import is not implemented.
+- CBR/DJVU/DOC/ODT import is not implemented.
 - Release APKs are unsigned.
 - Play Store packaging, dependency shrinking, and APK/AAB size optimization have not had a final pass.

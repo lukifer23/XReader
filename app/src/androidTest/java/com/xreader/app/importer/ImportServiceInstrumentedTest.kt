@@ -132,6 +132,27 @@ class ImportServiceInstrumentedTest {
     }
 
     @Test
+    fun importsRtfAsPrivateEpubAndIndexesText() = runBlocking {
+        val source = File(root, "source/Field Notes.rtf").apply {
+            parentFile?.mkdirs()
+            writeText(rtfDocument(), Charsets.ISO_8859_1)
+        }
+
+        val result = ImportService(context, db).import(Uri.fromFile(source))
+
+        assertFalse(result.duplicate)
+        val book = requireNotNull(db.books().getBook(result.bookId))
+        assertEquals(BookFormat.EPUB, book.format)
+        assertEquals("rtf", book.sourceExtension)
+        assertEquals("Field Notes", book.title)
+        assertEquals("Mina Patel", book.author)
+        assertTrue(File(context.filesDir, book.filePath).exists())
+
+        val searchResults = db.search().searchBook(result.bookId, "normalizedBody:observatory*")
+        assertTrue(searchResults.any { it.body.contains("observatory", ignoreCase = true) })
+    }
+
+    @Test
     fun importsManyBooksAndReportsDuplicatesAndUnsupportedFiles() = runBlocking {
         val first = File(root, "source/batch_one.txt").apply {
             parentFile?.mkdirs()
@@ -237,4 +258,15 @@ class ImportServiceInstrumentedTest {
           </body>
         </FictionBook>
         """.trimIndent().trimStart()
+
+    private fun rtfDocument(): String =
+        """
+        {\rtf1\ansi\deff0
+        {\info{\title Field Notes}{\author Mina Patel}}
+        {\fonttbl{\f0\fswiss Arial;}}
+        \pard\b Field Notes\b0\par
+        The observatory window caught the morning light.\par
+        A second paragraph kept the import searchable.\par
+        }
+        """.trimIndent()
 }
