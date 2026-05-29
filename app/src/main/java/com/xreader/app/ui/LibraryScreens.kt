@@ -192,6 +192,7 @@ internal fun LibraryRoute(
             onOpenBook = { openReaderAt(it, null) },
             onOpenSearchResult = openReaderAt,
             onToggleFavorite = viewModel::toggleFavorite,
+            onSetFinished = viewModel::setFinished,
             onShowAll = {
                 viewModel.setQuery("")
                 viewModel.setGroup(LibraryGroup.BOOKS)
@@ -219,6 +220,7 @@ internal fun LibraryScreen(
     onOpenBook: (Long) -> Unit,
     onOpenSearchResult: (Long, String?) -> Unit,
     onToggleFavorite: (BookListItem) -> Unit,
+    onSetFinished: (BookListItem, Boolean) -> Unit,
     onShowAll: () -> Unit,
     onUpdateMetadata: (BookEntity, String, String, Int?, String?, String?, Double?, Boolean) -> Unit,
     onReplaceCover: (BookEntity, Uri) -> Unit,
@@ -245,7 +247,7 @@ internal fun LibraryScreen(
     val continueItem = remember(state.books, state.group) {
         if (state.group == LibraryGroup.BOOKS) {
             state.books
-                .filter { (it.state?.progress ?: 0.0) in 0.01..0.994 }
+                .filter { it.isLibraryInProgress() }
                 .maxByOrNull { it.state?.lastReadAt ?: it.book.lastOpenedAt ?: it.book.importedAt }
         } else {
             null
@@ -340,6 +342,7 @@ internal fun LibraryScreen(
                             density = state.density,
                             onOpen = { onOpenBook(item.book.id) },
                             onFavorite = { onToggleFavorite(item) },
+                            onSetFinished = { finished -> onSetFinished(item, finished) },
                             onEdit = { editing = item.book },
                             onDelete = { deleteCandidate = item.book }
                         )
@@ -402,8 +405,8 @@ internal fun LibraryActionRow(
     var groupMenuOpen by remember { mutableStateOf(false) }
     var sortMenuOpen by remember { mutableStateOf(false) }
     val bookCount = state.books.size
-    val inProgress = state.books.count { (it.state?.progress ?: 0.0) in 0.01..0.994 }
-    val finished = state.books.count { it.book.finished || (it.state?.progress ?: 0.0) >= 0.995 }
+    val inProgress = state.books.count { it.isLibraryInProgress() }
+    val finished = state.books.count { it.isLibraryFinished() }
     val countText = when (bookCount) {
         0 -> "No books"
         1 -> "1 book"
@@ -552,7 +555,7 @@ internal fun ContinueReadingCard(
     item: BookListItem,
     onOpen: () -> Unit,
 ) {
-    val progress = item.state?.progress ?: 0.0
+    val progress = item.displayLibraryProgress()
     val wpm = item.state?.estimatedWpm?.takeIf { it > 0 }
     Card(
         onClick = onOpen,
@@ -688,10 +691,11 @@ internal fun BookRow(
     density: LibraryDensity,
     onOpen: () -> Unit,
     onFavorite: () -> Unit,
+    onSetFinished: (Boolean) -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    val progress = item.state?.progress ?: 0.0
+    val progress = item.displayLibraryProgress()
     var menuOpen by remember(item.book.id) { mutableStateOf(false) }
     val compact = density == LibraryDensity.COMPACT
     Card(
@@ -755,6 +759,19 @@ internal fun BookRow(
                         onClick = {
                             menuOpen = false
                             onFavorite()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(if (item.book.finished) "Mark not finished" else "Mark finished") },
+                        leadingIcon = {
+                            Icon(
+                                if (item.book.finished) Icons.Filled.Refresh else Icons.Filled.Check,
+                                contentDescription = null
+                            )
+                        },
+                        onClick = {
+                            menuOpen = false
+                            onSetFinished(!item.book.finished)
                         }
                     )
                     DropdownMenuItem(

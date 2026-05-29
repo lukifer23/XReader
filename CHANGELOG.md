@@ -14,6 +14,7 @@ Initial public repository snapshot.
 - Duplicate detection by checksum.
 - Local Room database for books, reading state, sessions, notes, bookmarks, search, and dictionary entries.
 - Library organization, metadata editing, favorites, finished state, and progress display.
+- Manual mark-finished and mark-not-finished actions from the compact book action menu, with finished-state-aware progress classification.
 - Opt-in bulk genre and series cleanup from the metadata editor for matching series books.
 - Persisted library sort and comfortable/compact density controls.
 - Quiet first-run import state plus distinct no-results states for search misses and empty library filters.

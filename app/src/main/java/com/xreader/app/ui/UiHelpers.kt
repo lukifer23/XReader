@@ -198,6 +198,21 @@ internal fun groupBooks(group: LibraryGroup, books: List<BookListItem>): Map<Str
         else -> mapOf("" to books)
     }.toSortedMap()
 
+internal fun BookListItem.rawLibraryProgress(): Double =
+    (state?.progress ?: 0.0).coerceIn(0.0, 1.0)
+
+internal fun BookListItem.displayLibraryProgress(): Double =
+    if (book.finished) 1.0 else rawLibraryProgress()
+
+internal fun BookListItem.isLibraryFinished(): Boolean =
+    book.finished || rawLibraryProgress() >= 0.995
+
+internal fun BookListItem.isLibraryInProgress(): Boolean =
+    !isLibraryFinished() && rawLibraryProgress() in 0.01..0.994
+
+internal fun BookListItem.isLibraryUnread(): Boolean =
+    !isLibraryFinished() && rawLibraryProgress() <= 0.01
+
 internal fun LibraryGroup.label(): String =
     name.lowercase().split('_').joinToString(" ") { it.replaceFirstChar(Char::titlecase) }
 

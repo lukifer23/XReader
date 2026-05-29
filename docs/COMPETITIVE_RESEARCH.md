@@ -58,6 +58,7 @@ The research points to several areas that matter more than raw feature count:
 - Read aloud. The reader can speak forward from the visible position through Android TextToSpeech using XReader's private full-text index, with persisted speed control and no permanent reader chrome.
 - Batch SAF import. The library can import multiple files or a whole SAF folder without broad storage permission, while preserving checksum duplicate handling.
 - Markdown notes export. Notes, highlights, and bookmarks can leave the app in a readable grouped document, while JSON remains the restore-oriented backup format.
+- Manual finished-state control. The book action menu can mark books finished or not finished, and library filters/counts/progress displays use one finished-state-aware classification.
 
 ## Product Rules From The Research
 

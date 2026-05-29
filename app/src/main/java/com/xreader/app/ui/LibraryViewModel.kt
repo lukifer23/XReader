@@ -226,6 +226,17 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    fun setFinished(item: BookListItem, finished: Boolean) {
+        viewModelScope.launch {
+            container.libraryRepository.setFinished(item.book.id, finished)
+            message.value = when {
+                finished -> "Marked finished"
+                item.rawLibraryProgress() >= 0.995 -> "Removed manual finish mark; progress is still complete"
+                else -> "Marked not finished"
+            }
+        }
+    }
+
     fun updateMetadata(
         book: BookEntity,
         title: String,
@@ -315,9 +326,9 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     private fun List<BookListItem>.filteredBy(group: LibraryGroup): List<BookListItem> =
         when (group) {
             LibraryGroup.RECENT -> sortedByDescending { it.book.lastOpenedAt ?: it.book.importedAt }
-            LibraryGroup.UNREAD -> filter { (it.state?.progress ?: 0.0) <= 0.01 }
-            LibraryGroup.IN_PROGRESS -> filter { (it.state?.progress ?: 0.0) in 0.01..0.994 }
-            LibraryGroup.FINISHED -> filter { it.book.finished || (it.state?.progress ?: 0.0) >= 0.995 }
+            LibraryGroup.UNREAD -> filter { it.isLibraryUnread() }
+            LibraryGroup.IN_PROGRESS -> filter { it.isLibraryInProgress() }
+            LibraryGroup.FINISHED -> filter { it.isLibraryFinished() }
             LibraryGroup.FAVORITES -> filter { it.book.favorite }
             else -> this
         }
@@ -337,7 +348,7 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
                     .thenBy { it.book.sortTitle.lowercase() }
             )
             LibrarySort.PROGRESS -> sortedWith(
-                compareByDescending<BookListItem> { it.state?.progress ?: 0.0 }
+                compareByDescending<BookListItem> { it.displayLibraryProgress() }
                     .thenBy { it.book.sortTitle.lowercase() }
             )
             LibrarySort.SERIES -> sortedWith(
