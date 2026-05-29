@@ -11,7 +11,7 @@ This is the working product roadmap for the personal APK line. Items should appe
 ## Reader Polish
 
 - Evaluate page-turn animation styles supported by Readium and Android without adding custom fake page effects.
-- Harden read-aloud voice controls with device voice selection if testing shows the current play/stop and speed controls are too limited.
+- Continue hardening read-aloud lifecycle behavior across lock screen, app backgrounding, Bluetooth/headset controls, and device TTS engine differences.
 - Add a reader gesture calibration screen if Samsung/gesture-navigation edge conflicts remain visible.
 
 ## Library Polish
@@ -23,7 +23,7 @@ This is the working product roadmap for the personal APK line. Items should appe
 
 - MOBI/AZW3 conversion through a real local conversion pipeline.
 - OPDS catalog import if it can stay optional and low-bloat.
-- Evaluate an optional small on-device neural/NLP TTS model after APK size, battery, latency, and privacy testing. Android TextToSpeech remains the default unless a local model is genuinely better offline.
+- Evaluate an optional small on-device neural/NLP TTS model after APK size, battery, latency, privacy, and text-position sync testing. Android TextToSpeech remains the default unless a local model is genuinely better offline.
 - Optional encrypted local backup.
 - Play Store packaging pass with signed release, shrinker configuration, dependency/license review, and APK/AAB size pass.
 

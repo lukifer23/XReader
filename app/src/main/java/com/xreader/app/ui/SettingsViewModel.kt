@@ -14,6 +14,7 @@ import com.xreader.app.settings.ReaderPdfFit
 import com.xreader.app.settings.ReaderSettings
 import com.xreader.app.settings.ReaderSpacingPreset
 import com.xreader.app.settings.ReaderTextAlign
+import com.xreader.app.tts.ReadAloudVoiceOption
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -39,8 +40,18 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         container.settingsRepository.librarySettings
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibrarySettings())
 
+    val readAloudVoices: StateFlow<List<ReadAloudVoiceOption>> =
+        container.readAloudEngine.voices
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     private val _maintenance = MutableStateFlow(SettingsMaintenanceUiState())
     val maintenance: StateFlow<SettingsMaintenanceUiState> = _maintenance
+
+    init {
+        viewModelScope.launch {
+            container.readAloudEngine.refreshVoices()
+        }
+    }
 
     fun setTheme(theme: com.xreader.app.data.ReaderTheme) {
         viewModelScope.launch { container.settingsRepository.setTheme(theme) }
@@ -76,6 +87,12 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     fun setReadAloudRate(value: Float) {
         viewModelScope.launch { container.settingsRepository.setReadAloudRate(value) }
+        container.readAloudEngine.setSpeechRate(value)
+    }
+
+    fun setReadAloudVoiceName(value: String?) {
+        viewModelScope.launch { container.settingsRepository.setReadAloudVoiceName(value) }
+        container.readAloudEngine.setVoice(value)
     }
 
     fun setFullScreen(value: Boolean) {

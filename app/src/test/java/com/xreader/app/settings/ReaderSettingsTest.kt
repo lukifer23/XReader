@@ -11,6 +11,7 @@ class ReaderSettingsTest {
     fun readerDefaultsKeepFastPageTurnsAvailable() {
         assertTrue(ReaderSettings().pageTurnAnimations)
         assertEquals(1.0f, ReaderSettings().readAloudRate, 0.001f)
+        assertNull(ReaderSettings().readAloudVoiceName)
     }
 
     @Test
@@ -40,6 +41,7 @@ class ReaderSettingsTest {
             marginScale = 0.4f,
             fullScreen = true,
             readAloudRate = 1.25f,
+            readAloudVoiceName = "local-voice",
             textAlign = ReaderTextAlign.JUSTIFY
         )
 
@@ -48,6 +50,7 @@ class ReaderSettingsTest {
         assertEquals(com.xreader.app.data.ReaderTheme.OLED, accessible.theme)
         assertTrue(accessible.fullScreen)
         assertEquals(1.25f, accessible.readAloudRate, 0.001f)
+        assertEquals("local-voice", accessible.readAloudVoiceName)
         assertEquals(ReaderTextAlign.JUSTIFY, accessible.textAlign)
         assertEquals(ReaderSpacingPreset.ACCESSIBLE.fontScale, accessible.fontScale, 0.001f)
         assertEquals(ReaderSpacingPreset.ACCESSIBLE.lineHeight, accessible.lineHeight, 0.001f)
@@ -67,6 +70,7 @@ class ReaderSettingsTest {
             tapZonesEnabled = false,
             pageTurnAnimations = false,
             readAloudRate = 1.3f,
+            readAloudVoiceName = "local-voice",
             fullScreen = true,
             publisherStyles = true,
             textAlign = ReaderTextAlign.JUSTIFY,
@@ -89,6 +93,7 @@ class ReaderSettingsTest {
         assertFalse(combined.tapZonesEnabled)
         assertFalse(combined.pageTurnAnimations)
         assertEquals(1.3f, combined.readAloudRate, 0.001f)
+        assertEquals("local-voice", combined.readAloudVoiceName)
         assertTrue(combined.fullScreen)
         assertEquals(30_000L, combined.idleTimeoutMillis)
         assertEquals(1.4f, combined.fontScale, 0.001f)

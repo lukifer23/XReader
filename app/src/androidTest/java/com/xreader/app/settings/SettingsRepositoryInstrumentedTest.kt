@@ -59,6 +59,7 @@ class SettingsRepositoryInstrumentedTest {
         repository.setTapZonesEnabled(false)
         repository.setPageTurnAnimations(false)
         repository.setReadAloudRate(0.2f)
+        repository.setReadAloudVoiceName("local-en-us-voice")
         repository.setFullScreen(true)
         repository.setPublisherStyles(true)
         repository.setTextAlign(ReaderTextAlign.JUSTIFY)
@@ -77,12 +78,16 @@ class SettingsRepositoryInstrumentedTest {
         assertFalse(readerSettings.tapZonesEnabled)
         assertFalse(readerSettings.pageTurnAnimations)
         assertEquals(0.7f, readerSettings.readAloudRate, 0.001f)
+        assertEquals("local-en-us-voice", readerSettings.readAloudVoiceName)
         assertTrue(readerSettings.fullScreen)
         assertTrue(readerSettings.publisherStyles)
         assertEquals(ReaderTextAlign.JUSTIFY, readerSettings.textAlign)
         assertEquals(ReaderPdfFit.CONTAIN, readerSettings.pdfFit)
         assertEquals(LibrarySort.SERIES, librarySettings.sort)
         assertEquals(LibraryDensity.COMPACT, librarySettings.density)
+
+        repository.setReadAloudVoiceName(null)
+        assertNull(repository.settings.first().readAloudVoiceName)
     }
 
     @Test

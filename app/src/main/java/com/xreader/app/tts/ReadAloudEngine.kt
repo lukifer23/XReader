@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import android.speech.tts.Voice
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CompletableDeferred
@@ -16,11 +17,20 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
+data class ReadAloudVoiceOption(
+    val name: String,
+    val label: String,
+    val localeTag: String,
+    val quality: Int,
+    val latency: Int,
+)
+
 data class ReadAloudState(
     val activeBookId: Long? = null,
     val initializing: Boolean = false,
     val playing: Boolean = false,
     val currentChunk: Int = 0,
+    val currentUnit: Int = 0,
     val totalChunks: Int = 0,
     val currentHeading: String? = null,
     val currentLocator: String? = null,
@@ -35,6 +45,8 @@ class ReadAloudEngine(
     private val utteranceCounter = AtomicLong(0)
     private val _state = MutableStateFlow(ReadAloudState())
     val state: StateFlow<ReadAloudState> = _state.asStateFlow()
+    private val _voices = MutableStateFlow<List<ReadAloudVoiceOption>>(emptyList())
+    val voices: StateFlow<List<ReadAloudVoiceOption>> = _voices.asStateFlow()
 
     private var tts: TextToSpeech? = null
     private var activeSpeech: ActiveSpeech? = null
@@ -45,6 +57,7 @@ class ReadAloudEngine(
         chunks: List<ReadAloudChunk>,
         currentUnit: Int,
         speechRate: Float = DEFAULT_SPEECH_RATE,
+        voiceName: String? = null,
     ) {
         withContext(Dispatchers.Main.immediate) {
             if (chunks.isEmpty()) {
@@ -67,6 +80,7 @@ class ReadAloudEngine(
                 return@withContext
             }
 
+            setVoiceInternal(voiceName)
             setSpeechRateInternal(speechRate)
             val chunkIndex = ReadAloudPlanner.startIndex(chunks, currentUnit)
             val segments = ReadAloudPlanner.splitForSpeech(chunks[chunkIndex].text)
@@ -91,9 +105,33 @@ class ReadAloudEngine(
         }
     }
 
+    suspend fun refreshVoices(): List<ReadAloudVoiceOption> =
+        withContext(Dispatchers.Main.immediate) {
+            if (!ensureReady()) {
+                _voices.value = emptyList()
+                return@withContext emptyList()
+            }
+            updateVoiceOptions()
+        }
+
+    fun setVoice(voiceName: String?) {
+        scope.launch(Dispatchers.Main.immediate) {
+            if (ensureReady()) setVoiceInternal(voiceName)
+        }
+    }
+
     fun stop(bookId: Long? = null) {
         scope.launch(Dispatchers.Main.immediate) {
             stopInternal(bookId)
+        }
+    }
+
+    suspend fun shutdown() {
+        withContext(Dispatchers.Main.immediate) {
+            stopInternal()
+            tts?.shutdown()
+            tts = null
+            _voices.value = emptyList()
         }
     }
 
@@ -122,13 +160,9 @@ class ReadAloudEngine(
             return false
         }
 
-        val languageResult = engine.setLanguage(Locale.getDefault())
-        if (languageResult == TextToSpeech.LANG_MISSING_DATA || languageResult == TextToSpeech.LANG_NOT_SUPPORTED) {
-            val fallbackResult = engine.setLanguage(Locale.US)
-            if (fallbackResult == TextToSpeech.LANG_MISSING_DATA || fallbackResult == TextToSpeech.LANG_NOT_SUPPORTED) {
-                engine.shutdown()
-                return false
-            }
+        if (!setDefaultLanguage(engine)) {
+            engine.shutdown()
+            return false
         }
 
         engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
@@ -152,7 +186,24 @@ class ReadAloudEngine(
             }
         })
         tts = engine
+        updateVoiceOptions(engine)
         return true
+    }
+
+    private fun setVoiceInternal(voiceName: String?) {
+        val engine = tts ?: return
+        if (voiceName.isNullOrBlank()) {
+            setDefaultLanguage(engine)
+            return
+        }
+        val voice = runCatching {
+            engine.voices.orEmpty().firstOrNull { it.name == voiceName && !it.isNetworkConnectionRequired }
+        }.getOrNull()
+        if (voice != null) {
+            engine.setVoice(voice)
+        } else {
+            setDefaultLanguage(engine)
+        }
     }
 
     private fun setSpeechRateInternal(value: Float) {
@@ -213,6 +264,7 @@ class ReadAloudEngine(
             activeBookId = current.bookId,
             playing = true,
             currentChunk = current.chunkIndex,
+            currentUnit = chunk.unitIndex,
             totalChunks = current.chunks.size,
             currentHeading = chunk.heading,
             currentLocator = chunk.locator
@@ -232,6 +284,77 @@ class ReadAloudEngine(
         activeSpeech = null
         pendingUtteranceId = null
         _state.value = ReadAloudState()
+    }
+
+    private fun updateVoiceOptions(engine: TextToSpeech? = tts): List<ReadAloudVoiceOption> {
+        val activeEngine = engine ?: return emptyList()
+        val options = runCatching {
+            activeEngine.voices.orEmpty()
+                .filterNot { it.isNetworkConnectionRequired }
+                .sortedWith(
+                    compareBy<Voice> { it.locale?.getDisplayName(Locale.getDefault()).orEmpty() }
+                        .thenBy { it.name }
+                )
+                .map {
+                    ReadAloudVoiceOption(
+                        name = it.name,
+                        label = it.displayLabel(),
+                        localeTag = it.locale?.toLanguageTag().orEmpty(),
+                        quality = it.quality,
+                        latency = it.latency
+                    )
+                }
+        }.getOrDefault(emptyList())
+        _voices.value = options
+        return options
+    }
+
+    private fun setDefaultLanguage(engine: TextToSpeech): Boolean {
+        val locales = listOf(Locale.getDefault(), Locale.US).distinctBy { it.toLanguageTag() }
+        locales.forEach { locale ->
+            val languageResult = engine.setLanguage(locale)
+            if (languageResult != TextToSpeech.LANG_MISSING_DATA && languageResult != TextToSpeech.LANG_NOT_SUPPORTED) {
+                engine.bestOfflineVoice(locale)?.let { engine.setVoice(it) }
+                return true
+            }
+        }
+        return false
+    }
+
+    private fun TextToSpeech.bestOfflineVoice(locale: Locale): Voice? =
+        runCatching {
+            voices.orEmpty()
+                .filterNot { it.isNetworkConnectionRequired }
+                .filter { it.locale.matches(locale) }
+                .sortedWith(
+                    compareByDescending<Voice> { it.quality }
+                        .thenBy { it.latency }
+                        .thenBy { it.name }
+                )
+                .firstOrNull()
+        }.getOrNull()
+
+    private fun Locale?.matches(requested: Locale): Boolean {
+        if (this == null) return false
+        if (!language.equals(requested.language, ignoreCase = true)) return false
+        return requested.country.isBlank() ||
+            country.isBlank() ||
+            country.equals(requested.country, ignoreCase = true)
+    }
+
+    private fun Voice.displayLabel(): String {
+        val localeName = locale?.getDisplayName(Locale.getDefault()).orEmpty()
+        val cleanedName = name
+            .replace('_', ' ')
+            .replace('-', ' ')
+            .replace(Regex("\\s+"), " ")
+            .trim()
+        return when {
+            localeName.isBlank() -> cleanedName
+            cleanedName.contains(localeName, ignoreCase = true) -> cleanedName
+            cleanedName.isBlank() -> localeName
+            else -> "$localeName - $cleanedName"
+        }
     }
 
     private data class ActiveSpeech(

@@ -77,6 +77,7 @@ class ReaderViewModel(
     private var lastReadingState: ReadingStateEntity? = null
     private var ignoreStoredStateUntilFirstLocator = initialLocatorOverride != null
     private var deferredObserversStarted = false
+    private var lastReadAloudLocator: String? = null
 
     init {
         viewModelScope.launch {
@@ -95,19 +96,31 @@ class ReaderViewModel(
                 val readAloud = container.readAloudEngine.state.value
                 if (readAloud.activeBookId == bookId && (readAloud.playing || readAloud.initializing)) {
                     container.readAloudEngine.setSpeechRate(settings.readAloudRate)
+                    container.readAloudEngine.setVoice(settings.readAloudVoiceName)
                 }
             }
         }
         viewModelScope.launch {
             container.readAloudEngine.state.collect { readAloud ->
+                val relevantReadAloud = if (readAloud.activeBookId == null || readAloud.activeBookId == bookId) {
+                    readAloud
+                } else {
+                    ReadAloudState()
+                }
                 _uiState.update {
-                    it.copy(
-                        readAloud = if (readAloud.activeBookId == null || readAloud.activeBookId == bookId) {
-                            readAloud
-                        } else {
-                            ReadAloudState()
-                        }
-                    )
+                    it.copy(readAloud = relevantReadAloud)
+                }
+                val spokenLocator = relevantReadAloud.currentLocator
+                if (relevantReadAloud.playing && spokenLocator != null) {
+                    if (spokenLocator != lastReadAloudLocator) {
+                        lastReadAloudLocator = spokenLocator
+                        recordReadAloudProgress(
+                            unit = relevantReadAloud.currentUnit,
+                            locator = spokenLocator
+                        )
+                    }
+                } else if (!relevantReadAloud.initializing) {
+                    lastReadAloudLocator = null
                 }
             }
         }
@@ -333,12 +346,18 @@ class ReaderViewModel(
             val publication = _uiState.value.publication ?: return@launch
             val rows = container.libraryRepository.indexedRowsForBook(bookId)
             val chunks = readAloudChunks(publication, rows)
-            val startUnit = visibleUnit?.coerceAtLeast(0) ?: _uiState.value.currentUnit
+            val storedUnit = _uiState.value.currentUnit
+            val startUnit = when {
+                visibleUnit == null -> storedUnit
+                visibleUnit <= 0 && storedUnit > 0 -> storedUnit
+                else -> visibleUnit.coerceAtLeast(0)
+            }
             container.readAloudEngine.play(
                 bookId = bookId,
                 chunks = chunks,
                 currentUnit = startUnit,
-                speechRate = _uiState.value.settings.readAloudRate
+                speechRate = _uiState.value.settings.readAloudRate,
+                voiceName = _uiState.value.settings.readAloudVoiceName
             )
         }
     }
@@ -402,6 +421,26 @@ class ReaderViewModel(
             state.finishedAt != previousFinishedAt ||
             state.activeMillis - previousActiveMillis >= 10_000L
         if (shouldSave) scheduleStateSave(state)
+    }
+
+    private fun recordReadAloudProgress(unit: Int, locator: String) {
+        val publication = _uiState.value.publication ?: return
+        val total = publication.units.size.coerceAtLeast(1)
+        val readiumLocator = locator.toReadiumLocatorOrNull()
+        val boundedUnit = readiumLocator
+            ?.let { publication.positionIndexFor(it) }
+            ?: unit
+        val currentUnit = boundedUnit.coerceIn(0, total - 1)
+        val progress = readiumLocator?.locations?.totalProgression
+            ?: if (total <= 1) 1.0 else currentUnit.toDouble() / (total - 1).toDouble()
+        val state = (tracker ?: createTracker(publication).also { tracker = it }).record(
+            unit = currentUnit,
+            locator = readiumLocator?.toJSON()?.toString() ?: locator,
+            progressOverride = progress.coerceIn(0.0, 1.0)
+        )
+        lastReadingState = state
+        _uiState.update { it.copy(currentUnit = currentUnit, state = state) }
+        scheduleStateSave(state)
     }
 
     fun persistReadingState() {

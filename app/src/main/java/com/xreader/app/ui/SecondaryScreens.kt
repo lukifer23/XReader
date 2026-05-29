@@ -85,6 +85,7 @@ import com.xreader.app.settings.ReaderPdfFit
 import com.xreader.app.settings.ReaderSpacingPreset
 import com.xreader.app.settings.ReaderTextAlign
 import com.xreader.app.settings.spacingPresetOrNull
+import com.xreader.app.tts.ReadAloudVoiceOption
 import java.text.DateFormat
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -569,6 +570,7 @@ internal fun EditAnnotationDialog(
 internal fun SettingsRoute(viewModel: SettingsViewModel, onBack: () -> Unit) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val librarySettings by viewModel.librarySettings.collectAsStateWithLifecycle()
+    val readAloudVoices by viewModel.readAloudVoices.collectAsStateWithLifecycle()
     val maintenance by viewModel.maintenance.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val backupMimeTypes = remember {
@@ -687,6 +689,11 @@ internal fun SettingsRoute(viewModel: SettingsViewModel, onBack: () -> Unit) {
                         onCheckedChange = viewModel::setPageTurnAnimations
                     )
                     SettingSlider("Read aloud speed", settings.readAloudRate, 0.7f..1.4f, viewModel::setReadAloudRate)
+                    ReadAloudVoiceSettings(
+                        voices = readAloudVoices,
+                        selectedVoiceName = settings.readAloudVoiceName,
+                        onSelected = viewModel::setReadAloudVoiceName
+                    )
                 }
             }
             item {
@@ -845,6 +852,37 @@ private fun <T> SettingsChipGroup(
                     selected = selected == option,
                     onClick = { onSelected(option) },
                     label = { Text(label(option)) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReadAloudVoiceSettings(
+    voices: List<ReadAloudVoiceOption>,
+    selectedVoiceName: String?,
+    onSelected: (String?) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("Read aloud voice", style = MaterialTheme.typography.titleSmall)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(
+                selected = selectedVoiceName == null,
+                onClick = { onSelected(null) },
+                label = { Text("Device default") }
+            )
+            voices.forEach { voice ->
+                FilterChip(
+                    selected = selectedVoiceName == voice.name,
+                    onClick = { onSelected(voice.name) },
+                    label = {
+                        Text(
+                            text = voice.label,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 )
             }
         }

@@ -32,7 +32,7 @@ This is the working competitive map for XReader. It should drive implementation 
 | Dictionary | Offline WordNet implemented with common possessive, plural, irregular plural, and inflected-form lookup. | Many rely on external dictionaries or online lookup. | Strong differentiator; keep improving morphology/phrase handling. |
 | Search | Local full-text index plus Readium fallback. | Common, but quality varies by format. | Keep hardening PDF/EPUB extraction. |
 | Analytics | Active reading, WPM, streaks, range-aware activity, book/author/genre summaries, and local CSV/JSON export. | Moon+ and some ecosystems have stats. | Continue improving trend evidence and long-library performance. |
-| TTS | Implemented as in-reader Android TextToSpeech read-aloud from local indexed book text, starting from the visible reader position with persisted speed control. | Moon+, Librera, PocketBook, BookFusion, and others offer it. | Keep hardening voice behavior and device lifecycle handling; evaluate optional on-device neural TTS only if quality, latency, battery, and APK size justify it. |
+| TTS | Implemented as in-reader Android TextToSpeech read-aloud from local indexed book text, starting from the visible reader position, persisting spoken position as playback advances, and supporting installed offline device voice selection plus speed control. | Moon+, Librera, PocketBook, BookFusion, and others offer it. | Keep hardening lock-screen/background/headset lifecycle behavior; evaluate optional on-device neural TTS only if quality, latency, battery, position sync, and APK size justify it. |
 | OPDS/catalogs | Not implemented. | Moon+, Librera, FBReader, PocketBook support OPDS. | Good optional later feature. |
 | PDF reflow/crop | PDF fit implemented; reflow/crop not implemented. | PocketBook/ReadEra have PDF comfort features. | Evaluate after reader polish. |
 | Custom user fonts | Built-in family choices, spacing presets, and per-book appearance overrides implemented; user font import not implemented. | FBReader/Moon+ support user fonts. | User font import is a later reader-polish candidate. |
@@ -45,7 +45,7 @@ The research points to several areas that matter more than raw feature count:
 - Library correctness beats file scanning breadth. Lithium-style lost-book reports and Play Books upload friction reinforce XReader's app-private library copy model.
 - Reader controls need restraint. Moon+ and KOReader show the ceiling for power, but user pain clusters around too many exposed controls, hidden progress surfaces, and slowdown from heavy customization.
 - Metadata cleanup is not optional for real libraries. Series and genre drift makes browse views feel broken, even when every individual book imported successfully.
-- OPDS, broader file formats, voice selection/on-device TTS quality, and PDF comfort tools are the largest remaining parity gaps. They should land only as real optional workflows with device tests, not as visible menu promises.
+- OPDS, broader file formats, on-device TTS quality, and PDF comfort tools are the largest remaining parity gaps. They should land only as real optional workflows with device tests, not as visible menu promises.
 - Large-library performance needs continuous evidence. Competitors with folder/file-browser models show lag under thousands of books, so XReader should keep indexed Room queries, private copies, and startup/open baselines.
 
 ## Patches From This Research
@@ -55,7 +55,7 @@ The research points to several areas that matter more than raw feature count:
 - Local reading stats export. The stats screen can export all analytics ranges to CSV or JSON through Android's document picker, keeping the workflow local and user-controlled.
 - Per-book reader appearance. Books can keep their own font, spacing, alignment, publisher-style, and PDF fit choices without changing global reading behavior.
 - Reader spacing presets. Compact, comfort, and accessible presets provide fast setup while still using the same manual font, line-height, and margin controls.
-- Read aloud. The reader can speak forward from the visible position through Android TextToSpeech using XReader's private full-text index, with persisted speed control and no permanent reader chrome.
+- Read aloud. The reader can speak forward from the visible position through Android TextToSpeech using XReader's private full-text index, persists its spoken locator as it advances, and supports installed offline device voice selection without permanent reader chrome.
 - Batch SAF import. The library can import multiple files or a whole SAF folder without broad storage permission, while preserving checksum duplicate handling.
 - Markdown notes export. Notes, highlights, and bookmarks can leave the app in a readable grouped document, while JSON remains the restore-oriented backup format.
 - Manual finished-state control. The book action menu can mark books finished or not finished, and library filters/counts/progress displays use one finished-state-aware classification.

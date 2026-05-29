@@ -29,6 +29,7 @@ class SettingsRepository(
         val tapZonesEnabled = booleanPreferencesKey("tap_zones_enabled")
         val pageTurnAnimations = booleanPreferencesKey("page_turn_animations")
         val readAloudRate = floatPreferencesKey("read_aloud_rate")
+        val readAloudVoiceName = stringPreferencesKey("read_aloud_voice_name")
         val fullScreen = booleanPreferencesKey("full_screen")
         val publisherStyles = booleanPreferencesKey("publisher_styles")
         val textAlign = stringPreferencesKey("text_align")
@@ -61,6 +62,7 @@ class SettingsRepository(
                 tapZonesEnabled = prefs[Keys.tapZonesEnabled] ?: true,
                 pageTurnAnimations = prefs[Keys.pageTurnAnimations] ?: true,
                 readAloudRate = (prefs[Keys.readAloudRate] ?: 1.0f).coerceIn(0.7f, 1.4f),
+                readAloudVoiceName = prefs[Keys.readAloudVoiceName]?.takeIf { it.isNotBlank() },
                 fullScreen = prefs[Keys.fullScreen] ?: false,
                 publisherStyles = prefs[Keys.publisherStyles] ?: false,
                 textAlign = prefs[Keys.textAlign]?.let { runCatching { ReaderTextAlign.valueOf(it) }.getOrNull() }
@@ -140,6 +142,16 @@ class SettingsRepository(
 
     suspend fun setReadAloudRate(value: Float) {
         dataStore.edit { it[Keys.readAloudRate] = value.coerceIn(0.7f, 1.4f) }
+    }
+
+    suspend fun setReadAloudVoiceName(value: String?) {
+        dataStore.edit { prefs ->
+            if (value.isNullOrBlank()) {
+                prefs.remove(Keys.readAloudVoiceName)
+            } else {
+                prefs[Keys.readAloudVoiceName] = value
+            }
+        }
     }
 
     suspend fun setFullScreen(value: Boolean) {
