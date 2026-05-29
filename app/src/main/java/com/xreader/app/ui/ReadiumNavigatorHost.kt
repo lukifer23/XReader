@@ -3,6 +3,9 @@
 package com.xreader.app.ui
 
 import android.annotation.SuppressLint
+import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
@@ -13,6 +16,7 @@ import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import android.widget.Toast
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
@@ -141,6 +145,8 @@ internal fun ReadiumPublicationView(
                 menu.add(0, HIGHLIGHT_SELECTION_ID, 0, "Highlight")
                 menu.add(0, NOTE_SELECTION_ID, 1, "Note")
                 menu.add(0, DEFINE_SELECTION_ID, 2, "Define")
+                menu.add(0, COPY_SELECTION_ID, 3, "Copy")
+                menu.add(0, SHARE_SELECTION_ID, 4, "Share")
                 return true
             }
 
@@ -152,14 +158,18 @@ internal fun ReadiumPublicationView(
                 selectionScope.launch {
                     val selected = selectable.currentSelection()
                     val locator = selected?.locator
-                    val text = locator?.text?.highlight
-                        ?.trim()
-                        ?.takeIf { it.isNotBlank() }
-                    if (locator != null && text != null) {
-                        when (item.itemId) {
-                            DEFINE_SELECTION_ID -> latestLookupHandler(text)
-                            NOTE_SELECTION_ID -> latestSelectedNoteHandler(locator, text)
-                            HIGHLIGHT_SELECTION_ID -> latestSelectedHighlightHandler(locator, text)
+                    if (locator != null) {
+                        val text = locator.text.highlight
+                            ?.trim()
+                            ?.takeIf { it.isNotBlank() }
+                        if (text != null) {
+                            when (item.itemId) {
+                                COPY_SELECTION_ID -> context.copyReaderSelection(text)
+                                SHARE_SELECTION_ID -> context.shareReaderSelection(text)
+                                DEFINE_SELECTION_ID -> latestLookupHandler(text)
+                                NOTE_SELECTION_ID -> latestSelectedNoteHandler(locator, text)
+                                HIGHLIGHT_SELECTION_ID -> latestSelectedHighlightHandler(locator, text)
+                            }
                         }
                     }
                     selectable.clearSelection()
@@ -397,6 +407,23 @@ private fun Context.openExternal(url: String) {
     }
 }
 
+private fun Context.copyReaderSelection(text: String) {
+    val clipboard = getSystemService(ClipboardManager::class.java) ?: return
+    clipboard.setPrimaryClip(ClipData.newPlainText("Book selection", text))
+    Toast.makeText(this, "Copied selection", Toast.LENGTH_SHORT).show()
+}
+
+private fun Context.shareReaderSelection(text: String) {
+    val sendIntent = Intent(Intent.ACTION_SEND)
+        .setType("text/plain")
+        .putExtra(Intent.EXTRA_TEXT, text)
+    val chooser = Intent.createChooser(sendIntent, "Share selection")
+    if (this !is Activity) {
+        chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    runCatching { startActivity(chooser) }
+}
+
 private fun View.disableScrollbarsRecursively() {
     disableScrollbars()
     if (this is ViewGroup) {
@@ -447,4 +474,12 @@ private inline fun <T> traced(name: String, block: () -> T): T {
 private const val DEFINE_SELECTION_ID = 42_001
 private const val NOTE_SELECTION_ID = 42_002
 private const val HIGHLIGHT_SELECTION_ID = 42_003
-private val SELECTION_ACTION_IDS = setOf(DEFINE_SELECTION_ID, NOTE_SELECTION_ID, HIGHLIGHT_SELECTION_ID)
+private const val COPY_SELECTION_ID = 42_004
+private const val SHARE_SELECTION_ID = 42_005
+private val SELECTION_ACTION_IDS = setOf(
+    DEFINE_SELECTION_ID,
+    NOTE_SELECTION_ID,
+    HIGHLIGHT_SELECTION_ID,
+    COPY_SELECTION_ID,
+    SHARE_SELECTION_ID
+)

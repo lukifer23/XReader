@@ -29,6 +29,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.automirrored.filled.NoteAdd
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
@@ -233,6 +234,19 @@ internal fun ReaderScreen(
         )
         pagingController.goToLocator(locator)
     }
+    fun seekWithReturn(progress: Float) {
+        val index = ((publication.positions.size - 1).coerceAtLeast(0) * progress).roundToInt()
+        val target = publication.positions.getOrNull(index)?.toJSON()?.toString()
+        if (target != null) {
+            pushReaderReturnLocator(
+                history = returnHistory,
+                visibleLocatorJson = pagingController.currentLocatorJson,
+                fallbackUnitLocator = units.getOrNull(pagingController.currentUnit)?.locator,
+                targetLocatorJson = target
+            )
+        }
+        pagingController.goToProgress(progress)
+    }
     fun goBackWithinBook(): Boolean {
         val locator = popReaderReturnLocator(returnHistory) ?: return false
         pagingController.goToLocator(locator)
@@ -295,6 +309,8 @@ internal fun ReaderScreen(
                     fallbackUnitLocator = units.getOrNull(pagingController.currentUnit)?.locator
                 ) != null,
                 onBack = onBack,
+                canReturn = returnHistory.isNotEmpty(),
+                onReturn = { goBackWithinBook() },
                 onContents = { navigationOpen = true },
                 onSearch = { searchOpen = true },
                 onBookmark = {
@@ -320,7 +336,7 @@ internal fun ReaderScreen(
                 pageCount = pagingController.pageCount,
                 onPrevious = { pagingController.goToPage(pagingController.currentPage - 1) },
                 onNext = { pagingController.goToPage(pagingController.currentPage + 1) },
-                onSeek = pagingController.goToProgress,
+                onSeek = ::seekWithReturn,
                 theme = state.settings.theme,
                 onToggleTheme = onToggleTheme,
                 fullScreen = state.settings.fullScreen,
@@ -440,6 +456,8 @@ internal fun ReaderTopChrome(
     progress: Double,
     bookmarked: Boolean,
     onBack: () -> Unit,
+    canReturn: Boolean,
+    onReturn: () -> Unit,
     onContents: () -> Unit,
     onSearch: () -> Unit,
     onBookmark: () -> Unit,
@@ -475,6 +493,11 @@ internal fun ReaderTopChrome(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+            if (canReturn) {
+                IconButton(onClick = onReturn, modifier = Modifier.size(40.dp)) {
+                    Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = "Return to previous reading location")
+                }
             }
             IconButton(onClick = onContents, modifier = Modifier.size(40.dp)) {
                 Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = "Contents")
