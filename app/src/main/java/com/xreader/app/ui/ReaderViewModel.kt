@@ -503,8 +503,18 @@ class ReaderViewModel(
         _uiState.update { it.copy(dictionaryWord = null, dictionaryEntries = emptyList()) }
     }
 
-    fun openNoteDraft() {
-        _uiState.update { it.copy(noteDraftOpen = true, pendingNoteLocator = null, pendingNoteQuote = null) }
+    fun openNoteDraft(
+        visibleUnit: Int? = null,
+        visibleLocator: String? = null,
+    ) {
+        val target = visibleReadingTarget(visibleUnit, visibleLocator)
+        _uiState.update {
+            it.copy(
+                noteDraftOpen = true,
+                pendingNoteLocator = target?.position?.locatorJson,
+                pendingNoteQuote = target?.noteQuote()
+            )
+        }
     }
 
     fun openSelectedNote(locator: Locator, quote: String) {
@@ -569,34 +579,25 @@ class ReaderViewModel(
         visibleUnit: Int? = null,
         visibleLocator: String? = null,
     ) {
+        val target = visibleReadingTarget(visibleUnit, visibleLocator) ?: return
         val publication = _uiState.value.publication ?: return
         val total = publication.units.size.coerceAtLeast(1)
-        val readiumLocator = visibleLocator?.toReadiumLocatorOrNull()
-        val resolvedUnit = readiumLocator
-            ?.let { publication.positionIndexFor(it) }
-            ?: visibleUnit
-            ?: _uiState.value.currentUnit
-        val currentUnit = resolvedUnit.coerceIn(0, total - 1)
-        val unit = publication.units.getOrNull(currentUnit) ?: return
-        val locator = readiumLocator?.toJSON()?.toString()
-            ?: visibleLocator?.takeIf { it.isNotBlank() }
-            ?: unit.locator
         val existing = _uiState.value.bookmarks.bookmarkAtReaderLocation(
-            visibleLocatorJson = locator,
-            fallbackUnitLocator = unit.locator
+            visibleLocatorJson = target.position.locatorJson,
+            fallbackUnitLocator = target.unit.locator
         )
         if (existing != null) {
             viewModelScope.launch { container.annotationRepository.deleteBookmark(existing.id) }
             return
         }
-        val progress = readiumLocator?.locations?.totalProgression
-            ?: if (total <= 1) 1.0 else currentUnit.toDouble() / (total - 1).toDouble()
-        val label = readiumLocator?.title
-            ?: unit.heading.ifBlank { "Position ${currentUnit + 1}" }
+        val progress = target.position.readiumLocator?.locations?.totalProgression
+            ?: if (total <= 1) 1.0 else target.position.unitIndex.toDouble() / (total - 1).toDouble()
+        val label = target.position.readiumLocator?.title
+            ?: target.unit.heading.ifBlank { "Position ${target.position.unitIndex + 1}" }
         viewModelScope.launch {
             container.annotationRepository.toggleBookmark(
                 bookId = bookId,
-                locator = locator,
+                locator = target.position.locatorJson,
                 label = label,
                 progress = progress.coerceIn(0.0, 1.0)
             )
@@ -630,6 +631,22 @@ class ReaderViewModel(
 
     private fun currentReadingUnit(): ReadingUnit? =
         _uiState.value.publication?.units?.getOrNull(_uiState.value.currentUnit)
+
+    private fun visibleReadingTarget(
+        visibleUnit: Int?,
+        visibleLocator: String?,
+    ): VisibleReadingTarget? {
+        val publication = _uiState.value.publication ?: return null
+        val position = resolveVisibleReaderPosition(
+            visibleUnit = visibleUnit,
+            visibleLocatorJson = visibleLocator,
+            fallbackUnit = _uiState.value.currentUnit,
+            positions = publication.positions,
+            units = publication.units
+        ) ?: return null
+        val unit = publication.units.getOrNull(position.unitIndex) ?: return null
+        return VisibleReadingTarget(position = position, unit = unit)
+    }
 
     private fun createTracker(publication: OpenPublication): ReadingAnalyticsTracker =
         ReadingAnalyticsTracker(
@@ -745,3 +762,14 @@ private fun SearchIndexEntity.snippet(query: String): String {
 
 private fun String.selectedQuote(): String =
     replace(Regex("\\s+"), " ").trim().take(800)
+
+private data class VisibleReadingTarget(
+    val position: ResolvedVisibleReaderPosition,
+    val unit: ReadingUnit,
+)
+
+private fun VisibleReadingTarget.noteQuote(): String =
+    position.readiumLocator?.text?.highlight?.selectedQuote()?.takeIf { it.isNotBlank() }
+        ?: unit.body.selectedQuote().takeIf { it.isNotBlank() }
+        ?: position.readiumLocator?.title?.takeIf { it.isNotBlank() }
+        ?: unit.heading

@@ -187,7 +187,7 @@ internal fun ReaderScreen(
     onSelectedNote: (org.readium.r2.shared.publication.Locator, String) -> Unit,
     onSelectedHighlight: (org.readium.r2.shared.publication.Locator, String) -> Unit,
     onCloseDictionary: () -> Unit,
-    onOpenNote: () -> Unit,
+    onOpenNote: (Int, String?) -> Unit,
     onCloseNote: () -> Unit,
     onAddNote: (String) -> Unit,
     onBookmark: (Int, String?) -> Unit,
@@ -287,7 +287,12 @@ internal fun ReaderScreen(
                         pagingController.currentLocatorJson
                     )
                 },
-                onNote = onOpenNote,
+                onNote = {
+                    onOpenNote(
+                        pagingController.currentUnit,
+                        pagingController.currentLocatorJson
+                    )
+                },
                 onSettings = { readerSettingsOpen = true },
                 modifier = Modifier
                     .align(Alignment.TopCenter)

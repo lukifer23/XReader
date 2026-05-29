@@ -15,6 +15,12 @@ data class ResolvedReaderPosition(
     val fromInitialOverride: Boolean,
 )
 
+data class ResolvedVisibleReaderPosition(
+    val unitIndex: Int,
+    val locatorJson: String,
+    val readiumLocator: Locator?,
+)
+
 fun OpenPublication.positionIndexFor(locator: Locator): Int {
     locator.locations.position?.let { position ->
         if (position > 0) return position - 1
@@ -78,6 +84,33 @@ internal fun resolveInitialReaderPosition(
         unitIndex = boundedUnit,
         locatorJson = locatorJson,
         fromInitialOverride = initialLocatorOverride != null
+    )
+}
+
+internal fun resolveVisibleReaderPosition(
+    visibleUnit: Int?,
+    visibleLocatorJson: String?,
+    fallbackUnit: Int,
+    positions: List<Locator>,
+    units: List<ReadingUnit>,
+): ResolvedVisibleReaderPosition? {
+    if (units.isEmpty()) return null
+    val requestedLocator = visibleLocatorJson.cleanLocator()
+    val readiumLocator = requestedLocator?.toReadiumLocatorOrNull()
+    val unitIndex = (
+        readiumLocator?.let { positionIndexFor(locator = it, positions = positions, units = units) }
+            ?: visibleUnit
+            ?: fallbackUnit
+        ).coerceIn(0, units.lastIndex)
+    val locatorJson = readiumLocator?.toJSON()?.toString()
+        ?: requestedLocator
+        ?: positions.getOrNull(unitIndex)?.toJSON()?.toString()
+        ?: units.getOrNull(unitIndex)?.locator
+        ?: return null
+    return ResolvedVisibleReaderPosition(
+        unitIndex = unitIndex,
+        locatorJson = locatorJson,
+        readiumLocator = readiumLocator
     )
 }
 

@@ -74,6 +74,38 @@ class ReaderLocatorTest {
     }
 
     @Test
+    fun resolveVisibleReaderPositionKeepsVisibleLocator() {
+        val units = (0..4).map { unit(it, "locator-$it") }
+
+        val resolved = resolveVisibleReaderPosition(
+            visibleUnit = 3,
+            visibleLocatorJson = "visible-locator",
+            fallbackUnit = 0,
+            positions = emptyList(),
+            units = units
+        )
+
+        assertEquals(3, resolved?.unitIndex)
+        assertEquals("visible-locator", resolved?.locatorJson)
+    }
+
+    @Test
+    fun resolveVisibleReaderPositionFallsBackToCurrentUnit() {
+        val units = (0..4).map { unit(it, "locator-$it") }
+
+        val resolved = resolveVisibleReaderPosition(
+            visibleUnit = null,
+            visibleLocatorJson = null,
+            fallbackUnit = 2,
+            positions = emptyList(),
+            units = units
+        )
+
+        assertEquals(2, resolved?.unitIndex)
+        assertEquals("locator-2", resolved?.locatorJson)
+    }
+
+    @Test
     fun bookmarkAtReaderLocationMatchesExactVisibleLocator() {
         val locator = locator(position = 7, progression = 0.42)
         val bookmarks = listOf(bookmark(id = 10, locator = locator))
