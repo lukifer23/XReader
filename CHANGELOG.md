@@ -42,6 +42,7 @@ Initial public repository snapshot.
 - Manual Settings action to repair covers, metadata, and search indexes from stored library files.
 - Modern adaptive app icon.
 - Unit and instrumented test coverage for core parsing, indexing, dictionary, analytics, settings persistence, and maintenance repair behavior.
+- Public-domain Alice text fixture used by instrumented TXT/EPUB import coverage.
 
 ### Known Limits
 

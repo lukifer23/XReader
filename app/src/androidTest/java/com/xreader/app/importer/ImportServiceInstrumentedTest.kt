@@ -6,6 +6,7 @@ import android.net.Uri
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import com.xreader.app.data.BookFormat
 import com.xreader.app.data.XReaderDatabase
 import kotlinx.coroutines.flow.first
@@ -21,11 +22,13 @@ import java.io.File
 @RunWith(AndroidJUnit4::class)
 class ImportServiceInstrumentedTest {
     private val baseContext: Context = ApplicationProvider.getApplicationContext()
+    private val instrumentationContext: Context = InstrumentationRegistry.getInstrumentation().context
     private val root = File(baseContext.cacheDir, "import-service-test-${System.nanoTime()}")
     private val context = object : ContextWrapper(baseContext) {
         override fun getFilesDir(): File = File(root, "files").apply { mkdirs() }
         override fun getCacheDir(): File = File(root, "cache").apply { mkdirs() }
     }
+    private val fixtures = PublicDomainBookFixtures(instrumentationContext, root)
     private val db = Room.inMemoryDatabaseBuilder(baseContext, XReaderDatabase::class.java)
         .allowMainThreadQueries()
         .build()
@@ -38,17 +41,7 @@ class ImportServiceInstrumentedTest {
 
     @Test
     fun importsTxtAsPrivateEpubAndIndexesText() = runBlocking {
-        val source = File(root, "source/xreader_smoke.txt").apply {
-            parentFile?.mkdirs()
-            writeText(
-                """
-                XReader smoke test
-
-                This is a real TXT file imported through ImportService.
-                The importer should convert it to EPUB and index searchable text.
-                """.trimIndent()
-            )
-        }
+        val source = fixtures.aliceTxt()
 
         val result = ImportService(context, db).import(Uri.fromFile(source))
 
@@ -56,10 +49,31 @@ class ImportServiceInstrumentedTest {
         val book = requireNotNull(db.books().getBook(result.bookId))
         assertEquals(BookFormat.EPUB, book.format)
         assertEquals("txt", book.sourceExtension)
+        assertEquals("Alice Public Domain Excerpt", book.title)
         assertTrue(File(context.filesDir, book.filePath).exists())
 
-        val searchResults = db.search().searchBook(result.bookId, "normalizedBody:smoke*")
-        assertTrue(searchResults.any { it.body.contains("smoke", ignoreCase = true) })
+        val searchResults = db.search().searchBook(result.bookId, "normalizedBody:rabbit*")
+        assertTrue(searchResults.any { it.body.contains("Rabbit", ignoreCase = true) })
+    }
+
+    @Test
+    fun importsPublicDomainEpubFixtureAndIndexesText() = runBlocking {
+        val source = fixtures.aliceEpub()
+
+        val result = ImportService(context, db).import(Uri.fromFile(source))
+
+        assertFalse(result.duplicate)
+        val book = requireNotNull(db.books().getBook(result.bookId))
+        assertEquals(BookFormat.EPUB, book.format)
+        assertEquals("epub", book.sourceExtension)
+        assertEquals("Alice Public Domain Excerpt", book.title)
+        assertTrue(book.wordCount > 80)
+        assertTrue(File(context.filesDir, book.filePath).exists())
+
+        val aliceResults = db.search().searchBook(result.bookId, "normalizedBody:alice*")
+        val rabbitResults = db.search().searchBook(result.bookId, "normalizedBody:rabbit*")
+        assertTrue(aliceResults.any { it.body.contains("Alice", ignoreCase = true) })
+        assertTrue(rabbitResults.any { it.body.contains("White Rabbit", ignoreCase = true) })
     }
 
     @Test

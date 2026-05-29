@@ -28,6 +28,7 @@ Implemented:
 - Offline English dictionary backed by bundled Princeton WordNet data, with common plural, possessive, and inflected-form lookup.
 - Local full-text search index for imported book text where extraction is supported.
 - Reading analytics for sessions, active reading time, progress, estimated WPM, 7-day/30-day/13-week/all-time activity, streaks, book/author/genre summaries, and local CSV/JSON export.
+- Public-domain book fixture coverage for TXT/EPUB import paths.
 
 Not implemented in the UI:
 
