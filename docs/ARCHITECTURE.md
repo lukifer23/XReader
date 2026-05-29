@@ -72,6 +72,7 @@ Manual metadata edits can optionally apply the edited genre and series name to o
 - persisted initial locator resume
 - calibrated tap-zone page navigation
 - chrome toggle
+- bounded return history for manual TOC, bookmark, note, and search-result jumps
 - selection actions for highlight, note, and dictionary lookup
 - scrollbar cleanup for nested Readium/WebView content
 - reader preferences for theme, typography, PDF fit, fullscreen, tap-zone sizing, page-turn animation behavior, and per-book appearance overrides
@@ -133,7 +134,7 @@ Device checks should cover:
 
 - importing EPUB/PDF/TXT
 - opening a real EPUB and PDF
-- page navigation by swipe, tap, hardware key, TOC, bookmark, search result, and scrubber
+- page navigation by swipe, tap, hardware key, TOC, bookmark, search result, scrubber, and Back-based return after manual jumps
 - resume after process/app restart
 - adding/removing notes, highlights, and bookmarks
 - dictionary lookup from selected text

@@ -139,6 +139,26 @@ internal fun List<BookmarkEntity>.bookmarkAtReaderLocation(
         }
 }
 
+internal fun pushReaderReturnLocator(
+    history: MutableList<String>,
+    visibleLocatorJson: String?,
+    fallbackUnitLocator: String?,
+    targetLocatorJson: String,
+    maxEntries: Int = MAX_READER_RETURN_HISTORY,
+) {
+    val source = visibleLocatorJson.cleanLocator() ?: fallbackUnitLocator.cleanLocator() ?: return
+    val target = targetLocatorJson.cleanLocator() ?: return
+    if (source == target) return
+    if (history.lastOrNull() == source) return
+    history += source
+    while (history.size > maxEntries.coerceAtLeast(1)) {
+        history.removeAt(0)
+    }
+}
+
+internal fun popReaderReturnLocator(history: MutableList<String>): String? =
+    if (history.isEmpty()) null else history.removeAt(history.lastIndex)
+
 private fun positionIndexFor(
     locator: Locator,
     positions: List<Locator>,
@@ -274,3 +294,4 @@ private val STRING_VALUE_REGEX = Regex("\"([^\"]+)\"")
 private val POSITION_REGEX = Regex("\"position\"\\s*:\\s*(\\d+)")
 private val TOTAL_PROGRESSION_REGEX = Regex("\"totalProgression\"\\s*:\\s*(-?\\d+(?:\\.\\d+)?)")
 private val PROGRESSION_REGEX = Regex("(?<!total)\"progression\"\\s*:\\s*(-?\\d+(?:\\.\\d+)?)")
+private const val MAX_READER_RETURN_HISTORY = 24

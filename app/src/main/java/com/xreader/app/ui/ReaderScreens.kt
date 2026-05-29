@@ -58,6 +58,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -218,7 +219,22 @@ internal fun ReaderScreen(
     var navigationOpen by remember(publication.book.id) { mutableStateOf(false) }
     var readerSettingsOpen by remember(publication.book.id) { mutableStateOf(false) }
     var editingAnnotation by remember(publication.book.id) { mutableStateOf<AnnotationEntity?>(null) }
+    val returnHistory = remember(publication.book.id) { mutableStateListOf<String>() }
     val activity = LocalContext.current.findActivity()
+    fun jumpWithReturn(locator: String) {
+        pushReaderReturnLocator(
+            history = returnHistory,
+            visibleLocatorJson = pagingController.currentLocatorJson,
+            fallbackUnitLocator = units.getOrNull(pagingController.currentUnit)?.locator,
+            targetLocatorJson = locator
+        )
+        pagingController.goToLocator(locator)
+    }
+    fun goBackWithinBook(): Boolean {
+        val locator = popReaderReturnLocator(returnHistory) ?: return false
+        pagingController.goToLocator(locator)
+        return true
+    }
 
     ReaderSystemBars(
         activity = activity,
@@ -238,6 +254,7 @@ internal fun ReaderScreen(
             state.dictionaryWord != null -> onCloseDictionary()
             state.noteDraftOpen -> onCloseNote()
             state.chromeVisible -> onToggleChrome()
+            returnHistory.isNotEmpty() -> goBackWithinBook()
             else -> onBack()
         }
     }
@@ -329,7 +346,7 @@ internal fun ReaderScreen(
                 searchOpen = false
             },
             onJump = { locator ->
-                pagingController.goToLocator(locator)
+                jumpWithReturn(locator)
                 searchOpen = false
             }
         )
@@ -355,7 +372,7 @@ internal fun ReaderScreen(
             annotations = state.annotations,
             onDismiss = { navigationOpen = false },
             onJump = { locator ->
-                pagingController.goToLocator(locator)
+                jumpWithReturn(locator)
                 navigationOpen = false
             },
             onDeleteBookmark = onDeleteBookmark,

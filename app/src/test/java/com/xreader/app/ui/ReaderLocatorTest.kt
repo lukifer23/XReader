@@ -147,6 +147,67 @@ class ReaderLocatorTest {
         )
     }
 
+    @Test
+    fun pushReaderReturnLocatorUsesVisibleLocatorAndSkipsSameTarget() {
+        val history = mutableListOf<String>()
+
+        pushReaderReturnLocator(
+            history = history,
+            visibleLocatorJson = " visible ",
+            fallbackUnitLocator = "fallback",
+            targetLocatorJson = "target"
+        )
+        pushReaderReturnLocator(
+            history = history,
+            visibleLocatorJson = "target",
+            fallbackUnitLocator = "fallback",
+            targetLocatorJson = "target"
+        )
+
+        assertEquals(listOf("visible"), history)
+    }
+
+    @Test
+    fun pushReaderReturnLocatorFallsBackToUnitLocatorAndAvoidsDuplicateTop() {
+        val history = mutableListOf<String>()
+
+        pushReaderReturnLocator(
+            history = history,
+            visibleLocatorJson = null,
+            fallbackUnitLocator = "unit-4",
+            targetLocatorJson = "target-1"
+        )
+        pushReaderReturnLocator(
+            history = history,
+            visibleLocatorJson = "unit-4",
+            fallbackUnitLocator = null,
+            targetLocatorJson = "target-2"
+        )
+
+        assertEquals(listOf("unit-4"), history)
+    }
+
+    @Test
+    fun readerReturnHistoryIsBoundedAndPopsNewestFirst() {
+        val history = mutableListOf<String>()
+
+        repeat(4) { index ->
+            pushReaderReturnLocator(
+                history = history,
+                visibleLocatorJson = "source-$index",
+                fallbackUnitLocator = null,
+                targetLocatorJson = "target-$index",
+                maxEntries = 3
+            )
+        }
+
+        assertEquals(listOf("source-1", "source-2", "source-3"), history)
+        assertEquals("source-3", popReaderReturnLocator(history))
+        assertEquals("source-2", popReaderReturnLocator(history))
+        assertEquals("source-1", popReaderReturnLocator(history))
+        assertNull(popReaderReturnLocator(history))
+    }
+
     private fun unit(
         index: Int,
         locator: String = "locator-$index",
