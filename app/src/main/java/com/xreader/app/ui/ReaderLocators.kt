@@ -114,6 +114,30 @@ internal fun resolveVisibleReaderPosition(
     )
 }
 
+internal fun resolveReadAloudStartPosition(
+    visibleUnit: Int?,
+    visibleLocatorJson: String?,
+    storedLocatorJson: String?,
+    fallbackUnit: Int,
+    positions: List<Locator>,
+    units: List<ReadingUnit>,
+): ResolvedVisibleReaderPosition? {
+    val visibleLocator = visibleLocatorJson.cleanLocator()
+    val effectiveVisibleUnit = if (visibleLocator == null && visibleUnit != null && visibleUnit <= 0 && fallbackUnit > 0) {
+        fallbackUnit
+    } else {
+        visibleUnit
+    }
+    val locatorForResolution = visibleLocator ?: storedLocatorJson.cleanLocator().takeIf { effectiveVisibleUnit == null }
+    return resolveVisibleReaderPosition(
+        visibleUnit = effectiveVisibleUnit,
+        visibleLocatorJson = locatorForResolution,
+        fallbackUnit = fallbackUnit,
+        positions = positions,
+        units = units
+    )
+}
+
 internal fun String.toReadiumLocatorOrNull(): Locator? {
     if (isBlank() || !trimStart().startsWith("{")) return null
     return runCatching { Locator.fromJSON(JSONObject(this)) }.getOrNull()

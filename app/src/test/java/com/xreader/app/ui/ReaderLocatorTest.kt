@@ -106,6 +106,57 @@ class ReaderLocatorTest {
     }
 
     @Test
+    fun resolveReadAloudStartPositionUsesVisibleUnitBeforeStoredLocator() {
+        val units = (0..4).map { unit(it, "locator-$it") }
+
+        val resolved = resolveReadAloudStartPosition(
+            visibleUnit = 3,
+            visibleLocatorJson = null,
+            storedLocatorJson = "locator-0",
+            fallbackUnit = 0,
+            positions = emptyList(),
+            units = units
+        )
+
+        assertEquals(3, resolved?.unitIndex)
+        assertEquals("locator-3", resolved?.locatorJson)
+    }
+
+    @Test
+    fun resolveReadAloudStartPositionKeepsRealFirstPageLocator() {
+        val units = (0..4).map { unit(it, "locator-$it") }
+
+        val resolved = resolveReadAloudStartPosition(
+            visibleUnit = 0,
+            visibleLocatorJson = "visible-first-page",
+            storedLocatorJson = "locator-3",
+            fallbackUnit = 3,
+            positions = emptyList(),
+            units = units
+        )
+
+        assertEquals(0, resolved?.unitIndex)
+        assertEquals("visible-first-page", resolved?.locatorJson)
+    }
+
+    @Test
+    fun resolveReadAloudStartPositionUsesViewModelUnitWhenControllerHasNotReportedLocator() {
+        val units = (0..4).map { unit(it, "locator-$it") }
+
+        val resolved = resolveReadAloudStartPosition(
+            visibleUnit = 0,
+            visibleLocatorJson = null,
+            storedLocatorJson = "locator-0",
+            fallbackUnit = 2,
+            positions = emptyList(),
+            units = units
+        )
+
+        assertEquals(2, resolved?.unitIndex)
+        assertEquals("locator-2", resolved?.locatorJson)
+    }
+
+    @Test
     fun bookmarkAtReaderLocationMatchesExactVisibleLocator() {
         val locator = locator(position = 7, progression = 0.42)
         val bookmarks = listOf(bookmark(id = 10, locator = locator))

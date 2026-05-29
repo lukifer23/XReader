@@ -365,20 +365,19 @@ class ReaderViewModel(
             val publication = _uiState.value.publication ?: return@launch
             val rows = container.libraryRepository.indexedRowsForBook(bookId)
             val chunks = readAloudChunks(publication, rows)
-            val storedUnit = _uiState.value.currentUnit
-            val startLocator = visibleLocator
-                ?.takeIf { it.isNotBlank() }
-                ?: _uiState.value.state?.locator?.takeIf { it.isNotBlank() }
-            val startUnit = when {
-                visibleUnit == null -> storedUnit
-                visibleUnit <= 0 && storedUnit > 0 -> storedUnit
-                else -> visibleUnit.coerceAtLeast(0)
-            }
+            val startPosition = resolveReadAloudStartPosition(
+                visibleUnit = visibleUnit,
+                visibleLocatorJson = visibleLocator,
+                storedLocatorJson = _uiState.value.state?.locator,
+                fallbackUnit = _uiState.value.currentUnit,
+                positions = publication.positions,
+                units = publication.units
+            )
             container.readAloudEngine.play(
                 bookId = bookId,
                 chunks = chunks,
-                currentUnit = startUnit,
-                currentLocator = startLocator,
+                currentUnit = startPosition?.unitIndex ?: _uiState.value.currentUnit.coerceAtLeast(0),
+                currentLocator = startPosition?.locatorJson ?: _uiState.value.state?.locator?.takeIf { it.isNotBlank() },
                 speechRate = _uiState.value.settings.readAloudRate,
                 voiceName = _uiState.value.settings.readAloudVoiceName,
                 sleepTimerDurationMillis = _uiState.value.settings.readAloudSleepTimer.durationMillis
