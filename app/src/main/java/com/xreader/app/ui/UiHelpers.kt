@@ -185,7 +185,8 @@ internal fun ErrorScreen(error: String, onBack: () -> Unit) {
 internal fun groupBooks(group: LibraryGroup, books: List<BookListItem>): Map<String, List<BookListItem>> =
     when (group) {
         LibraryGroup.AUTHORS -> books.groupBy { it.book.author }
-        LibraryGroup.SERIES -> books.groupBy { it.book.series ?: "No series" }
+            .sortedLibraryGroups()
+        LibraryGroup.SERIES -> books.groupBy { it.book.series ?: NO_SERIES_LABEL }
             .mapValues { (_, items) ->
                 items.sortedWith(
                     compareBy<BookListItem> { it.book.seriesIndex ?: Double.MAX_VALUE }
@@ -193,10 +194,34 @@ internal fun groupBooks(group: LibraryGroup, books: List<BookListItem>): Map<Str
                         .thenBy { it.book.sortTitle }
                 )
             }
-        LibraryGroup.GENRES -> books.groupBy { it.book.genre ?: "No genre" }
-        LibraryGroup.YEARS -> books.groupBy { it.book.year?.toString() ?: "No year" }
+            .sortedLibraryGroups(emptyLabel = NO_SERIES_LABEL)
+        LibraryGroup.GENRES -> books.groupBy { it.book.genre ?: NO_GENRE_LABEL }
+            .sortedLibraryGroups(emptyLabel = NO_GENRE_LABEL)
+        LibraryGroup.YEARS -> books.groupBy { it.book.year?.toString() ?: NO_YEAR_LABEL }
+            .sortedYearGroups()
         else -> mapOf("" to books)
-    }.toSortedMap()
+    }
+
+private fun Map<String, List<BookListItem>>.sortedLibraryGroups(emptyLabel: String? = null): Map<String, List<BookListItem>> =
+    entries
+        .sortedWith(
+            compareBy<Map.Entry<String, List<BookListItem>>> { if (it.key == emptyLabel) 1 else 0 }
+                .thenBy { it.key.lowercase() }
+        )
+        .associateTo(LinkedHashMap()) { it.key to it.value }
+
+private fun Map<String, List<BookListItem>>.sortedYearGroups(): Map<String, List<BookListItem>> =
+    entries
+        .sortedWith(
+            compareBy<Map.Entry<String, List<BookListItem>>> { if (it.key == NO_YEAR_LABEL) 1 else 0 }
+                .thenByDescending { it.key.toIntOrNull() ?: Int.MIN_VALUE }
+                .thenBy { it.key }
+        )
+        .associateTo(LinkedHashMap()) { it.key to it.value }
+
+private const val NO_SERIES_LABEL = "No series"
+private const val NO_GENRE_LABEL = "No genre"
+private const val NO_YEAR_LABEL = "No year"
 
 internal fun BookListItem.rawLibraryProgress(): Double =
     (state?.progress ?: 0.0).coerceIn(0.0, 1.0)
