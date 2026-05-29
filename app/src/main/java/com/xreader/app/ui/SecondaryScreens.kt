@@ -938,38 +938,99 @@ private fun ReadAloudVoicePickerDialog(
     onDismiss: () -> Unit,
     onSelected: (String?) -> Unit,
 ) {
+    var query by remember { mutableStateOf("") }
+    var selectedGroupKey by remember(voices, selectedVoiceName) { mutableStateOf<String?>(null) }
+    val voiceGroups = remember(voices, selectedVoiceName) {
+        buildReadAloudVoiceGroups(voices, selectedVoiceName)
+    }
+    val selectedGroup = voiceGroups.firstOrNull { it.key == selectedGroupKey }
+    val matchingVoices = remember(voices, query) { filterReadAloudVoices(voices, query) }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Read aloud voice") },
         text = {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 360.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                item {
-                    ReadAloudVoiceChoiceRow(
-                        label = "Device default",
-                        selected = selectedVoiceName == null,
-                        onClick = { onSelected(null) }
-                    )
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = {
+                        query = it
+                        selectedGroupKey = null
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    label = { Text("Search voices") },
+                    leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                    trailingIcon = {
+                        if (query.isNotBlank()) {
+                            IconButton(onClick = { query = "" }) {
+                                Icon(Icons.Filled.Close, contentDescription = "Clear voice search")
+                            }
+                        }
+                    }
+                )
+                if (selectedGroup != null && query.isBlank()) {
+                    TextButton(onClick = { selectedGroupKey = null }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Languages")
+                    }
                 }
-                items(voices, key = { it.name }) { voice ->
-                    ReadAloudVoiceChoiceRow(
-                        label = voice.label,
-                        selected = selectedVoiceName == voice.name,
-                        onClick = { onSelected(voice.name) }
-                    )
-                }
-                if (voices.isEmpty()) {
-                    item {
-                        Text(
-                            text = "No installed voices found.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
-                        )
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 360.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    when {
+                        query.isNotBlank() -> {
+                            if (matchingVoices.isEmpty()) {
+                                item {
+                                    PickerEmptyRow("No matching voices.")
+                                }
+                            } else {
+                                items(matchingVoices, key = { "search-${it.name}" }) { voice ->
+                                    ReadAloudVoiceChoiceRow(
+                                        label = voice.label,
+                                        selected = selectedVoiceName == voice.name,
+                                        onClick = { onSelected(voice.name) }
+                                    )
+                                }
+                            }
+                        }
+                        selectedGroup != null -> {
+                            items(selectedGroup.voices, key = { "voice-${it.name}" }) { voice ->
+                                ReadAloudVoiceChoiceRow(
+                                    label = voice.label,
+                                    selected = selectedVoiceName == voice.name,
+                                    onClick = { onSelected(voice.name) }
+                                )
+                            }
+                        }
+                        else -> {
+                            item(key = "default") {
+                                ReadAloudVoiceChoiceRow(
+                                    label = "Device default",
+                                    selected = selectedVoiceName == null,
+                                    onClick = { onSelected(null) }
+                                )
+                            }
+                            if (voices.isEmpty()) {
+                                item {
+                                    PickerEmptyRow("No installed voices found.")
+                                }
+                            } else {
+                                items(voiceGroups, key = { "group-${it.key}" }) { group ->
+                                    ReadAloudVoiceGroupRow(
+                                        group = group,
+                                        onClick = { selectedGroupKey = group.key }
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -983,20 +1044,67 @@ private fun ReadAloudVoicePickerDialog(
 }
 
 @Composable
+private fun ReadAloudVoiceGroupRow(
+    group: ReadAloudVoiceGroup,
+    onClick: () -> Unit,
+) {
+    DropdownMenuItem(
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = group.label,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "${group.voices.size} ${if (group.voices.size == 1) "voice" else "voices"}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1
+                )
+            }
+        },
+        onClick = onClick,
+        leadingIcon = {
+            if (group.selected) {
+                Icon(
+                    imageVector = Icons.Filled.Done,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
+                )
+            } else {
+                Spacer(Modifier.size(20.dp))
+            }
+        }
+    )
+}
+
+@Composable
+private fun PickerEmptyRow(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+    )
+}
+
+@Composable
 private fun ReadAloudVoiceChoiceRow(
     label: String,
     selected: Boolean,
     onClick: () -> Unit,
 ) {
-    TextButton(
+    DropdownMenuItem(
+        text = {
+            Text(
+                text = label,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        },
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
+        leadingIcon = {
             if (selected) {
                 Icon(
                     imageVector = Icons.Filled.Done,
@@ -1006,23 +1114,9 @@ private fun ReadAloudVoiceChoiceRow(
             } else {
                 Spacer(Modifier.size(20.dp))
             }
-            Text(
-                text = label,
-                modifier = Modifier.weight(1f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
         }
-    }
+    )
 }
-
-private fun selectedVoiceLabel(
-    voices: List<ReadAloudVoiceOption>,
-    selectedVoiceName: String?,
-): String =
-    selectedVoiceName?.let { selected ->
-        voices.firstOrNull { it.name == selected }?.label ?: "Selected voice unavailable"
-    } ?: "Device default"
 
 private fun activityTitle(
     range: AnalyticsRange,
