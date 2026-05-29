@@ -13,6 +13,7 @@ import com.xreader.app.settings.ReaderFontFamily
 import com.xreader.app.settings.ReaderPdfFit
 import com.xreader.app.settings.ReaderSettings
 import com.xreader.app.settings.ReaderSpacingPreset
+import com.xreader.app.settings.ReaderTapZonePreset
 import com.xreader.app.settings.ReaderTextAlign
 import com.xreader.app.tts.ReadAloudVoiceOption
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -79,6 +80,10 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     fun setTapZonesEnabled(value: Boolean) {
         viewModelScope.launch { container.settingsRepository.setTapZonesEnabled(value) }
+    }
+
+    fun setTapZonePreset(value: ReaderTapZonePreset) {
+        viewModelScope.launch { container.settingsRepository.setTapZonePreset(value) }
     }
 
     fun setPageTurnAnimations(value: Boolean) {

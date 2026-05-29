@@ -83,6 +83,7 @@ import com.xreader.app.settings.LibrarySort
 import com.xreader.app.settings.ReaderFontFamily
 import com.xreader.app.settings.ReaderPdfFit
 import com.xreader.app.settings.ReaderSpacingPreset
+import com.xreader.app.settings.ReaderTapZonePreset
 import com.xreader.app.settings.ReaderTextAlign
 import com.xreader.app.settings.spacingPresetOrNull
 import com.xreader.app.tts.ReadAloudVoiceOption
@@ -683,6 +684,15 @@ internal fun SettingsRoute(viewModel: SettingsViewModel, onBack: () -> Unit) {
                         checked = settings.tapZonesEnabled,
                         onCheckedChange = viewModel::setTapZonesEnabled
                     )
+                    if (settings.tapZonesEnabled) {
+                        SettingsChipGroup(
+                            title = "Tap zone size",
+                            options = ReaderTapZonePreset.entries,
+                            selected = settings.tapZonePreset,
+                            label = { it.label },
+                            onSelected = viewModel::setTapZonePreset
+                        )
+                    }
                     SettingsToggleRow(
                         label = "Page animations",
                         checked = settings.pageTurnAnimations,

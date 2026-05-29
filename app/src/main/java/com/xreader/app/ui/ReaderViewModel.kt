@@ -20,6 +20,7 @@ import com.xreader.app.settings.ReaderFontFamily
 import com.xreader.app.settings.ReaderPdfFit
 import com.xreader.app.settings.ReaderSettings
 import com.xreader.app.settings.ReaderSpacingPreset
+import com.xreader.app.settings.ReaderTapZonePreset
 import com.xreader.app.settings.ReaderTextAlign
 import com.xreader.app.settings.withBookAppearance
 import com.xreader.app.tts.ReadAloudChunk
@@ -299,6 +300,14 @@ class ReaderViewModel(
 
     fun setPageTurnAnimations(value: Boolean) {
         viewModelScope.launch { container.settingsRepository.setPageTurnAnimations(value) }
+    }
+
+    fun setTapZonesEnabled(value: Boolean) {
+        viewModelScope.launch { container.settingsRepository.setTapZonesEnabled(value) }
+    }
+
+    fun setTapZonePreset(value: ReaderTapZonePreset) {
+        viewModelScope.launch { container.settingsRepository.setTapZonePreset(value) }
     }
 
     fun setReadAloudRate(value: Float) {

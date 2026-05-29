@@ -70,11 +70,11 @@ Manual metadata edits can optionally apply the edited genre and series name to o
 `ReadiumNavigatorHost` embeds the Readium navigator fragment inside Compose. It handles:
 
 - persisted initial locator resume
-- tap-zone page navigation
+- calibrated tap-zone page navigation
 - chrome toggle
 - selection actions for highlight, note, and dictionary lookup
 - scrollbar cleanup for nested Readium/WebView content
-- reader preferences for theme, typography, PDF fit, fullscreen, page-turn animation behavior, and per-book appearance overrides
+- reader preferences for theme, typography, PDF fit, fullscreen, tap-zone sizing, page-turn animation behavior, and per-book appearance overrides
 
 Read aloud is handled by `ReadAloudEngine`, a small wrapper around Android `TextToSpeech`. `ReaderViewModel` builds speech chunks from the app's local search index, maps those chunks back to nearest Readium positions, starts from the visible reader position or nearest earlier chunk, persists the spoken locator as playback advances, and keeps Compose limited to play/stop, speed, installed offline voice selection, and error feedback.
 
@@ -88,7 +88,7 @@ Reader and library settings are persisted with DataStore. Settings include:
 - margin scale
 - compact, comfort, and accessible spacing presets that write the same typography fields
 - font family
-- tap zones
+- tap zones and tap-zone size preset
 - page animations
 - read-aloud speed
 - fullscreen

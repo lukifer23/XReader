@@ -19,9 +19,9 @@ Implemented:
 - Metadata editing for title, author, year, genre, series, series order, and opt-in bulk series/genre cleanup.
 - Covers, including EPUB guide/title-page cover references, metadata extraction, manual cover replacement, per-book health checks, and repair/reindex actions.
 - Resume from persisted Readium locators with percent read and progress state.
-- Swipe, tap-zone, hardware-key, TOC, search-result, bookmark, and scrubber navigation.
+- Swipe, calibrated tap-zone, hardware-key, TOC, search-result, bookmark, and scrubber navigation.
 - Reader themes: light, dark, sepia, and OLED black.
-- Reader typography controls: spacing presets, font size, line height, margins, alignment, publisher styles, PDF fit, fullscreen, page animation toggle, real Readium/CSS-resolvable font choices, and per-book appearance overrides.
+- Reader typography and behavior controls: spacing presets, font size, line height, margins, alignment, publisher styles, PDF fit, fullscreen, page animation toggle, tap-zone sizing, real Readium/CSS-resolvable font choices, and per-book appearance overrides.
 - Read aloud from the visible reading position through Android TextToSpeech using local indexed book text, with persisted spoken position, speech speed, and installed offline voice selection.
 - Grouped Settings screen for reader appearance, typography, reading behavior, library display, and maintenance.
 - Bookmarks, highlights, notes, global notes, in-book annotation lists, human-readable Markdown notes export, local notes/bookmark JSON export/import, and library metadata/progress backup.

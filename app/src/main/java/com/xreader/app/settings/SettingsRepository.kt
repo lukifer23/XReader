@@ -27,6 +27,7 @@ class SettingsRepository(
         val marginScale = floatPreferencesKey("margin_scale")
         val fontFamily = stringPreferencesKey("font_family")
         val tapZonesEnabled = booleanPreferencesKey("tap_zones_enabled")
+        val tapZonePreset = stringPreferencesKey("tap_zone_preset")
         val pageTurnAnimations = booleanPreferencesKey("page_turn_animations")
         val readAloudRate = floatPreferencesKey("read_aloud_rate")
         val readAloudVoiceName = stringPreferencesKey("read_aloud_voice_name")
@@ -60,6 +61,8 @@ class SettingsRepository(
                 marginScale = prefs[Keys.marginScale] ?: 0.52f,
                 fontFamily = readerFontFamily(prefs[Keys.fontFamily]) ?: ReaderFontFamily.DEFAULT,
                 tapZonesEnabled = prefs[Keys.tapZonesEnabled] ?: true,
+                tapZonePreset = prefs[Keys.tapZonePreset]?.let { runCatching { ReaderTapZonePreset.valueOf(it) }.getOrNull() }
+                    ?: ReaderTapZonePreset.BALANCED,
                 pageTurnAnimations = prefs[Keys.pageTurnAnimations] ?: true,
                 readAloudRate = (prefs[Keys.readAloudRate] ?: 1.0f).coerceIn(0.7f, 1.4f),
                 readAloudVoiceName = prefs[Keys.readAloudVoiceName]?.takeIf { it.isNotBlank() },
@@ -134,6 +137,10 @@ class SettingsRepository(
 
     suspend fun setTapZonesEnabled(value: Boolean) {
         dataStore.edit { it[Keys.tapZonesEnabled] = value }
+    }
+
+    suspend fun setTapZonePreset(value: ReaderTapZonePreset) {
+        dataStore.edit { it[Keys.tapZonePreset] = value.name }
     }
 
     suspend fun setPageTurnAnimations(value: Boolean) {

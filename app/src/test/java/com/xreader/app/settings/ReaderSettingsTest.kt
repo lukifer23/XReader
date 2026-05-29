@@ -10,6 +10,7 @@ class ReaderSettingsTest {
     @Test
     fun readerDefaultsKeepFastPageTurnsAvailable() {
         assertTrue(ReaderSettings().pageTurnAnimations)
+        assertEquals(ReaderTapZonePreset.BALANCED, ReaderSettings().tapZonePreset)
         assertEquals(1.0f, ReaderSettings().readAloudRate, 0.001f)
         assertNull(ReaderSettings().readAloudVoiceName)
     }
@@ -68,6 +69,7 @@ class ReaderSettingsTest {
             marginScale = 0.7f,
             fontFamily = ReaderFontFamily.SERIF,
             tapZonesEnabled = false,
+            tapZonePreset = ReaderTapZonePreset.COMPACT,
             pageTurnAnimations = false,
             readAloudRate = 1.3f,
             readAloudVoiceName = "local-voice",
@@ -91,6 +93,7 @@ class ReaderSettingsTest {
 
         assertEquals(com.xreader.app.data.ReaderTheme.OLED, combined.theme)
         assertFalse(combined.tapZonesEnabled)
+        assertEquals(ReaderTapZonePreset.COMPACT, combined.tapZonePreset)
         assertFalse(combined.pageTurnAnimations)
         assertEquals(1.3f, combined.readAloudRate, 0.001f)
         assertEquals("local-voice", combined.readAloudVoiceName)

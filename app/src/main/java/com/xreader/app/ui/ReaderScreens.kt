@@ -89,6 +89,7 @@ import com.xreader.app.settings.ReaderFontFamily
 import com.xreader.app.settings.ReaderPdfFit
 import com.xreader.app.settings.ReaderSettings
 import com.xreader.app.settings.ReaderSpacingPreset
+import com.xreader.app.settings.ReaderTapZonePreset
 import com.xreader.app.settings.ReaderTextAlign
 import com.xreader.app.settings.spacingPresetOrNull
 import com.xreader.app.tts.ReadAloudState
@@ -157,6 +158,8 @@ internal fun ReaderRoute(
         onSpacingPreset = viewModel::setSpacingPreset,
         onFontFamily = viewModel::setFontFamily,
         onPublisherStyles = viewModel::setPublisherStyles,
+        onTapZonesEnabled = viewModel::setTapZonesEnabled,
+        onTapZonePreset = viewModel::setTapZonePreset,
         onPageTurnAnimations = viewModel::setPageTurnAnimations,
         onReadAloudRate = viewModel::setReadAloudRate,
         onTextAlign = viewModel::setTextAlign,
@@ -194,6 +197,8 @@ internal fun ReaderScreen(
     onSpacingPreset: (ReaderSpacingPreset) -> Unit,
     onFontFamily: (ReaderFontFamily) -> Unit,
     onPublisherStyles: (Boolean) -> Unit,
+    onTapZonesEnabled: (Boolean) -> Unit,
+    onTapZonePreset: (ReaderTapZonePreset) -> Unit,
     onPageTurnAnimations: (Boolean) -> Unit,
     onReadAloudRate: (Float) -> Unit,
     onTextAlign: (ReaderTextAlign) -> Unit,
@@ -344,6 +349,8 @@ internal fun ReaderScreen(
             onSpacingPreset = onSpacingPreset,
             onFontFamily = onFontFamily,
             onPublisherStyles = onPublisherStyles,
+            onTapZonesEnabled = onTapZonesEnabled,
+            onTapZonePreset = onTapZonePreset,
             onPageTurnAnimations = onPageTurnAnimations,
             onReadAloudRate = onReadAloudRate,
             onTextAlign = onTextAlign,
@@ -512,6 +519,8 @@ internal fun ReaderQuickSettingsDialog(
     onSpacingPreset: (ReaderSpacingPreset) -> Unit,
     onFontFamily: (ReaderFontFamily) -> Unit,
     onPublisherStyles: (Boolean) -> Unit,
+    onTapZonesEnabled: (Boolean) -> Unit,
+    onTapZonePreset: (ReaderTapZonePreset) -> Unit,
     onPageTurnAnimations: (Boolean) -> Unit,
     onReadAloudRate: (Float) -> Unit,
     onTextAlign: (ReaderTextAlign) -> Unit,
@@ -580,6 +589,22 @@ internal fun ReaderQuickSettingsDialog(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Publisher styles", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
                     Switch(checked = settings.publisherStyles, onCheckedChange = onPublisherStyles)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Tap zones", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                    Switch(checked = settings.tapZonesEnabled, onCheckedChange = onTapZonesEnabled)
+                }
+                if (settings.tapZonesEnabled) {
+                    Text("Tap zone size", style = MaterialTheme.typography.titleMedium)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ReaderTapZonePreset.entries.forEach { preset ->
+                            FilterChip(
+                                selected = settings.tapZonePreset == preset,
+                                onClick = { onTapZonePreset(preset) },
+                                label = { Text(preset.label) }
+                            )
+                        }
+                    }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Page animations", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)

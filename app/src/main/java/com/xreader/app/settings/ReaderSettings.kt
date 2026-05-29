@@ -12,6 +12,16 @@ enum class ReaderPdfFit {
     WIDTH,
 }
 
+enum class ReaderTapZonePreset(
+    val label: String,
+    val sideFraction: Float,
+    val edgeGuardDp: Int,
+) {
+    COMPACT("Compact", 0.28f, 64),
+    BALANCED("Balanced", 0.34f, 44),
+    WIDE("Wide", 0.42f, 24),
+}
+
 enum class ReaderFontFamily(
     val label: String,
     val readiumName: String?,
@@ -48,6 +58,7 @@ data class ReaderSettings(
     val marginScale: Float = 0.52f,
     val fontFamily: ReaderFontFamily = ReaderFontFamily.DEFAULT,
     val tapZonesEnabled: Boolean = true,
+    val tapZonePreset: ReaderTapZonePreset = ReaderTapZonePreset.BALANCED,
     val pageTurnAnimations: Boolean = true,
     val readAloudRate: Float = 1.0f,
     val readAloudVoiceName: String? = null,

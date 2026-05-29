@@ -92,7 +92,7 @@ internal fun ReadiumPublicationView(
     val latestLookupHandler by rememberUpdatedState(onLookup)
     val latestSelectedNoteHandler by rememberUpdatedState(onSelectedNote)
     val latestSelectedHighlightHandler by rememberUpdatedState(onSelectedHighlight)
-    val tapEdgeInsetPx = with(LocalDensity.current) { 44.dp.toPx() }
+    val tapEdgeInsetPx = with(LocalDensity.current) { settings.tapZonePreset.edgeGuardDp.dp.toPx() }
     val latestTapEdgeInsetPx by rememberUpdatedState(tapEdgeInsetPx)
     val selectionScope = rememberCoroutineScope()
     var navigator by remember(publication.book.id) { mutableStateOf<OverflowableNavigator?>(null) }
@@ -152,23 +152,18 @@ internal fun ReadiumPublicationView(
                 active.publicationView.disableScrollbarsRecursively()
                 val width = active.publicationView.width.toFloat().takeIf { it > 0f } ?: return false
                 val x = event.point.x
-                if (!latestSettings.tapZonesEnabled) {
-                    active.publicationView.post { active.publicationView.disableScrollbarsRecursively() }
-                    latestToggleChrome()
-                    return true
-                }
-                return when {
-                    x in latestTapEdgeInsetPx..(width * 0.34f) -> {
+                return when (resolveReaderTapAction(x, width, latestSettings, latestTapEdgeInsetPx)) {
+                    ReaderTapAction.BACKWARD -> {
                         active.goBackward(animated = latestSettings.pageTurnAnimations)
                         active.publicationView.post { active.publicationView.disableScrollbarsRecursively() }
                         true
                     }
-                    x in (width * 0.66f)..(width - latestTapEdgeInsetPx) -> {
+                    ReaderTapAction.FORWARD -> {
                         active.goForward(animated = latestSettings.pageTurnAnimations)
                         active.publicationView.post { active.publicationView.disableScrollbarsRecursively() }
                         true
                     }
-                    else -> {
+                    ReaderTapAction.CHROME -> {
                         active.publicationView.post { active.publicationView.disableScrollbarsRecursively() }
                         latestToggleChrome()
                         true

@@ -12,7 +12,7 @@ This is the working product roadmap for the personal APK line. Items should appe
 
 - Evaluate page-turn animation styles supported by Readium and Android without adding custom fake page effects.
 - Continue hardening read-aloud lifecycle behavior across lock screen, app backgrounding, Bluetooth/headset controls, and device TTS engine differences.
-- Add a reader gesture calibration screen if Samsung/gesture-navigation edge conflicts remain visible.
+- Continue device QA for tap-zone presets on gesture-navigation phones and foldable widths.
 
 ## Library Polish
 
