@@ -10,6 +10,7 @@ import com.xreader.app.data.XReaderDatabase
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -72,6 +73,42 @@ class AnnotationRepositoryInstrumentedTest {
         assertEquals(0, secondImport.bookmarksImported)
         assertEquals(2, secondImport.annotationsSkipped)
         assertEquals(1, secondImport.bookmarksSkipped)
+    }
+
+    @Test
+    fun markdownExportIsHumanReadableAndOmitsPrivateBookData() = runBlocking {
+        val sourceBookId = sourceDb.books().insert(testBook(id = 0, title = "Source title"))
+        val sourceRepository = AnnotationRepository(sourceDb.annotations(), sourceDb.books(), clock)
+        sourceRepository.addNote(
+            bookId = sourceBookId,
+            locator = "loc-1",
+            quote = "Important quote",
+            note = "Remember this",
+            tags = "tagged"
+        )
+        sourceRepository.addHighlight(
+            bookId = sourceBookId,
+            locator = "loc-2",
+            quote = "Highlighted quote",
+            color = "#FFCC00",
+            note = "Useful"
+        )
+        assertTrue(sourceRepository.toggleBookmark(sourceBookId, "loc-3", "Chapter 3", 0.42))
+
+        val exported = sourceRepository.exportMarkdown()
+
+        assertEquals(1, exported.books)
+        assertEquals(2, exported.annotations)
+        assertEquals(1, exported.bookmarks)
+        assertTrue(exported.markdown.contains("# XReader Notes"))
+        assertTrue(exported.markdown.contains("## Source title"))
+        assertTrue(exported.markdown.contains("Author"))
+        assertTrue(exported.markdown.contains("> Important quote"))
+        assertTrue(exported.markdown.contains("Remember this"))
+        assertTrue(exported.markdown.contains("Tags: tagged"))
+        assertTrue(exported.markdown.contains("- 42% - Chapter 3"))
+        assertFalse(exported.markdown.contains("shared-checksum"))
+        assertFalse(exported.markdown.contains("library/books"))
     }
 
     private fun testBook(id: Long, title: String): BookEntity =

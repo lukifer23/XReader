@@ -1,5 +1,6 @@
 package com.xreader.app.ui
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -24,12 +25,21 @@ data class NotesUiState(
     val query: String = "",
     val kind: AnnotationKind? = null,
     val notes: List<NoteListItem> = emptyList(),
+    val exporting: Boolean = false,
+    val message: String? = null,
 )
 
 class NotesViewModel(container: AppContainer) : ViewModel() {
     private val annotationRepository = container.annotationRepository
+    private val annotationBackupService = container.annotationBackupService
     private val query = MutableStateFlow("")
     private val kind = MutableStateFlow<AnnotationKind?>(null)
+    private val exportState = MutableStateFlow(NotesExportState())
+
+    private data class NotesExportState(
+        val exporting: Boolean = false,
+        val message: String? = null,
+    )
 
     val uiState: StateFlow<NotesUiState> =
         container.annotationRepository.observeAllAnnotations()
@@ -61,6 +71,9 @@ class NotesViewModel(container: AppContainer) : ViewModel() {
                     .toList()
                 NotesUiState(query = currentQuery, kind = currentKind, notes = filtered)
             }
+            .combine(exportState) { notes, export ->
+                notes.copy(exporting = export.exporting, message = export.message)
+            }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), NotesUiState())
 
     fun setQuery(value: String) {
@@ -81,6 +94,25 @@ class NotesViewModel(container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             annotationRepository.deleteAnnotation(id)
         }
+    }
+
+    fun exportMarkdown(uri: Uri) {
+        if (exportState.value.exporting) return
+        viewModelScope.launch {
+            exportState.update { it.copy(exporting = true, message = null) }
+            val message = runCatching { annotationBackupService.exportMarkdownTo(uri) }
+                .fold(
+                    onSuccess = {
+                        "Exported ${it.annotations} ${if (it.annotations == 1) "annotation" else "annotations"} and ${it.bookmarks} ${if (it.bookmarks == 1) "bookmark" else "bookmarks"} to Markdown"
+                    },
+                    onFailure = { it.message ?: "Markdown export failed" }
+                )
+            exportState.update { it.copy(exporting = false, message = message) }
+        }
+    }
+
+    fun clearMessage() {
+        exportState.update { it.copy(message = null) }
     }
 
     companion object {

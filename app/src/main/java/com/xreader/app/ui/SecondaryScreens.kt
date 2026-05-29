@@ -355,15 +355,38 @@ internal fun NotesRoute(
 ) {
     val viewModel: NotesViewModel = viewModel(factory = NotesViewModel.factory(container))
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val exportMarkdownLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/markdown")) { uri ->
+        if (uri != null) viewModel.exportMarkdown(uri)
+    }
     var editing by remember { mutableStateOf<AnnotationEntity?>(null) }
     var deleteCandidate by remember { mutableStateOf<AnnotationEntity?>(null) }
+    LaunchedEffect(state.message) {
+        state.message?.let { message ->
+            snackbarHostState.showSnackbar(message)
+            viewModel.clearMessage()
+        }
+    }
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Notes and highlights") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = { exportMarkdownLauncher.launch("xreader-notes.md") },
+                        enabled = !state.exporting
+                    ) {
+                        if (state.exporting) {
+                            CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                        } else {
+                            Icon(Icons.Filled.FileDownload, contentDescription = "Export notes as Markdown")
+                        }
                     }
                 }
             )

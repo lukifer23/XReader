@@ -28,7 +28,7 @@ This is the working competitive map for XReader. It should drive implementation 
 | No ads/no account | Implemented. | ReadEra and Lithium lead here; Moon+ free has ads; sync apps require accounts. | Preserve. |
 | Private app library | Implemented with SAF file/folder copies and checksum duplicates. | Some apps scan folders or request broad file access. | Preserve SAF-only imports and private copies. |
 | Resume/progress | Implemented with Readium locators and sessions. | Table stakes; sync apps add cloud resume. | Keep testing across restarts and screen sizes. |
-| Notes/highlights/bookmarks | Implemented with local export/import. | Table stakes in strong readers. | Add richer export targets later. |
+| Notes/highlights/bookmarks | Implemented with local JSON backup/import and human-readable Markdown export. | Table stakes in strong readers. | Keep export local and useful outside the app. |
 | Dictionary | Offline WordNet implemented. | Many rely on external dictionaries or online lookup. | Strong differentiator; keep improving morphology/phrase handling. |
 | Search | Local full-text index plus Readium fallback. | Common, but quality varies by format. | Keep hardening PDF/EPUB extraction. |
 | Analytics | Active reading, WPM, streaks, range-aware activity, book/author/genre summaries, and local CSV/JSON export. | Moon+ and some ecosystems have stats. | Continue improving trend evidence and long-library performance. |
@@ -57,6 +57,7 @@ The research points to several areas that matter more than raw feature count:
 - Reader spacing presets. Compact, comfort, and accessible presets provide fast setup while still using the same manual font, line-height, and margin controls.
 - Read aloud. The reader can speak forward from the visible position through Android TextToSpeech using XReader's private full-text index, with persisted speed control and no permanent reader chrome.
 - Batch SAF import. The library can import multiple files or a whole SAF folder without broad storage permission, while preserving checksum duplicate handling.
+- Markdown notes export. Notes, highlights, and bookmarks can leave the app in a readable grouped document, while JSON remains the restore-oriented backup format.
 
 ## Product Rules From The Research
 

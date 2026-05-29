@@ -22,6 +22,13 @@ class AnnotationRepository(
         val bookmarks: Int,
     )
 
+    data class MarkdownExportResult(
+        val markdown: String,
+        val books: Int,
+        val annotations: Int,
+        val bookmarks: Int,
+    )
+
     data class BackupImportResult(
         val annotationsImported: Int,
         val annotationsUpdated: Int,
@@ -168,6 +175,26 @@ class AnnotationRepository(
             )
         return BackupExportResult(
             json = root.toString(2),
+            annotations = annotations.size,
+            bookmarks = bookmarks.size
+        )
+    }
+
+    suspend fun exportMarkdown(): MarkdownExportResult {
+        val books = bookDao.booksForBackup().associateBy { it.id }
+        val annotations = dao.allAnnotations().filter { books.containsKey(it.bookId) }
+        val bookmarks = dao.allBookmarks().filter { books.containsKey(it.bookId) }
+        val bookCount = (annotations.map { it.bookId } + bookmarks.map { it.bookId })
+            .distinct()
+            .size
+        return MarkdownExportResult(
+            markdown = AnnotationMarkdownExport.build(
+                exportedAt = clock.millis(),
+                booksById = books,
+                annotations = annotations,
+                bookmarks = bookmarks
+            ),
+            books = bookCount,
             annotations = annotations.size,
             bookmarks = bookmarks.size
         )
