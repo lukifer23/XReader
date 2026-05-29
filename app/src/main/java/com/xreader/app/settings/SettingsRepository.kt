@@ -36,6 +36,7 @@ class SettingsRepository(
         val publisherStyles = booleanPreferencesKey("publisher_styles")
         val textAlign = stringPreferencesKey("text_align")
         val pdfFit = stringPreferencesKey("pdf_fit")
+        val highlightColor = stringPreferencesKey("highlight_color")
         val idleTimeoutMillis = longPreferencesKey("idle_timeout_millis")
         val librarySort = stringPreferencesKey("library_sort")
         val libraryDensity = stringPreferencesKey("library_density")
@@ -76,6 +77,7 @@ class SettingsRepository(
                     ?: ReaderTextAlign.START,
                 pdfFit = prefs[Keys.pdfFit]?.let { runCatching { ReaderPdfFit.valueOf(it) }.getOrNull() }
                     ?: ReaderPdfFit.WIDTH,
+                highlightColor = ReaderHighlightColor.normalized(prefs[Keys.highlightColor]),
                 idleTimeoutMillis = prefs[Keys.idleTimeoutMillis] ?: 90_000L
             )
         }
@@ -183,6 +185,10 @@ class SettingsRepository(
 
     suspend fun setPdfFit(value: ReaderPdfFit) {
         dataStore.edit { it[Keys.pdfFit] = value.name }
+    }
+
+    suspend fun setHighlightColor(value: String) {
+        dataStore.edit { it[Keys.highlightColor] = ReaderHighlightColor.normalized(value) }
     }
 
     suspend fun setBookAppearanceEnabled(bookId: Long, enabled: Boolean, seed: ReaderSettings) {

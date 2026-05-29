@@ -332,6 +332,18 @@ internal fun String.toAnnotationColor(): Color =
     runCatching { Color(toColorInt()) }
         .getOrDefault(Color(0xFFF2C94C))
 
+@Composable
+internal fun AnnotationColorSwatch(
+    hex: String,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.size(14.dp),
+        shape = RoundedCornerShape(8.dp),
+        color = hex.toAnnotationColor()
+    ) {}
+}
+
 internal fun ReaderTheme.label(): String =
     if (this == ReaderTheme.OLED) "OLED" else name.lowercase().replaceFirstChar(Char::titlecase)
 

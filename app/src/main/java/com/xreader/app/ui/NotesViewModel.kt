@@ -8,6 +8,7 @@ import com.xreader.app.AppContainer
 import com.xreader.app.data.AnnotationEntity
 import com.xreader.app.data.AnnotationKind
 import com.xreader.app.data.BookEntity
+import com.xreader.app.settings.ReaderHighlightColor
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -84,9 +85,17 @@ class NotesViewModel(container: AppContainer) : ViewModel() {
         kind.value = value
     }
 
-    fun updateNote(annotation: AnnotationEntity, note: String) {
+    fun updateNote(annotation: AnnotationEntity, note: String, color: String) {
         viewModelScope.launch {
-            annotationRepository.updateNote(annotation, note)
+            annotationRepository.updateNote(
+                annotation = annotation,
+                note = note,
+                color = if (annotation.kind == AnnotationKind.HIGHLIGHT) {
+                    ReaderHighlightColor.normalized(color)
+                } else {
+                    annotation.color
+                }
+            )
         }
     }
 

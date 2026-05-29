@@ -79,6 +79,7 @@ import com.xreader.app.data.AnnotationEntity
 import com.xreader.app.data.ReaderTheme
 import com.xreader.app.reader.OpenPublication
 import com.xreader.app.settings.ReaderFontFamily
+import com.xreader.app.settings.ReaderHighlightColor
 import com.xreader.app.settings.ReaderPdfFit
 import com.xreader.app.settings.ReaderSettings
 import com.xreader.app.settings.ReaderSpacingPreset
@@ -158,6 +159,7 @@ internal fun ReaderRoute(
         onPageTurnAnimations = viewModel::setPageTurnAnimations,
         onReadAloudRate = viewModel::setReadAloudRate,
         onReadAloudSleepTimer = viewModel::setReadAloudSleepTimer,
+        onHighlightColor = viewModel::setHighlightColor,
         onTextAlign = viewModel::setTextAlign,
         onPdfFit = viewModel::setPdfFit,
         onBookAppearanceEnabled = viewModel::setBookAppearanceEnabled,
@@ -184,7 +186,7 @@ internal fun ReaderScreen(
     onOpenNote: (Int, String?) -> Unit,
     onCloseNote: () -> Unit,
     onAddNote: (String) -> Unit,
-    onUpdateAnnotationNote: (AnnotationEntity, String) -> Unit,
+    onUpdateAnnotationNote: (AnnotationEntity, String, String) -> Unit,
     onBookmark: (Int, String?) -> Unit,
     onDeleteBookmark: (Long) -> Unit,
     onDeleteAnnotation: (Long) -> Unit,
@@ -201,6 +203,7 @@ internal fun ReaderScreen(
     onPageTurnAnimations: (Boolean) -> Unit,
     onReadAloudRate: (Float) -> Unit,
     onReadAloudSleepTimer: (ReadAloudSleepTimer) -> Unit,
+    onHighlightColor: (String) -> Unit,
     onTextAlign: (ReaderTextAlign) -> Unit,
     onPdfFit: (ReaderPdfFit) -> Unit,
     onBookAppearanceEnabled: (Boolean) -> Unit,
@@ -387,8 +390,8 @@ internal fun ReaderScreen(
         EditAnnotationDialog(
             annotation = annotation,
             onDismiss = { editingAnnotation = null },
-            onSave = { note ->
-                onUpdateAnnotationNote(annotation, note)
+            onSave = { note, color ->
+                onUpdateAnnotationNote(annotation, note, color)
                 editingAnnotation = null
             }
         )
@@ -409,6 +412,7 @@ internal fun ReaderScreen(
             onPageTurnAnimations = onPageTurnAnimations,
             onReadAloudRate = onReadAloudRate,
             onReadAloudSleepTimer = onReadAloudSleepTimer,
+            onHighlightColor = onHighlightColor,
             onTextAlign = onTextAlign,
             onPdfFit = onPdfFit,
             onBookAppearanceEnabled = onBookAppearanceEnabled
@@ -584,6 +588,7 @@ internal fun ReaderQuickSettingsDialog(
     onPageTurnAnimations: (Boolean) -> Unit,
     onReadAloudRate: (Float) -> Unit,
     onReadAloudSleepTimer: (ReadAloudSleepTimer) -> Unit,
+    onHighlightColor: (String) -> Unit,
     onTextAlign: (ReaderTextAlign) -> Unit,
     onPdfFit: (ReaderPdfFit) -> Unit,
     onBookAppearanceEnabled: (Boolean) -> Unit,
@@ -602,6 +607,17 @@ internal fun ReaderQuickSettingsDialog(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Book-specific appearance", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
                     Switch(checked = bookAppearanceEnabled, onCheckedChange = onBookAppearanceEnabled)
+                }
+                Text("Highlight color", style = MaterialTheme.typography.titleMedium)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ReaderHighlightColor.entries.forEach { color ->
+                        FilterChip(
+                            selected = ReaderHighlightColor.optionFor(settings.highlightColor) == color,
+                            onClick = { onHighlightColor(color.hex) },
+                            label = { Text(color.label) },
+                            leadingIcon = { AnnotationColorSwatch(color.hex) }
+                        )
+                    }
                 }
                 Text("Spacing preset", style = MaterialTheme.typography.titleMedium)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

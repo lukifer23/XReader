@@ -112,24 +112,26 @@ class AnnotationRepositoryInstrumentedTest {
     }
 
     @Test
-    fun updateNoteTrimsTextAndKeepsAnnotationIdentity() = runBlocking {
+    fun updateNoteTrimsTextAndCanUpdateHighlightColor() = runBlocking {
         val bookId = sourceDb.books().insert(testBook(id = 0, title = "Source title"))
         val repository = AnnotationRepository(sourceDb.annotations(), sourceDb.books(), clock)
-        val noteId = repository.addNote(
+        val noteId = repository.addHighlight(
             bookId = bookId,
             locator = "loc-1",
             quote = "Important quote",
+            color = "#F2C94C",
             note = "Original"
         )
         val annotation = sourceDb.annotations().allAnnotations().single { it.id == noteId }
 
-        repository.updateNote(annotation, "  Updated note  ")
+        repository.updateNote(annotation, "  Updated note  ", "#56CCF2")
 
         val updated = sourceDb.annotations().allAnnotations().single { it.id == noteId }
         assertEquals(bookId, updated.bookId)
         assertEquals("loc-1", updated.locator)
         assertEquals("Important quote", updated.quote)
         assertEquals("Updated note", updated.note)
+        assertEquals("#56CCF2", updated.color)
     }
 
     private fun testBook(id: Long, title: String): BookEntity =

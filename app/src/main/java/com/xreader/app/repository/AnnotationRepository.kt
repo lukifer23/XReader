@@ -90,10 +90,15 @@ class AnnotationRepository(
 
     suspend fun deleteAnnotation(id: Long) = dao.deleteAnnotation(id)
 
-    suspend fun updateNote(annotation: AnnotationEntity, note: String) {
+    suspend fun updateNote(
+        annotation: AnnotationEntity,
+        note: String,
+        color: String = annotation.color,
+    ) {
         dao.updateAnnotation(
             annotation.copy(
                 note = note.trim(),
+                color = color,
                 updatedAt = clock.millis()
             )
         )

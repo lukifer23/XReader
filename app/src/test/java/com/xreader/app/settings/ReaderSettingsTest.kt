@@ -14,6 +14,7 @@ class ReaderSettingsTest {
         assertEquals(1.0f, ReaderSettings().readAloudRate, 0.001f)
         assertNull(ReaderSettings().readAloudVoiceName)
         assertEquals(ReadAloudSleepTimer.OFF, ReaderSettings().readAloudSleepTimer)
+        assertEquals(ReaderHighlightColor.YELLOW.hex, ReaderSettings().highlightColor)
     }
 
     @Test
@@ -45,6 +46,7 @@ class ReaderSettingsTest {
             readAloudRate = 1.25f,
             readAloudVoiceName = "local-voice",
             readAloudSleepTimer = ReadAloudSleepTimer.THIRTY_MINUTES,
+            highlightColor = ReaderHighlightColor.BLUE.hex,
             textAlign = ReaderTextAlign.JUSTIFY
         )
 
@@ -55,6 +57,7 @@ class ReaderSettingsTest {
         assertEquals(1.25f, accessible.readAloudRate, 0.001f)
         assertEquals("local-voice", accessible.readAloudVoiceName)
         assertEquals(ReadAloudSleepTimer.THIRTY_MINUTES, accessible.readAloudSleepTimer)
+        assertEquals(ReaderHighlightColor.BLUE.hex, accessible.highlightColor)
         assertEquals(ReaderTextAlign.JUSTIFY, accessible.textAlign)
         assertEquals(ReaderSpacingPreset.ACCESSIBLE.fontScale, accessible.fontScale, 0.001f)
         assertEquals(ReaderSpacingPreset.ACCESSIBLE.lineHeight, accessible.lineHeight, 0.001f)
@@ -77,6 +80,7 @@ class ReaderSettingsTest {
             readAloudRate = 1.3f,
             readAloudVoiceName = "local-voice",
             readAloudSleepTimer = ReadAloudSleepTimer.FORTY_FIVE_MINUTES,
+            highlightColor = ReaderHighlightColor.PURPLE.hex,
             fullScreen = true,
             publisherStyles = true,
             textAlign = ReaderTextAlign.JUSTIFY,
@@ -102,6 +106,7 @@ class ReaderSettingsTest {
         assertEquals(1.3f, combined.readAloudRate, 0.001f)
         assertEquals("local-voice", combined.readAloudVoiceName)
         assertEquals(ReadAloudSleepTimer.FORTY_FIVE_MINUTES, combined.readAloudSleepTimer)
+        assertEquals(ReaderHighlightColor.PURPLE.hex, combined.highlightColor)
         assertTrue(combined.fullScreen)
         assertEquals(30_000L, combined.idleTimeoutMillis)
         assertEquals(1.4f, combined.fontScale, 0.001f)
@@ -120,5 +125,12 @@ class ReaderSettingsTest {
         assertEquals(30 * 60_000L, ReadAloudSleepTimer.THIRTY_MINUTES.durationMillis)
         assertEquals(45 * 60_000L, ReadAloudSleepTimer.FORTY_FIVE_MINUTES.durationMillis)
         assertEquals(60 * 60_000L, ReadAloudSleepTimer.SIXTY_MINUTES.durationMillis)
+    }
+
+    @Test
+    fun highlightColorNormalizesToPalette() {
+        assertEquals(ReaderHighlightColor.GREEN.hex, ReaderHighlightColor.normalized("#6fcf97"))
+        assertEquals(ReaderHighlightColor.YELLOW.hex, ReaderHighlightColor.normalized("#123456"))
+        assertEquals(ReaderHighlightColor.YELLOW, ReaderHighlightColor.optionFor(null))
     }
 }

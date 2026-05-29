@@ -83,6 +83,7 @@ import com.xreader.app.settings.LibraryDensity
 import com.xreader.app.settings.LibrarySort
 import com.xreader.app.settings.ReadAloudSleepTimer
 import com.xreader.app.settings.ReaderFontFamily
+import com.xreader.app.settings.ReaderHighlightColor
 import com.xreader.app.settings.ReaderPdfFit
 import com.xreader.app.settings.ReaderSpacingPreset
 import com.xreader.app.settings.ReaderTapZonePreset
@@ -466,8 +467,8 @@ internal fun NotesRoute(
         EditAnnotationDialog(
             annotation = annotation,
             onDismiss = { editing = null },
-            onSave = { note ->
-                viewModel.updateNote(annotation, note)
+            onSave = { note, color ->
+                viewModel.updateNote(annotation, note, color)
                 editing = null
             }
         )
@@ -540,15 +541,29 @@ internal fun AnnotationRow(
 internal fun EditAnnotationDialog(
     annotation: AnnotationEntity,
     onDismiss: () -> Unit,
-    onSave: (String) -> Unit,
+    onSave: (String, String) -> Unit,
 ) {
     var note by remember(annotation.id) { mutableStateOf(annotation.note) }
+    var color by remember(annotation.id) { mutableStateOf(ReaderHighlightColor.normalized(annotation.color)) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (annotation.kind == AnnotationKind.NOTE) "Edit note" else "Edit highlight note") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(annotation.quote, maxLines = 4, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (annotation.kind == AnnotationKind.HIGHLIGHT) {
+                    Text("Highlight color", style = MaterialTheme.typography.titleSmall)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ReaderHighlightColor.entries.forEach { option ->
+                            FilterChip(
+                                selected = ReaderHighlightColor.optionFor(color) == option,
+                                onClick = { color = option.hex },
+                                label = { Text(option.label) },
+                                leadingIcon = { AnnotationColorSwatch(option.hex) }
+                            )
+                        }
+                    }
+                }
                 OutlinedTextField(
                     value = note,
                     onValueChange = { note = it },
@@ -559,7 +574,7 @@ internal fun EditAnnotationDialog(
             }
         },
         confirmButton = {
-            Button(onClick = { onSave(note) }) {
+            Button(onClick = { onSave(note, color) }) {
                 Icon(Icons.Filled.Done, contentDescription = null)
                 Spacer(Modifier.width(6.dp))
                 Text("Save")

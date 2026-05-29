@@ -33,6 +33,27 @@ enum class ReadAloudSleepTimer(
     SIXTY_MINUTES("60 min", 60 * 60_000L),
 }
 
+enum class ReaderHighlightColor(
+    val label: String,
+    val hex: String,
+) {
+    YELLOW("Yellow", "#F2C94C"),
+    GREEN("Green", "#6FCF97"),
+    BLUE("Blue", "#56CCF2"),
+    PINK("Pink", "#F299C1"),
+    PURPLE("Purple", "#BB6BD9");
+
+    companion object {
+        val defaultHex: String = YELLOW.hex
+
+        fun normalized(value: String?): String =
+            entries.firstOrNull { it.hex.equals(value, ignoreCase = true) }?.hex ?: defaultHex
+
+        fun optionFor(value: String?): ReaderHighlightColor =
+            entries.firstOrNull { it.hex.equals(value, ignoreCase = true) } ?: YELLOW
+    }
+}
+
 enum class ReaderFontFamily(
     val label: String,
     val readiumName: String?,
@@ -78,6 +99,7 @@ data class ReaderSettings(
     val publisherStyles: Boolean = false,
     val textAlign: ReaderTextAlign = ReaderTextAlign.START,
     val pdfFit: ReaderPdfFit = ReaderPdfFit.WIDTH,
+    val highlightColor: String = ReaderHighlightColor.defaultHex,
     val idleTimeoutMillis: Long = 90_000L,
 )
 

@@ -62,6 +62,7 @@ class SettingsRepositoryInstrumentedTest {
         repository.setReadAloudRate(0.2f)
         repository.setReadAloudVoiceName("local-en-us-voice")
         repository.setReadAloudSleepTimer(ReadAloudSleepTimer.THIRTY_MINUTES)
+        repository.setHighlightColor(ReaderHighlightColor.GREEN.hex)
         repository.setFullScreen(true)
         repository.setPublisherStyles(true)
         repository.setTextAlign(ReaderTextAlign.JUSTIFY)
@@ -83,6 +84,7 @@ class SettingsRepositoryInstrumentedTest {
         assertEquals(0.7f, readerSettings.readAloudRate, 0.001f)
         assertEquals("local-en-us-voice", readerSettings.readAloudVoiceName)
         assertEquals(ReadAloudSleepTimer.THIRTY_MINUTES, readerSettings.readAloudSleepTimer)
+        assertEquals(ReaderHighlightColor.GREEN.hex, readerSettings.highlightColor)
         assertTrue(readerSettings.fullScreen)
         assertTrue(readerSettings.publisherStyles)
         assertEquals(ReaderTextAlign.JUSTIFY, readerSettings.textAlign)
@@ -92,6 +94,8 @@ class SettingsRepositoryInstrumentedTest {
 
         repository.setReadAloudVoiceName(null)
         assertNull(repository.settings.first().readAloudVoiceName)
+        repository.setHighlightColor("#not-a-palette-color")
+        assertEquals(ReaderHighlightColor.YELLOW.hex, repository.settings.first().highlightColor)
     }
 
     @Test

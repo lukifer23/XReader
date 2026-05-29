@@ -18,6 +18,7 @@ import com.xreader.app.reader.ReaderSearchResult
 import com.xreader.app.reader.ReadingUnit
 import com.xreader.app.settings.ReadAloudSleepTimer
 import com.xreader.app.settings.ReaderFontFamily
+import com.xreader.app.settings.ReaderHighlightColor
 import com.xreader.app.settings.ReaderPdfFit
 import com.xreader.app.settings.ReaderSettings
 import com.xreader.app.settings.ReaderSpacingPreset
@@ -342,6 +343,12 @@ class ReaderViewModel(
         }
     }
 
+    fun setHighlightColor(value: String) {
+        viewModelScope.launch {
+            container.settingsRepository.setHighlightColor(value)
+        }
+    }
+
     fun setBookAppearanceEnabled(value: Boolean) {
         viewModelScope.launch {
             container.settingsRepository.setBookAppearanceEnabled(
@@ -565,9 +572,10 @@ class ReaderViewModel(
         }
     }
 
-    fun addSelectedHighlight(locator: Locator, quote: String, color: String = "#F2C94C") {
+    fun addSelectedHighlight(locator: Locator, quote: String) {
         val cleanQuote = quote.selectedQuote()
         if (cleanQuote.isBlank()) return
+        val color = ReaderHighlightColor.normalized(_uiState.value.settings.highlightColor)
         viewModelScope.launch {
             container.annotationRepository.addHighlight(
                 bookId = bookId,
@@ -599,14 +607,23 @@ class ReaderViewModel(
         }
     }
 
-    fun updateAnnotationNote(annotation: AnnotationEntity, note: String) {
+    fun updateAnnotationNote(annotation: AnnotationEntity, note: String, color: String) {
         viewModelScope.launch {
-            container.annotationRepository.updateNote(annotation, note)
+            container.annotationRepository.updateNote(
+                annotation = annotation,
+                note = note,
+                color = if (annotation.kind == com.xreader.app.data.AnnotationKind.HIGHLIGHT) {
+                    ReaderHighlightColor.normalized(color)
+                } else {
+                    annotation.color
+                }
+            )
         }
     }
 
-    fun addHighlight(color: String = "#F2C94C") {
+    fun addHighlight() {
         val unit = currentReadingUnit() ?: return
+        val color = ReaderHighlightColor.normalized(_uiState.value.settings.highlightColor)
         viewModelScope.launch {
             container.annotationRepository.addHighlight(
                 bookId = bookId,
