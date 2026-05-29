@@ -23,6 +23,7 @@ Initial public repository snapshot.
 - Manual cover replacement from local image files.
 - EPUB cover discovery from OPF guide references and guide XHTML/HTML title pages.
 - Unified library search, sorting, density, and grouping controls to reduce duplicate chrome; sorting now applies predictably to grouped library views and in-group book order.
+- Library metadata and health UI split into focused components to keep future polish changes lower-risk.
 - Per-book library health checks and targeted repair from the metadata dialog.
 - In-reader navigation by swipe, calibrated tap zones, hardware keys, TOC, bookmarks, search results, and progress scrubber.
 - Reader themes, fullscreen mode, typography controls, PDF fit controls, page animation toggle, configurable tap-zone sizing, and real font-family options.

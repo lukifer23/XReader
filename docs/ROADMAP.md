@@ -4,7 +4,7 @@ This is the working product roadmap for the personal APK line. Items should appe
 
 ## Near Term
 
-- Split the large Compose UI file into smaller screen/components packages.
+- Continue splitting large Compose screen files into focused component files.
 - Expand public-domain fixture coverage into screenshot and reader navigation QA.
 - Track startup and reader-open baseline history after each major UI, import, or Readium change.
 
