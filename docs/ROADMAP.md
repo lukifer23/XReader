@@ -11,7 +11,7 @@ This is the working product roadmap for the personal APK line. Items should appe
 ## Reader Polish
 
 - Evaluate page-turn animation styles supported by Readium and Android without adding custom fake page effects.
-- Continue hardening read-aloud lifecycle behavior across lock screen, app backgrounding, Bluetooth/headset controls, and device TTS engine differences beyond the in-reader sleep timer.
+- Continue hardening read-aloud lifecycle behavior across lock screen, Bluetooth/headset controls, and device TTS engine differences beyond the in-reader sleep timer and audio-focus handling.
 - Continue device QA for tap-zone presets on gesture-navigation phones and foldable widths.
 
 ## Library Polish

@@ -1,6 +1,9 @@
 package com.xreader.app.tts
 
 import android.content.Context
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
@@ -45,6 +48,21 @@ class ReadAloudEngine(
     private val scope: CoroutineScope,
 ) {
     private val appContext = context.applicationContext
+    private val audioManager = appContext.getSystemService(AudioManager::class.java)
+    private val speechAudioAttributes = AudioAttributes.Builder()
+        .setUsage(AudioAttributes.USAGE_MEDIA)
+        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+        .build()
+    private val audioFocusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+        .setAudioAttributes(speechAudioAttributes)
+        .setAcceptsDelayedFocusGain(false)
+        .setWillPauseWhenDucked(false)
+        .setOnAudioFocusChangeListener { focusChange ->
+            scope.launch(Dispatchers.Main.immediate) {
+                handleAudioFocusChange(focusChange)
+            }
+        }
+        .build()
     private val utteranceCounter = AtomicLong(0)
     private val _state = MutableStateFlow(ReadAloudState())
     val state: StateFlow<ReadAloudState> = _state.asStateFlow()
@@ -56,6 +74,7 @@ class ReadAloudEngine(
     private var pendingUtteranceId: String? = null
     private var sleepTimerJob: Job? = null
     private var sleepTimerEndsAtMillis: Long? = null
+    private var hasAudioFocus = false
 
     suspend fun play(
         bookId: Long,
@@ -97,6 +116,13 @@ class ReadAloudEngine(
             val segments = ReadAloudPlanner.splitForSpeech(chunks[chunkIndex].text)
             if (segments.isEmpty()) {
                 showMessage(bookId, "No readable text is indexed for this position.")
+                return@withContext
+            }
+            if (!requestAudioFocus()) {
+                _state.value = ReadAloudState(
+                    activeBookId = bookId,
+                    message = "Read aloud could not start because another app is using audio."
+                )
                 return@withContext
             }
             activeSpeech = ActiveSpeech(
@@ -203,6 +229,7 @@ class ReadAloudEngine(
                 handleSpeechError(utteranceId)
             }
         })
+        engine.setAudioAttributes(speechAudioAttributes)
         tts = engine
         updateVoiceOptions(engine)
         return true
@@ -226,6 +253,29 @@ class ReadAloudEngine(
 
     private fun setSpeechRateInternal(value: Float) {
         tts?.setSpeechRate(value.coerceIn(MIN_SPEECH_RATE, MAX_SPEECH_RATE))
+    }
+
+    private fun requestAudioFocus(): Boolean {
+        if (hasAudioFocus) return true
+        val granted = audioManager.requestAudioFocus(audioFocusRequest) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        hasAudioFocus = granted
+        return granted
+    }
+
+    private fun abandonAudioFocus() {
+        if (!hasAudioFocus) return
+        audioManager.abandonAudioFocusRequest(audioFocusRequest)
+        hasAudioFocus = false
+    }
+
+    private fun handleAudioFocusChange(focusChange: Int) {
+        val message = readAloudAudioFocusStopMessage(focusChange) ?: return
+        val bookId = activeSpeech?.bookId ?: _state.value.activeBookId ?: return
+        stopInternal(bookId)
+        _state.value = ReadAloudState(
+            activeBookId = bookId,
+            message = message
+        )
     }
 
     private fun scheduleSleepTimerInternal(durationMillis: Long?) {
@@ -331,6 +381,7 @@ class ReadAloudEngine(
             sleepTimerEndsAtMillis = null
         }
         tts?.stop()
+        abandonAudioFocus()
         activeSpeech = null
         pendingUtteranceId = null
         _state.value = ReadAloudState()
@@ -422,3 +473,10 @@ class ReadAloudEngine(
         private const val MAX_SPEECH_RATE = 1.4f
     }
 }
+
+internal fun readAloudAudioFocusStopMessage(focusChange: Int): String? =
+    when (focusChange) {
+        AudioManager.AUDIOFOCUS_LOSS -> "Read aloud stopped because another app took audio focus."
+        AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> "Read aloud stopped because another app needed audio."
+        else -> null
+    }
