@@ -22,9 +22,9 @@ This is the working competitive map for XReader. It should drive implementation 
 
 | Capability | XReader Current | Major Competitors | Priority |
 | --- | --- | --- | --- |
-| EPUB/PDF/TXT/CBZ/FB2/RTF reading | Implemented through Readium, TXT-to-EPUB import, CBZ-to-fixed-layout-EPUB import, FB2-to-EPUB import, and RTF-to-EPUB import. | All major readers cover EPUB/PDF/TXT; broad readers often include comics/image archives, FB2, and RTF. | Keep hardening. |
+| EPUB/PDF/TXT/CBZ/FB2/RTF/ODT reading | Implemented through Readium, TXT-to-EPUB import, CBZ-to-fixed-layout-EPUB import, FB2-to-EPUB import, RTF-to-EPUB import, and ODT-to-EPUB import. | All major readers cover EPUB/PDF/TXT; broad readers often include comics/image archives, FB2, RTF, and office documents. | Keep hardening. |
 | MOBI/AZW3 | Not implemented in UI. | Common in Moon+, ReadEra, PocketBook, FBReader. | Later, only with real local conversion. |
-| DJVU/CBR/DOC/ODT | Not implemented. | Broad-format apps cover many of these. | Later; avoid format sprawl before the current reader path is excellent. |
+| DJVU/CBR/DOC | Not implemented. | Broad-format apps cover many of these. | Later; avoid format sprawl before the current reader path is excellent. |
 | No ads/no account | Implemented. | ReadEra and Lithium lead here; Moon+ free has ads; sync apps require accounts. | Preserve. |
 | Private app library | Implemented with SAF file/folder copies and checksum duplicates. | Some apps scan folders or request broad file access. | Preserve SAF-only imports and private copies. |
 | Resume/progress | Implemented with Readium locators and sessions. | Table stakes; sync apps add cloud resume. | Keep testing across restarts and screen sizes. |
@@ -62,6 +62,7 @@ The research points to several areas that matter more than raw feature count:
 - CBZ import. Comic/image archives are converted locally into fixed-layout EPUB, sorted by natural page order, and read through the same private-library and Readium path instead of adding a parallel comic-reader surface.
 - FB2 import. FictionBook files, including `.fb2.zip`, are converted locally into EPUB with title, author, genre, year, series, chapter text, and embedded cover metadata preserved where available.
 - RTF import. Rich Text files convert locally into EPUB with extracted title/author metadata and searchable text, keeping the same private-library and Readium reader path.
+- ODT import. OpenDocument text files convert locally into EPUB with metadata, headings, paragraphs, lists, tables, and searchable text preserved in reading order.
 - Markdown notes export. Notes, highlights, and bookmarks can leave the app in a readable grouped document, while JSON remains the restore-oriented backup format.
 - Manual finished-state control. The book action menu can mark books finished or not finished, and library filters/counts/progress displays use one finished-state-aware classification.
 

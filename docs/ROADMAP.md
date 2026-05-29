@@ -22,7 +22,7 @@ This is the working product roadmap for the personal APK line. Items should appe
 ## Later
 
 - MOBI/AZW3 conversion through a real local conversion pipeline.
-- CBR/DJVU/DOC/ODT only if each format can land as a real import path without cluttering the reader.
+- CBR/DJVU/DOC only if each format can land as a real import path without cluttering the reader.
 - OPDS catalog import if it can stay optional and low-bloat.
 - Evaluate an optional small on-device neural/NLP TTS model after APK size, battery, latency, privacy, and text-position sync testing. Android TextToSpeech remains the default unless a local model is genuinely better offline, streams reliably on midrange phones, and can keep page-level spoken-locator sync at least as reliably as the current read-aloud path.
 - Optional encrypted local backup.

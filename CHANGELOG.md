@@ -12,6 +12,7 @@ Initial public repository snapshot.
 - CBZ import converted into fixed-layout EPUB packages.
 - FB2 and zipped `.fb2.zip` import converted into EPUB packages with FictionBook metadata and embedded cover support.
 - RTF import converted into EPUB packages with title/author metadata and searchable text extraction.
+- ODT import converted into EPUB packages with OpenDocument metadata, headings, paragraphs, lists, tables, and searchable text extraction.
 - SAF-based private library imports.
 - Batch file and folder import through Android's Storage Access Framework.
 - Duplicate detection by checksum.
@@ -57,6 +58,6 @@ Initial public repository snapshot.
 ### Known Limits
 
 - MOBI/AZW3 conversion is not implemented.
-- CBR/DJVU/DOC/ODT import is not implemented.
+- CBR/DJVU/DOC import is not implemented.
 - Release APKs are unsigned.
 - Play Store packaging, dependency shrinking, and APK/AAB size optimization have not had a final pass.

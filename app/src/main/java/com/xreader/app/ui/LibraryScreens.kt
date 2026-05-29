@@ -106,6 +106,7 @@ internal fun LibraryRoute(
             "application/rtf",
             "text/rtf",
             "application/x-rtf",
+            "application/vnd.oasis.opendocument.text",
             "application/zip",
             "application/x-cbz",
             "application/vnd.comicbook+zip",
@@ -611,7 +612,7 @@ internal fun LibraryUiState.emptyStateCopy(): LibraryEmptyStateCopy =
     when {
         totalBookCount == 0 -> LibraryEmptyStateCopy(
             title = "Build your library",
-            body = "Import EPUB, PDF, TXT, CBZ, FB2, or RTF files from this device.",
+            body = "Import EPUB, PDF, TXT, CBZ, FB2, RTF, or ODT files from this device.",
             primaryAction = "Import books",
             importsBooks = true
         )

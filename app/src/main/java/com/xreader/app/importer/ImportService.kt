@@ -72,6 +72,7 @@ class ImportService(
     private val cbzConverter = CbzToEpubConverter()
     private val fb2Converter = Fb2ToEpubConverter()
     private val rtfConverter = RtfToEpubConverter()
+    private val odtConverter = OdtToEpubConverter()
     private val pdfTools = PdfTools(context)
 
     suspend fun importMany(uris: List<Uri>): ImportBatchResult = withContext(Dispatchers.IO) {
@@ -89,7 +90,8 @@ class ImportService(
 
     suspend fun import(uri: Uri): ImportResult = withContext(Dispatchers.IO) {
         val displayName = context.contentResolver.displayName(uri)
-        val sourceExtension = sourceExtension(displayName)
+        val mimeType = context.contentResolver.getType(uri).orEmpty()
+        val sourceExtension = sourceExtension(displayName, mimeType)
         require(sourceExtension in SUPPORTED_BOOK_EXTENSIONS) {
             "Unsupported file type: .$sourceExtension"
         }
@@ -136,6 +138,10 @@ class ImportService(
                 }
                 "rtf" -> {
                     rtfConverter.convert(tmp, stagedFile, sourceTitle(displayName, sourceExtension))
+                    null
+                }
+                "odt" -> {
+                    odtConverter.convert(tmp, stagedFile, sourceTitle(displayName, sourceExtension))
                     null
                 }
                 else -> {
@@ -679,19 +685,30 @@ class ImportService(
     }
 
     private fun isSupportedBook(displayName: String, mimeType: String): Boolean =
-        sourceExtension(displayName) in SUPPORTED_BOOK_EXTENSIONS ||
+        sourceExtension(displayName, mimeType) in SUPPORTED_BOOK_EXTENSIONS ||
             mimeType in SUPPORTED_BOOK_MIME_TYPES
 
     private fun Throwable.isUnsupportedImport(): Boolean =
         message?.startsWith("Unsupported file type:") == true
 
-    private fun sourceExtension(displayName: String): String {
+    private fun sourceExtension(displayName: String, mimeType: String = ""): String {
         val lower = displayName.lowercase(Locale.US)
         return when {
             lower.endsWith(".fb2.zip") -> "fb2.zip"
-            else -> TextTools.extension(displayName)
+            else -> TextTools.extension(displayName).ifBlank { extensionForMimeType(mimeType) }
         }
     }
+
+    private fun extensionForMimeType(mimeType: String): String =
+        when (mimeType.lowercase(Locale.US)) {
+            "application/epub+zip" -> "epub"
+            "application/pdf" -> "pdf"
+            "text/plain" -> "txt"
+            "application/rtf", "text/rtf", "application/x-rtf" -> "rtf"
+            "application/vnd.oasis.opendocument.text" -> "odt"
+            "application/x-fictionbook+xml", "application/fb2+xml", "text/fb2+xml" -> "fb2"
+            else -> ""
+        }
 
     private fun sourceTitle(displayName: String, sourceExtension: String): String =
         when (sourceExtension) {
@@ -713,7 +730,7 @@ class ImportService(
     }
 
     private companion object {
-        val SUPPORTED_BOOK_EXTENSIONS = setOf("epub", "pdf", "txt", "cbz", "fb2", "fb2.zip", "rtf")
+        val SUPPORTED_BOOK_EXTENSIONS = setOf("epub", "pdf", "txt", "cbz", "fb2", "fb2.zip", "rtf", "odt")
         val SUPPORTED_BOOK_MIME_TYPES = setOf(
             "application/epub+zip",
             "application/pdf",
@@ -721,6 +738,7 @@ class ImportService(
             "application/rtf",
             "text/rtf",
             "application/x-rtf",
+            "application/vnd.oasis.opendocument.text",
             "application/zip",
             "application/x-cbz",
             "application/vnd.comicbook+zip",

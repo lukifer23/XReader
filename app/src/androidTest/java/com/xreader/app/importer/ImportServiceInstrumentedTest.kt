@@ -153,6 +153,32 @@ class ImportServiceInstrumentedTest {
     }
 
     @Test
+    fun importsOdtAsPrivateEpubAndIndexesText() = runBlocking {
+        val source = File(root, "source/Station Notes.odt").apply {
+            parentFile?.mkdirs()
+        }
+        ZipOutputStream(source.outputStream().buffered()).use { zip ->
+            zip.writeEntry("mimetype", "application/vnd.oasis.opendocument.text".toByteArray(Charsets.US_ASCII))
+            zip.writeEntry("content.xml", odtContentXml().toByteArray(Charsets.UTF_8))
+            zip.writeEntry("meta.xml", odtMetaXml().toByteArray(Charsets.UTF_8))
+        }
+
+        val result = ImportService(context, db).import(Uri.fromFile(source))
+
+        assertFalse(result.duplicate)
+        val book = requireNotNull(db.books().getBook(result.bookId))
+        assertEquals(BookFormat.EPUB, book.format)
+        assertEquals("odt", book.sourceExtension)
+        assertEquals("Station Notes", book.title)
+        assertEquals("Mina Patel", book.author)
+        assertEquals(2025, book.year)
+        assertTrue(File(context.filesDir, book.filePath).exists())
+
+        val searchResults = db.search().searchBook(result.bookId, "normalizedBody:greenhouse*")
+        assertTrue(searchResults.any { it.body.contains("greenhouse", ignoreCase = true) })
+    }
+
+    @Test
     fun importsManyBooksAndReportsDuplicatesAndUnsupportedFiles() = runBlocking {
         val first = File(root, "source/batch_one.txt").apply {
             parentFile?.mkdirs()
@@ -269,4 +295,33 @@ class ImportServiceInstrumentedTest {
         A second paragraph kept the import searchable.\par
         }
         """.trimIndent()
+
+    private fun odtContentXml(): String =
+        """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+            xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">
+          <office:body>
+            <office:text>
+              <text:h text:outline-level="1">Station Notes</text:h>
+              <text:p>The greenhouse crew cataloged every new leaf.</text:p>
+              <text:p>OpenDocument import should stay searchable.</text:p>
+            </office:text>
+          </office:body>
+        </office:document-content>
+        """.trimIndent().trimStart()
+
+    private fun odtMetaXml(): String =
+        """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <office:document-meta xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+            xmlns:dc="http://purl.org/dc/elements/1.1/">
+          <office:meta>
+            <dc:title>Station Notes</dc:title>
+            <dc:creator>Mina Patel</dc:creator>
+            <dc:language>en</dc:language>
+            <dc:date>2025-05-29</dc:date>
+          </office:meta>
+        </office:document-meta>
+        """.trimIndent().trimStart()
 }
