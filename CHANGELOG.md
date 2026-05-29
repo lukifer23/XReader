@@ -29,6 +29,7 @@ Initial public repository snapshot.
 - Bookmarks now use the exact visible Readium location when available, while still recognizing older unit-level bookmarks.
 - Toolbar-created notes now attach to the exact visible reader location instead of only the coarse reading unit.
 - The in-reader navigation sheet now separates Contents, Bookmarks, and Notes into compact tabs instead of one mixed scroll.
+- Reader navigation UI split into a focused component file to keep future reader polish lower-risk.
 - Reader themes, fullscreen mode, typography controls, PDF fit controls, page animation toggle, configurable tap-zone sizing, and real font-family options.
 - Compact, comfort, and accessible reader spacing presets for fast typography setup.
 - Per-book reader appearance overrides for font size, line height, margins, font family, publisher styles, alignment, and PDF fit.
