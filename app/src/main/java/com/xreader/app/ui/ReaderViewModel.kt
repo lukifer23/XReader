@@ -721,20 +721,10 @@ class ReaderViewModel(
             return ReadAloudPlanner.chunksFromUnits(publication.units)
         }
         val chunks = ReadAloudPlanner.chunksFromRows(rows)
-        val positions = publication.positions
-        val lastIndexedUnit = chunks.maxOfOrNull { it.unitIndex }?.coerceAtLeast(1) ?: 1
-        val lastPositionIndex = (positions.size - 1).coerceAtLeast(0)
-        return chunks.map { chunk ->
-            val positionIndex = if (lastPositionIndex == 0) {
-                0
-            } else {
-                (lastPositionIndex * (chunk.unitIndex.toDouble() / lastIndexedUnit.toDouble())).roundToInt()
-            }
-            chunk.copy(
-                unitIndex = positionIndex,
-                locator = positions.getOrNull(positionIndex)?.toJSON()?.toString() ?: chunk.locator
-            )
-        }
+        return ReadAloudPlanner.alignChunksToPositions(
+            chunks = chunks,
+            positionLocators = publication.positions.map { it.toJSON().toString() }
+        )
     }
 
     override fun onCleared() {

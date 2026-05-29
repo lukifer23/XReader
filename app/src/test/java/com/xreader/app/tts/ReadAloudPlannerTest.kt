@@ -93,6 +93,33 @@ class ReadAloudPlannerTest {
     }
 
     @Test
+    fun alignChunksToPositionsUsesReadingProgressInsteadOfSparseParserIds() {
+        val sparseChunks = listOf(
+            ReadAloudChunk(unitIndex = 0, locator = "epub:chapter-1.xhtml:0", heading = "One", text = "A", wordCount = 100),
+            ReadAloudChunk(unitIndex = 10_000, locator = "epub:chapter-2.xhtml:0", heading = "Two", text = "B", wordCount = 100),
+            ReadAloudChunk(unitIndex = 10_001, locator = "epub:chapter-2.xhtml:1", heading = "Two", text = "C", wordCount = 100)
+        )
+        val positions = (1..6).map { page ->
+            locator(position = page, progression = (page - 1) / 5.0)
+        }
+
+        val aligned = ReadAloudPlanner.alignChunksToPositions(sparseChunks, positions)
+
+        assertEquals(0, aligned[0].unitIndex)
+        assertEquals(2, aligned[1].unitIndex)
+        assertEquals(3, aligned[2].unitIndex)
+        assertEquals(positions[2], aligned[1].locator)
+        assertEquals(
+            1,
+            ReadAloudPlanner.startIndex(
+                chunks = aligned,
+                currentUnit = 0,
+                currentLocator = positions[2]
+            )
+        )
+    }
+
+    @Test
     fun splitForSpeechRespectsMaxLength() {
         val text = (1..80).joinToString(" ") { "sentence$it." }
         val segments = ReadAloudPlanner.splitForSpeech(text, maxLength = 60)

@@ -2,6 +2,7 @@ package com.xreader.app.tts
 
 import com.xreader.app.data.SearchIndexEntity
 import com.xreader.app.reader.ReadingUnit
+import kotlin.math.roundToInt
 
 data class ReadAloudChunk(
     val unitIndex: Int,
@@ -47,6 +48,27 @@ object ReadAloudPlanner {
                     )
                 }
             }
+
+    fun alignChunksToPositions(
+        chunks: List<ReadAloudChunk>,
+        positionLocators: List<String>,
+    ): List<ReadAloudChunk> {
+        if (chunks.isEmpty() || positionLocators.isEmpty()) return chunks
+        val lastPositionIndex = positionLocators.lastIndex
+        val totalWords = chunks.sumOf { it.wordCount.coerceAtLeast(1) }.coerceAtLeast(1)
+        var wordsBefore = 0
+        return chunks.map { chunk ->
+            val progressBefore = wordsBefore.toDouble() / totalWords.toDouble()
+            val positionIndex = (lastPositionIndex * progressBefore)
+                .roundToInt()
+                .coerceIn(0, lastPositionIndex)
+            wordsBefore += chunk.wordCount.coerceAtLeast(1)
+            chunk.copy(
+                unitIndex = positionIndex,
+                locator = positionLocators[positionIndex]
+            )
+        }
+    }
 
     fun startIndex(
         chunks: List<ReadAloudChunk>,
