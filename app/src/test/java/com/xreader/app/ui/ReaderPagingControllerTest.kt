@@ -6,10 +6,14 @@ import org.junit.Test
 class ReaderPagingControllerTest {
     @Test
     fun startsFromPersistedVisibleUnit() {
-        val controller = ReaderPagingController(initialUnit = 42)
+        val controller = ReaderPagingController(
+            initialUnit = 42,
+            initialLocatorJson = """{"href":"chapter.xhtml"}"""
+        )
 
         assertEquals(42, controller.currentPage)
         assertEquals(42, controller.currentUnit)
+        assertEquals("""{"href":"chapter.xhtml"}""", controller.currentLocatorJson)
     }
 
     @Test

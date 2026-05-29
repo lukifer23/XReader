@@ -10,6 +10,8 @@ import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -34,6 +36,7 @@ data class ReadAloudState(
     val totalChunks: Int = 0,
     val currentHeading: String? = null,
     val currentLocator: String? = null,
+    val sleepTimerEndsAtMillis: Long? = null,
     val message: String? = null,
 )
 
@@ -51,13 +54,17 @@ class ReadAloudEngine(
     private var tts: TextToSpeech? = null
     private var activeSpeech: ActiveSpeech? = null
     private var pendingUtteranceId: String? = null
+    private var sleepTimerJob: Job? = null
+    private var sleepTimerEndsAtMillis: Long? = null
 
     suspend fun play(
         bookId: Long,
         chunks: List<ReadAloudChunk>,
         currentUnit: Int,
+        currentLocator: String? = null,
         speechRate: Float = DEFAULT_SPEECH_RATE,
         voiceName: String? = null,
+        sleepTimerDurationMillis: Long? = null,
     ) {
         withContext(Dispatchers.Main.immediate) {
             if (chunks.isEmpty()) {
@@ -82,7 +89,11 @@ class ReadAloudEngine(
 
             setVoiceInternal(voiceName)
             setSpeechRateInternal(speechRate)
-            val chunkIndex = ReadAloudPlanner.startIndex(chunks, currentUnit)
+            val chunkIndex = ReadAloudPlanner.startIndex(
+                chunks = chunks,
+                currentUnit = currentUnit,
+                currentLocator = currentLocator
+            )
             val segments = ReadAloudPlanner.splitForSpeech(chunks[chunkIndex].text)
             if (segments.isEmpty()) {
                 showMessage(bookId, "No readable text is indexed for this position.")
@@ -95,6 +106,7 @@ class ReadAloudEngine(
                 segments = segments,
                 segmentIndex = 0
             )
+            scheduleSleepTimerInternal(sleepTimerDurationMillis)
             speakCurrentSegment()
         }
     }
@@ -117,6 +129,12 @@ class ReadAloudEngine(
     fun setVoice(voiceName: String?) {
         scope.launch(Dispatchers.Main.immediate) {
             if (ensureReady()) setVoiceInternal(voiceName)
+        }
+    }
+
+    fun setSleepTimer(durationMillis: Long?) {
+        scope.launch(Dispatchers.Main.immediate) {
+            scheduleSleepTimerInternal(durationMillis)
         }
     }
 
@@ -144,7 +162,7 @@ class ReadAloudEngine(
     }
 
     fun showMessage(bookId: Long, message: String) {
-        _state.value = ReadAloudState(activeBookId = bookId, message = message)
+        _state.value = ReadAloudState(activeBookId = bookId, sleepTimerEndsAtMillis = sleepTimerEndsAtMillis, message = message)
     }
 
     private suspend fun ensureReady(): Boolean {
@@ -210,6 +228,32 @@ class ReadAloudEngine(
         tts?.setSpeechRate(value.coerceIn(MIN_SPEECH_RATE, MAX_SPEECH_RATE))
     }
 
+    private fun scheduleSleepTimerInternal(durationMillis: Long?) {
+        sleepTimerJob?.cancel()
+        sleepTimerJob = null
+        sleepTimerEndsAtMillis = null
+        val bookId = activeSpeech?.bookId ?: _state.value.activeBookId
+        if (bookId == null || durationMillis == null || durationMillis <= 0L) {
+            _state.value = _state.value.copy(sleepTimerEndsAtMillis = null)
+            return
+        }
+        val endsAt = System.currentTimeMillis() + durationMillis
+        sleepTimerEndsAtMillis = endsAt
+        _state.value = _state.value.copy(sleepTimerEndsAtMillis = endsAt)
+        sleepTimerJob = scope.launch(Dispatchers.Main.immediate) {
+            delay(durationMillis)
+            val activeBookId = activeSpeech?.bookId ?: _state.value.activeBookId
+            if (activeBookId != bookId) return@launch
+            sleepTimerJob = null
+            sleepTimerEndsAtMillis = null
+            stopInternal(bookId = bookId, cancelSleepTimer = false)
+            _state.value = ReadAloudState(
+                activeBookId = bookId,
+                message = "Read aloud stopped after the sleep timer."
+            )
+        }
+    }
+
     private fun handleSpeechError(utteranceId: String?) {
         scope.launch(Dispatchers.Main.immediate) {
             if (utteranceId != null && utteranceId != pendingUtteranceId) return@launch
@@ -267,7 +311,8 @@ class ReadAloudEngine(
             currentUnit = chunk.unitIndex,
             totalChunks = current.chunks.size,
             currentHeading = chunk.heading,
-            currentLocator = chunk.locator
+            currentLocator = chunk.locator,
+            sleepTimerEndsAtMillis = sleepTimerEndsAtMillis
         )
         val result = tts?.speak(segment, TextToSpeech.QUEUE_FLUSH, Bundle.EMPTY, utteranceId)
         if (result == TextToSpeech.ERROR) {
@@ -275,10 +320,15 @@ class ReadAloudEngine(
         }
     }
 
-    private fun stopInternal(bookId: Long? = null) {
+    private fun stopInternal(bookId: Long? = null, cancelSleepTimer: Boolean = true) {
         if (bookId != null) {
             val activeBookId = activeSpeech?.bookId ?: _state.value.activeBookId
             if (activeBookId != null && activeBookId != bookId) return
+        }
+        if (cancelSleepTimer) {
+            sleepTimerJob?.cancel()
+            sleepTimerJob = null
+            sleepTimerEndsAtMillis = null
         }
         tts?.stop()
         activeSpeech = null

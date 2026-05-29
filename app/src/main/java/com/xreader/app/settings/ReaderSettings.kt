@@ -22,6 +22,17 @@ enum class ReaderTapZonePreset(
     WIDE("Wide", 0.42f, 24),
 }
 
+enum class ReadAloudSleepTimer(
+    val label: String,
+    val durationMillis: Long?,
+) {
+    OFF("Off", null),
+    FIFTEEN_MINUTES("15 min", 15 * 60_000L),
+    THIRTY_MINUTES("30 min", 30 * 60_000L),
+    FORTY_FIVE_MINUTES("45 min", 45 * 60_000L),
+    SIXTY_MINUTES("60 min", 60 * 60_000L),
+}
+
 enum class ReaderFontFamily(
     val label: String,
     val readiumName: String?,
@@ -62,6 +73,7 @@ data class ReaderSettings(
     val pageTurnAnimations: Boolean = true,
     val readAloudRate: Float = 1.0f,
     val readAloudVoiceName: String? = null,
+    val readAloudSleepTimer: ReadAloudSleepTimer = ReadAloudSleepTimer.OFF,
     val fullScreen: Boolean = false,
     val publisherStyles: Boolean = false,
     val textAlign: ReaderTextAlign = ReaderTextAlign.START,

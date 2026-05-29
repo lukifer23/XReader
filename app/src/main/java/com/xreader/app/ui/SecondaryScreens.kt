@@ -80,6 +80,7 @@ import com.xreader.app.analytics.BookAnalytics
 import com.xreader.app.analytics.GroupAnalytics
 import com.xreader.app.settings.LibraryDensity
 import com.xreader.app.settings.LibrarySort
+import com.xreader.app.settings.ReadAloudSleepTimer
 import com.xreader.app.settings.ReaderFontFamily
 import com.xreader.app.settings.ReaderPdfFit
 import com.xreader.app.settings.ReaderSpacingPreset
@@ -699,6 +700,13 @@ internal fun SettingsRoute(viewModel: SettingsViewModel, onBack: () -> Unit) {
                         onCheckedChange = viewModel::setPageTurnAnimations
                     )
                     SettingSlider("Read aloud speed", settings.readAloudRate, 0.7f..1.4f, viewModel::setReadAloudRate)
+                    SettingsChipGroup(
+                        title = "Sleep timer",
+                        options = ReadAloudSleepTimer.entries,
+                        selected = settings.readAloudSleepTimer,
+                        label = { it.label },
+                        onSelected = viewModel::setReadAloudSleepTimer
+                    )
                     ReadAloudVoiceSettings(
                         voices = readAloudVoices,
                         selectedVoiceName = settings.readAloudVoiceName,

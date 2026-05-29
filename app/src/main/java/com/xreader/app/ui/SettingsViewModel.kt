@@ -9,6 +9,7 @@ import com.xreader.app.data.ReaderTheme
 import com.xreader.app.settings.LibraryDensity
 import com.xreader.app.settings.LibrarySettings
 import com.xreader.app.settings.LibrarySort
+import com.xreader.app.settings.ReadAloudSleepTimer
 import com.xreader.app.settings.ReaderFontFamily
 import com.xreader.app.settings.ReaderPdfFit
 import com.xreader.app.settings.ReaderSettings
@@ -98,6 +99,11 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     fun setReadAloudVoiceName(value: String?) {
         viewModelScope.launch { container.settingsRepository.setReadAloudVoiceName(value) }
         container.readAloudEngine.setVoice(value)
+    }
+
+    fun setReadAloudSleepTimer(value: ReadAloudSleepTimer) {
+        viewModelScope.launch { container.settingsRepository.setReadAloudSleepTimer(value) }
+        container.readAloudEngine.setSleepTimer(value.durationMillis)
     }
 
     fun setFullScreen(value: Boolean) {

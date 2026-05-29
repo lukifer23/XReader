@@ -13,6 +13,7 @@ class ReaderSettingsTest {
         assertEquals(ReaderTapZonePreset.BALANCED, ReaderSettings().tapZonePreset)
         assertEquals(1.0f, ReaderSettings().readAloudRate, 0.001f)
         assertNull(ReaderSettings().readAloudVoiceName)
+        assertEquals(ReadAloudSleepTimer.OFF, ReaderSettings().readAloudSleepTimer)
     }
 
     @Test
@@ -43,6 +44,7 @@ class ReaderSettingsTest {
             fullScreen = true,
             readAloudRate = 1.25f,
             readAloudVoiceName = "local-voice",
+            readAloudSleepTimer = ReadAloudSleepTimer.THIRTY_MINUTES,
             textAlign = ReaderTextAlign.JUSTIFY
         )
 
@@ -52,6 +54,7 @@ class ReaderSettingsTest {
         assertTrue(accessible.fullScreen)
         assertEquals(1.25f, accessible.readAloudRate, 0.001f)
         assertEquals("local-voice", accessible.readAloudVoiceName)
+        assertEquals(ReadAloudSleepTimer.THIRTY_MINUTES, accessible.readAloudSleepTimer)
         assertEquals(ReaderTextAlign.JUSTIFY, accessible.textAlign)
         assertEquals(ReaderSpacingPreset.ACCESSIBLE.fontScale, accessible.fontScale, 0.001f)
         assertEquals(ReaderSpacingPreset.ACCESSIBLE.lineHeight, accessible.lineHeight, 0.001f)
@@ -73,6 +76,7 @@ class ReaderSettingsTest {
             pageTurnAnimations = false,
             readAloudRate = 1.3f,
             readAloudVoiceName = "local-voice",
+            readAloudSleepTimer = ReadAloudSleepTimer.FORTY_FIVE_MINUTES,
             fullScreen = true,
             publisherStyles = true,
             textAlign = ReaderTextAlign.JUSTIFY,
@@ -97,6 +101,7 @@ class ReaderSettingsTest {
         assertFalse(combined.pageTurnAnimations)
         assertEquals(1.3f, combined.readAloudRate, 0.001f)
         assertEquals("local-voice", combined.readAloudVoiceName)
+        assertEquals(ReadAloudSleepTimer.FORTY_FIVE_MINUTES, combined.readAloudSleepTimer)
         assertTrue(combined.fullScreen)
         assertEquals(30_000L, combined.idleTimeoutMillis)
         assertEquals(1.4f, combined.fontScale, 0.001f)
@@ -106,5 +111,14 @@ class ReaderSettingsTest {
         assertFalse(combined.publisherStyles)
         assertEquals(ReaderTextAlign.START, combined.textAlign)
         assertEquals(ReaderPdfFit.WIDTH, combined.pdfFit)
+    }
+
+    @Test
+    fun readAloudSleepTimerPresetsExposeRealDurations() {
+        assertNull(ReadAloudSleepTimer.OFF.durationMillis)
+        assertEquals(15 * 60_000L, ReadAloudSleepTimer.FIFTEEN_MINUTES.durationMillis)
+        assertEquals(30 * 60_000L, ReadAloudSleepTimer.THIRTY_MINUTES.durationMillis)
+        assertEquals(45 * 60_000L, ReadAloudSleepTimer.FORTY_FIVE_MINUTES.durationMillis)
+        assertEquals(60 * 60_000L, ReadAloudSleepTimer.SIXTY_MINUTES.durationMillis)
     }
 }

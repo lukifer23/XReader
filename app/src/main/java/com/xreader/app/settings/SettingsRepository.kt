@@ -31,6 +31,7 @@ class SettingsRepository(
         val pageTurnAnimations = booleanPreferencesKey("page_turn_animations")
         val readAloudRate = floatPreferencesKey("read_aloud_rate")
         val readAloudVoiceName = stringPreferencesKey("read_aloud_voice_name")
+        val readAloudSleepTimer = stringPreferencesKey("read_aloud_sleep_timer")
         val fullScreen = booleanPreferencesKey("full_screen")
         val publisherStyles = booleanPreferencesKey("publisher_styles")
         val textAlign = stringPreferencesKey("text_align")
@@ -66,6 +67,9 @@ class SettingsRepository(
                 pageTurnAnimations = prefs[Keys.pageTurnAnimations] ?: true,
                 readAloudRate = (prefs[Keys.readAloudRate] ?: 1.0f).coerceIn(0.7f, 1.4f),
                 readAloudVoiceName = prefs[Keys.readAloudVoiceName]?.takeIf { it.isNotBlank() },
+                readAloudSleepTimer = prefs[Keys.readAloudSleepTimer]?.let {
+                    runCatching { ReadAloudSleepTimer.valueOf(it) }.getOrNull()
+                } ?: ReadAloudSleepTimer.OFF,
                 fullScreen = prefs[Keys.fullScreen] ?: false,
                 publisherStyles = prefs[Keys.publisherStyles] ?: false,
                 textAlign = prefs[Keys.textAlign]?.let { runCatching { ReaderTextAlign.valueOf(it) }.getOrNull() }
@@ -159,6 +163,10 @@ class SettingsRepository(
                 prefs[Keys.readAloudVoiceName] = value
             }
         }
+    }
+
+    suspend fun setReadAloudSleepTimer(value: ReadAloudSleepTimer) {
+        dataStore.edit { it[Keys.readAloudSleepTimer] = value.name }
     }
 
     suspend fun setFullScreen(value: Boolean) {

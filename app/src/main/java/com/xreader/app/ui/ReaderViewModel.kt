@@ -16,6 +16,7 @@ import com.xreader.app.reader.OpenPublication
 import com.xreader.app.reader.ReaderNavigationItem
 import com.xreader.app.reader.ReaderSearchResult
 import com.xreader.app.reader.ReadingUnit
+import com.xreader.app.settings.ReadAloudSleepTimer
 import com.xreader.app.settings.ReaderFontFamily
 import com.xreader.app.settings.ReaderPdfFit
 import com.xreader.app.settings.ReaderSettings
@@ -315,6 +316,11 @@ class ReaderViewModel(
         container.readAloudEngine.setSpeechRate(value)
     }
 
+    fun setReadAloudSleepTimer(value: ReadAloudSleepTimer) {
+        viewModelScope.launch { container.settingsRepository.setReadAloudSleepTimer(value) }
+        container.readAloudEngine.setSleepTimer(value.durationMillis)
+    }
+
     fun setTextAlign(value: ReaderTextAlign) {
         viewModelScope.launch {
             if (_uiState.value.bookAppearanceEnabled) {
@@ -345,7 +351,10 @@ class ReaderViewModel(
         }
     }
 
-    fun toggleReadAloud(visibleUnit: Int? = null) {
+    fun toggleReadAloud(
+        visibleUnit: Int? = null,
+        visibleLocator: String? = null,
+    ) {
         val readAloud = _uiState.value.readAloud
         if (readAloud.playing || readAloud.initializing) {
             container.readAloudEngine.stop(bookId)
@@ -356,6 +365,9 @@ class ReaderViewModel(
             val rows = container.libraryRepository.indexedRowsForBook(bookId)
             val chunks = readAloudChunks(publication, rows)
             val storedUnit = _uiState.value.currentUnit
+            val startLocator = visibleLocator
+                ?.takeIf { it.isNotBlank() }
+                ?: _uiState.value.state?.locator?.takeIf { it.isNotBlank() }
             val startUnit = when {
                 visibleUnit == null -> storedUnit
                 visibleUnit <= 0 && storedUnit > 0 -> storedUnit
@@ -365,8 +377,10 @@ class ReaderViewModel(
                 bookId = bookId,
                 chunks = chunks,
                 currentUnit = startUnit,
+                currentLocator = startLocator,
                 speechRate = _uiState.value.settings.readAloudRate,
-                voiceName = _uiState.value.settings.readAloudVoiceName
+                voiceName = _uiState.value.settings.readAloudVoiceName,
+                sleepTimerDurationMillis = _uiState.value.settings.readAloudSleepTimer.durationMillis
             )
         }
     }

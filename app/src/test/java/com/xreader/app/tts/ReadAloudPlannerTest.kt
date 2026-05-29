@@ -39,6 +39,60 @@ class ReadAloudPlannerTest {
     }
 
     @Test
+    fun startIndexPrefersExactCurrentLocator() {
+        val chunks = listOf(
+            ReadAloudChunk(unitIndex = 0, locator = locator(position = 1, progression = 0.1), heading = "A", text = "A", wordCount = 1),
+            ReadAloudChunk(unitIndex = 5, locator = locator(position = 2, progression = 0.4), heading = "B", text = "B", wordCount = 1),
+            ReadAloudChunk(unitIndex = 10, locator = locator(position = 3, progression = 0.8), heading = "C", text = "C", wordCount = 1)
+        )
+
+        assertEquals(
+            2,
+            ReadAloudPlanner.startIndex(
+                chunks = chunks,
+                currentUnit = 0,
+                currentLocator = chunks[2].locator
+            )
+        )
+    }
+
+    @Test
+    fun startIndexFallsBackToNearestLocatorProgression() {
+        val chunks = listOf(
+            ReadAloudChunk(unitIndex = 0, locator = locator(position = 1, progression = 0.1), heading = "A", text = "A", wordCount = 1),
+            ReadAloudChunk(unitIndex = 5, locator = locator(position = 2, progression = 0.4), heading = "B", text = "B", wordCount = 1),
+            ReadAloudChunk(unitIndex = 10, locator = locator(position = 3, progression = 0.8), heading = "C", text = "C", wordCount = 1)
+        )
+
+        assertEquals(
+            1,
+            ReadAloudPlanner.startIndex(
+                chunks = chunks,
+                currentUnit = 0,
+                currentLocator = """{"href":"chapter.xhtml","locations":{"totalProgression":0.55}}"""
+            )
+        )
+    }
+
+    @Test
+    fun startIndexUsesInChapterProgressionBeforeHrefFallback() {
+        val chunks = listOf(
+            ReadAloudChunk(unitIndex = 0, locator = locator(position = 1, progression = 0.1, localProgression = 0.1), heading = "A", text = "A", wordCount = 1),
+            ReadAloudChunk(unitIndex = 5, locator = locator(position = 2, progression = 0.4, localProgression = 0.4), heading = "B", text = "B", wordCount = 1),
+            ReadAloudChunk(unitIndex = 10, locator = locator(position = 3, progression = 0.8, localProgression = 0.8), heading = "C", text = "C", wordCount = 1)
+        )
+
+        assertEquals(
+            1,
+            ReadAloudPlanner.startIndex(
+                chunks = chunks,
+                currentUnit = 0,
+                currentLocator = """{"href":"chapter.xhtml","locations":{"progression":0.55}}"""
+            )
+        )
+    }
+
+    @Test
     fun splitForSpeechRespectsMaxLength() {
         val text = (1..80).joinToString(" ") { "sentence$it." }
         val segments = ReadAloudPlanner.splitForSpeech(text, maxLength = 60)
@@ -57,4 +111,15 @@ class ReadAloudPlannerTest {
             normalizedBody = body.lowercase(),
             unitIndex = unitIndex
         )
+
+    private fun locator(
+        position: Int,
+        progression: Double,
+        localProgression: Double? = null,
+    ): String =
+        if (localProgression == null) {
+            """{"href":"chapter.xhtml","locations":{"position":$position,"totalProgression":$progression}}"""
+        } else {
+            """{"href":"chapter.xhtml","locations":{"position":$position,"totalProgression":$progression,"progression":$localProgression}}"""
+        }
 }

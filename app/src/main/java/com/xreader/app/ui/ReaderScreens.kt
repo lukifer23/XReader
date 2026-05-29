@@ -91,6 +91,7 @@ import com.xreader.app.settings.ReaderSettings
 import com.xreader.app.settings.ReaderSpacingPreset
 import com.xreader.app.settings.ReaderTapZonePreset
 import com.xreader.app.settings.ReaderTextAlign
+import com.xreader.app.settings.ReadAloudSleepTimer
 import com.xreader.app.settings.spacingPresetOrNull
 import com.xreader.app.tts.ReadAloudState
 import kotlin.math.roundToInt
@@ -162,10 +163,13 @@ internal fun ReaderRoute(
         onTapZonePreset = viewModel::setTapZonePreset,
         onPageTurnAnimations = viewModel::setPageTurnAnimations,
         onReadAloudRate = viewModel::setReadAloudRate,
+        onReadAloudSleepTimer = viewModel::setReadAloudSleepTimer,
         onTextAlign = viewModel::setTextAlign,
         onPdfFit = viewModel::setPdfFit,
         onBookAppearanceEnabled = viewModel::setBookAppearanceEnabled,
-        onToggleReadAloud = { visibleUnit -> viewModel.toggleReadAloud(visibleUnit) },
+        onToggleReadAloud = { visibleUnit, visibleLocator ->
+            viewModel.toggleReadAloud(visibleUnit, visibleLocator)
+        },
         onClearReadAloudMessage = viewModel::clearReadAloudMessage
     )
 }
@@ -201,15 +205,21 @@ internal fun ReaderScreen(
     onTapZonePreset: (ReaderTapZonePreset) -> Unit,
     onPageTurnAnimations: (Boolean) -> Unit,
     onReadAloudRate: (Float) -> Unit,
+    onReadAloudSleepTimer: (ReadAloudSleepTimer) -> Unit,
     onTextAlign: (ReaderTextAlign) -> Unit,
     onPdfFit: (ReaderPdfFit) -> Unit,
     onBookAppearanceEnabled: (Boolean) -> Unit,
-    onToggleReadAloud: (Int) -> Unit,
+    onToggleReadAloud: (Int, String?) -> Unit,
     onClearReadAloudMessage: () -> Unit,
 ) {
     val publication = state.publication as? OpenPublication.Readium ?: return
     val units = publication.units
-    val pagingController = remember(publication.book.id) { ReaderPagingController(initialUnit = state.currentUnit) }
+    val pagingController = remember(publication.book.id) {
+        ReaderPagingController(
+            initialUnit = state.currentUnit,
+            initialLocatorJson = state.initialLocatorJson
+        )
+    }
     var searchOpen by remember(publication.book.id) { mutableStateOf(false) }
     var navigationOpen by remember(publication.book.id) { mutableStateOf(false) }
     var readerSettingsOpen by remember(publication.book.id) { mutableStateOf(false) }
@@ -287,7 +297,12 @@ internal fun ReaderScreen(
                 fullScreen = state.settings.fullScreen,
                 onToggleFullScreen = onToggleFullScreen,
                 readAloud = state.readAloud,
-                onToggleReadAloud = { onToggleReadAloud(pagingController.currentUnit) },
+                onToggleReadAloud = {
+                    onToggleReadAloud(
+                        pagingController.currentUnit,
+                        pagingController.currentLocatorJson
+                    )
+                },
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .zIndex(2f)
@@ -353,6 +368,7 @@ internal fun ReaderScreen(
             onTapZonePreset = onTapZonePreset,
             onPageTurnAnimations = onPageTurnAnimations,
             onReadAloudRate = onReadAloudRate,
+            onReadAloudSleepTimer = onReadAloudSleepTimer,
             onTextAlign = onTextAlign,
             onPdfFit = onPdfFit,
             onBookAppearanceEnabled = onBookAppearanceEnabled
@@ -360,9 +376,13 @@ internal fun ReaderScreen(
     }
 }
 
-internal class ReaderPagingController(initialUnit: Int = 0) {
+internal class ReaderPagingController(
+    initialUnit: Int = 0,
+    initialLocatorJson: String? = null,
+) {
     var currentPage by mutableIntStateOf(initialUnit.coerceAtLeast(0))
     var currentUnit by mutableIntStateOf(initialUnit.coerceAtLeast(0))
+    var currentLocatorJson by mutableStateOf(initialLocatorJson)
     var pageCount by mutableIntStateOf(1)
     var goToPage: (Int) -> Unit = {}
     var goToUnit: (Int) -> Unit = {}
@@ -523,6 +543,7 @@ internal fun ReaderQuickSettingsDialog(
     onTapZonePreset: (ReaderTapZonePreset) -> Unit,
     onPageTurnAnimations: (Boolean) -> Unit,
     onReadAloudRate: (Float) -> Unit,
+    onReadAloudSleepTimer: (ReadAloudSleepTimer) -> Unit,
     onTextAlign: (ReaderTextAlign) -> Unit,
     onPdfFit: (ReaderPdfFit) -> Unit,
     onBookAppearanceEnabled: (Boolean) -> Unit,
@@ -611,6 +632,16 @@ internal fun ReaderQuickSettingsDialog(
                     Switch(checked = settings.pageTurnAnimations, onCheckedChange = onPageTurnAnimations)
                 }
                 SettingSlider("Read aloud speed", settings.readAloudRate, 0.7f..1.4f, onReadAloudRate)
+                Text("Sleep timer", style = MaterialTheme.typography.titleMedium)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ReadAloudSleepTimer.entries.forEach { timer ->
+                        FilterChip(
+                            selected = settings.readAloudSleepTimer == timer,
+                            onClick = { onReadAloudSleepTimer(timer) },
+                            label = { Text(timer.label) }
+                        )
+                    }
+                }
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } }
