@@ -42,4 +42,24 @@ class DictionaryRepositoryInstrumentedTest {
         assertTrue(entries.isNotEmpty())
         assertTrue(entries.any { it.lemma == "reader" })
     }
+
+    @Test
+    fun lookupHandlesIrregularPluralSelection() = runBlocking {
+        val repository = DictionaryRepository(context, db.dictionary())
+
+        val entries = repository.lookup("children")
+
+        assertTrue(entries.isNotEmpty())
+        assertTrue(entries.any { it.lemma == "child" })
+    }
+
+    @Test
+    fun lookupHandlesVesPluralSelection() = runBlocking {
+        val repository = DictionaryRepository(context, db.dictionary())
+
+        val entries = repository.lookup("wolves")
+
+        assertTrue(entries.isNotEmpty())
+        assertTrue(entries.any { it.lemma == "wolf" })
+    }
 }

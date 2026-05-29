@@ -8,7 +8,6 @@ import com.xreader.app.data.DictionaryEntryEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.util.Locale
 
 class DictionaryRepository(
     private val context: Context,
@@ -21,44 +20,11 @@ class DictionaryRepository(
     }
 
     suspend fun lookup(rawWord: String): List<DictionaryEntryEntity> = withContext(Dispatchers.IO) {
-        val word = wordToken(rawWord)
-            .lowercase(Locale.US)
-            .removeSuffix("'s")
-            .removeSuffix("’s")
-        if (word.isBlank()) return@withContext emptyList()
-        val candidates = buildList {
-            add(word)
-            if (word.endsWith("ies") && word.length > 3) add(word.dropLast(3) + "y")
-            if (word.endsWith("es") && word.length > 2) add(word.dropLast(2))
-            if (word.endsWith("s") && word.length > 1) add(word.dropLast(1))
-            if (word.endsWith("ing") && word.length > 4) {
-                val stem = word.dropLast(3)
-                add(stem)
-                add(stem + "e")
-                stem.withoutDoubledTerminal()?.let(::add)
-            }
-            if (word.endsWith("ed") && word.length > 3) {
-                val stem = word.dropLast(2)
-                add(stem)
-                add(stem + "e")
-                if (stem.endsWith("i") && stem.length > 1) add(stem.dropLast(1) + "y")
-                stem.withoutDoubledTerminal()?.let(::add)
-            }
-        }.distinct()
+        val candidates = DictionaryLemmatizer.candidates(rawWord)
+        if (candidates.isEmpty()) return@withContext emptyList()
         candidates.firstNotNullOfOrNull { candidate ->
             query(candidate).takeIf { it.isNotEmpty() }
         }.orEmpty()
-    }
-
-    private fun wordToken(rawWord: String): String =
-        Regex("""[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)?""")
-            .find(rawWord.trim())
-            ?.value
-            .orEmpty()
-
-    private fun String.withoutDoubledTerminal(): String? {
-        if (length < 2) return null
-        return if (last() == this[length - 2]) dropLast(1) else null
     }
 
     private fun query(lemma: String): List<DictionaryEntryEntity> {

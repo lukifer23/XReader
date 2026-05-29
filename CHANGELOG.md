@@ -33,7 +33,7 @@ Initial public repository snapshot.
 - Human-readable Markdown export for notes, highlights, and bookmarks from the global notes screen.
 - Local JSON export/import for notes, highlights, and bookmarks matched back to books by checksum.
 - Local JSON export/import for library catalog metadata, favorites, finished state, reading progress, and reading sessions matched back to imported books by checksum.
-- Offline English dictionary backed by Princeton WordNet.
+- Offline English dictionary backed by Princeton WordNet, with common plural, possessive, and inflected-form lookup.
 - Local full-text search with fallback from Readium search to the app search index.
 - Reading analytics for active time, WPM estimate, streaks, range-aware activity, and book/author/genre summaries.
 - Reading stats activity chart with 7-day, 30-day, 13-week, and all-time ranges, current/best streaks, and optimized grouped session aggregation.

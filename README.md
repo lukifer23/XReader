@@ -25,7 +25,7 @@ Implemented:
 - Read aloud from the visible reading position through Android TextToSpeech using local indexed book text, with persisted speech speed.
 - Grouped Settings screen for reader appearance, typography, reading behavior, library display, and maintenance.
 - Bookmarks, highlights, notes, global notes, in-book annotation lists, human-readable Markdown notes export, local notes/bookmark JSON export/import, and library metadata/progress backup.
-- Offline English dictionary backed by bundled Princeton WordNet data.
+- Offline English dictionary backed by bundled Princeton WordNet data, with common plural, possessive, and inflected-form lookup.
 - Local full-text search index for imported book text where extraction is supported.
 - Reading analytics for sessions, active reading time, progress, estimated WPM, 7-day/30-day/13-week/all-time activity, streaks, book/author/genre summaries, and local CSV/JSON export.
 
