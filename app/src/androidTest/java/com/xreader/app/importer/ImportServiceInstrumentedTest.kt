@@ -106,6 +106,32 @@ class ImportServiceInstrumentedTest {
     }
 
     @Test
+    fun importsFb2ZipAsPrivateEpubAndIndexesText() = runBlocking {
+        val source = File(root, "source/Orbital Tales.fb2.zip").apply {
+            parentFile?.mkdirs()
+        }
+        ZipOutputStream(source.outputStream().buffered()).use { zip ->
+            zip.writeEntry("Orbital Tales.fb2", fictionBookXml().toByteArray(Charsets.UTF_8))
+        }
+
+        val result = ImportService(context, db).import(Uri.fromFile(source))
+
+        assertFalse(result.duplicate)
+        val book = requireNotNull(db.books().getBook(result.bookId))
+        assertEquals(BookFormat.EPUB, book.format)
+        assertEquals("fb2.zip", book.sourceExtension)
+        assertEquals("Orbital Dawn", book.title)
+        assertEquals("Octavia Butler", book.author)
+        assertEquals("Science Fiction", book.genre)
+        assertEquals("Patternist", book.series)
+        assertEquals(1.0, book.seriesIndex ?: -1.0, 0.001)
+        assertTrue(File(context.filesDir, book.filePath).exists())
+
+        val searchResults = db.search().searchBook(result.bookId, "normalizedBody:terraforming*")
+        assertTrue(searchResults.any { it.body.contains("terraforming", ignoreCase = true) })
+    }
+
+    @Test
     fun importsManyBooksAndReportsDuplicatesAndUnsupportedFiles() = runBlocking {
         val first = File(root, "source/batch_one.txt").apply {
             parentFile?.mkdirs()
@@ -184,4 +210,31 @@ class ImportServiceInstrumentedTest {
             output.toByteArray()
         }
     }
+
+    private fun fictionBookXml(): String =
+        """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <FictionBook xmlns="http://www.gribuser.ru/xml/fictionbook/2.0">
+          <description>
+            <title-info>
+              <genre>Science Fiction</genre>
+              <author>
+                <first-name>Octavia</first-name>
+                <last-name>Butler</last-name>
+              </author>
+              <book-title>Orbital Dawn</book-title>
+              <date value="1976-01-01">1976</date>
+              <lang>en</lang>
+              <sequence name="Patternist" number="1"/>
+            </title-info>
+          </description>
+          <body>
+            <section>
+              <title><p>First Light</p></title>
+              <p>The terraforming crew watched the alien sunrise.</p>
+              <p>Every instrument reported a breathable morning.</p>
+            </section>
+          </body>
+        </FictionBook>
+        """.trimIndent().trimStart()
 }

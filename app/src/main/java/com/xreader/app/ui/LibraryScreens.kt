@@ -106,6 +106,9 @@ internal fun LibraryRoute(
             "application/zip",
             "application/x-cbz",
             "application/vnd.comicbook+zip",
+            "application/x-fictionbook+xml",
+            "application/fb2+xml",
+            "text/fb2+xml",
             "application/octet-stream"
         )
     }

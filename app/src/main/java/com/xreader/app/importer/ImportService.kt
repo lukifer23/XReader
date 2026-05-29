@@ -70,6 +70,7 @@ class ImportService(
     private val epubParser = EpubParser()
     private val txtConverter = TxtToEpubConverter()
     private val cbzConverter = CbzToEpubConverter()
+    private val fb2Converter = Fb2ToEpubConverter()
     private val pdfTools = PdfTools(context)
 
     suspend fun importMany(uris: List<Uri>): ImportBatchResult = withContext(Dispatchers.IO) {
@@ -87,7 +88,7 @@ class ImportService(
 
     suspend fun import(uri: Uri): ImportResult = withContext(Dispatchers.IO) {
         val displayName = context.contentResolver.displayName(uri)
-        val sourceExtension = TextTools.extension(displayName)
+        val sourceExtension = sourceExtension(displayName)
         require(sourceExtension in SUPPORTED_BOOK_EXTENSIONS) {
             "Unsupported file type: .$sourceExtension"
         }
@@ -122,11 +123,15 @@ class ImportService(
         try {
             val convertedPageCount = when (sourceExtension) {
                 "txt" -> {
-                    txtConverter.convert(tmp, stagedFile, displayName.substringBeforeLast('.'))
+                    txtConverter.convert(tmp, stagedFile, sourceTitle(displayName, sourceExtension))
                     null
                 }
                 "cbz" -> {
-                    cbzConverter.convert(tmp, stagedFile, displayName.substringBeforeLast('.')).pageCount
+                    cbzConverter.convert(tmp, stagedFile, sourceTitle(displayName, sourceExtension)).pageCount
+                }
+                "fb2", "fb2.zip" -> {
+                    fb2Converter.convert(tmp, stagedFile, sourceTitle(displayName, sourceExtension))
+                    null
                 }
                 else -> {
                     tmp.copyTo(stagedFile, overwrite = true)
@@ -138,7 +143,7 @@ class ImportService(
             val parsed = parseStoredBook(
                 file = stagedFile,
                 format = storedFormat,
-                fallbackTitle = displayName.substringBeforeLast('.'),
+                fallbackTitle = sourceTitle(displayName, sourceExtension),
                 fallbackAuthor = "Unknown Author"
             )
 
@@ -669,11 +674,25 @@ class ImportService(
     }
 
     private fun isSupportedBook(displayName: String, mimeType: String): Boolean =
-        TextTools.extension(displayName) in SUPPORTED_BOOK_EXTENSIONS ||
+        sourceExtension(displayName) in SUPPORTED_BOOK_EXTENSIONS ||
             mimeType in SUPPORTED_BOOK_MIME_TYPES
 
     private fun Throwable.isUnsupportedImport(): Boolean =
         message?.startsWith("Unsupported file type:") == true
+
+    private fun sourceExtension(displayName: String): String {
+        val lower = displayName.lowercase(Locale.US)
+        return when {
+            lower.endsWith(".fb2.zip") -> "fb2.zip"
+            else -> TextTools.extension(displayName)
+        }
+    }
+
+    private fun sourceTitle(displayName: String, sourceExtension: String): String =
+        when (sourceExtension) {
+            "fb2.zip" -> displayName.dropLast(".fb2.zip".length)
+            else -> displayName.substringBeforeLast('.')
+        }.ifBlank { displayName }
 
     private fun sha256(file: File): String {
         val digest = MessageDigest.getInstance("SHA-256")
@@ -689,14 +708,17 @@ class ImportService(
     }
 
     private companion object {
-        val SUPPORTED_BOOK_EXTENSIONS = setOf("epub", "pdf", "txt", "cbz")
+        val SUPPORTED_BOOK_EXTENSIONS = setOf("epub", "pdf", "txt", "cbz", "fb2", "fb2.zip")
         val SUPPORTED_BOOK_MIME_TYPES = setOf(
             "application/epub+zip",
             "application/pdf",
             "text/plain",
             "application/zip",
             "application/x-cbz",
-            "application/vnd.comicbook+zip"
+            "application/vnd.comicbook+zip",
+            "application/x-fictionbook+xml",
+            "application/fb2+xml",
+            "text/fb2+xml"
         )
         const val CUSTOM_COVER_MAX_EDGE = 1400
         const val CUSTOM_COVER_JPEG_QUALITY = 90

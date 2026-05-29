@@ -13,6 +13,7 @@ Implemented:
 - EPUB and PDF reading through Readium Kotlin.
 - TXT import converted into a minimal EPUB package so text books use the same reader path.
 - CBZ import converted into fixed-layout EPUB so comic/image archives use the same private-library and reader path.
+- FB2 and zipped `.fb2.zip` import converted into EPUB with FictionBook metadata, chapters, series, and embedded cover support.
 - Private app-library imports from selected files or SAF folders, with checksum duplicate detection.
 - Library organization by books, authors, series, genres, years, recent, unread, in progress, finished, and favorites, with group-aware ordering.
 - Persisted library sort and comfortable/compact density controls that apply in grouped and ungrouped views.
@@ -34,7 +35,7 @@ Implemented:
 Not implemented in the UI:
 
 - MOBI/AZW3 conversion.
-- CBR/DJVU/FB2/DOC/RTF/ODT import.
+- CBR/DJVU/DOC/RTF/ODT import.
 - DRM handling.
 - Cloud sync.
 - Ads, subscriptions, or social features.

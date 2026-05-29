@@ -340,6 +340,7 @@ internal fun bookFormatLabel(book: BookEntity): String =
     when (book.sourceExtension.lowercase(Locale.US)) {
         "txt" -> "TXT"
         "cbz" -> "CBZ"
+        "fb2", "fb2.zip" -> "FB2"
         else -> book.format.name
     }
 

@@ -22,9 +22,9 @@ This is the working competitive map for XReader. It should drive implementation 
 
 | Capability | XReader Current | Major Competitors | Priority |
 | --- | --- | --- | --- |
-| EPUB/PDF/TXT/CBZ reading | Implemented through Readium, TXT-to-EPUB import, and CBZ-to-fixed-layout-EPUB import. | All major readers cover EPUB/PDF/TXT; broad readers often include comics/image archives. | Keep hardening. |
+| EPUB/PDF/TXT/CBZ/FB2 reading | Implemented through Readium, TXT-to-EPUB import, CBZ-to-fixed-layout-EPUB import, and FB2-to-EPUB import. | All major readers cover EPUB/PDF/TXT; broad readers often include comics/image archives and FB2. | Keep hardening. |
 | MOBI/AZW3 | Not implemented in UI. | Common in Moon+, ReadEra, PocketBook, FBReader. | Later, only with real local conversion. |
-| DJVU/FB2/CBR/DOC/RTF/ODT | Not implemented. | Broad-format apps cover many of these. | Later; avoid format sprawl before the current reader path is excellent. |
+| DJVU/CBR/DOC/RTF/ODT | Not implemented. | Broad-format apps cover many of these. | Later; avoid format sprawl before the current reader path is excellent. |
 | No ads/no account | Implemented. | ReadEra and Lithium lead here; Moon+ free has ads; sync apps require accounts. | Preserve. |
 | Private app library | Implemented with SAF file/folder copies and checksum duplicates. | Some apps scan folders or request broad file access. | Preserve SAF-only imports and private copies. |
 | Resume/progress | Implemented with Readium locators and sessions. | Table stakes; sync apps add cloud resume. | Keep testing across restarts and screen sizes. |
@@ -60,6 +60,7 @@ The research points to several areas that matter more than raw feature count:
 - Calibrated tap zones. Reader taps now use compact, balanced, or wide presets with edge guards for gesture-navigation devices, keeping page-turn control predictable without adding permanent reader chrome.
 - Batch SAF import. The library can import multiple files or a whole SAF folder without broad storage permission, while preserving checksum duplicate handling.
 - CBZ import. Comic/image archives are converted locally into fixed-layout EPUB, sorted by natural page order, and read through the same private-library and Readium path instead of adding a parallel comic-reader surface.
+- FB2 import. FictionBook files, including `.fb2.zip`, are converted locally into EPUB with title, author, genre, year, series, chapter text, and embedded cover metadata preserved where available.
 - Markdown notes export. Notes, highlights, and bookmarks can leave the app in a readable grouped document, while JSON remains the restore-oriented backup format.
 - Manual finished-state control. The book action menu can mark books finished or not finished, and library filters/counts/progress displays use one finished-state-aware classification.
 

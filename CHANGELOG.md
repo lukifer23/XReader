@@ -10,6 +10,7 @@ Initial public repository snapshot.
 - EPUB and PDF reading through Readium Kotlin.
 - TXT import converted into minimal EPUB packages.
 - CBZ import converted into fixed-layout EPUB packages.
+- FB2 and zipped `.fb2.zip` import converted into EPUB packages with FictionBook metadata and embedded cover support.
 - SAF-based private library imports.
 - Batch file and folder import through Android's Storage Access Framework.
 - Duplicate detection by checksum.
@@ -55,6 +56,6 @@ Initial public repository snapshot.
 ### Known Limits
 
 - MOBI/AZW3 conversion is not implemented.
-- CBR/DJVU/FB2/DOC/RTF/ODT import is not implemented.
+- CBR/DJVU/DOC/RTF/ODT import is not implemented.
 - Release APKs are unsigned.
 - Play Store packaging, dependency shrinking, and APK/AAB size optimization have not had a final pass.
