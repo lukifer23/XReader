@@ -54,4 +54,17 @@ class LibraryEmptyStateTest {
         assertEquals("Show all", copy.primaryAction)
         assertFalse(copy.importsBooks)
     }
+
+    @Test
+    fun emptyCollectionsViewOffersReturnToLibrary() {
+        val copy = LibraryUiState(
+            group = LibraryGroup.COLLECTIONS,
+            matchedBookCount = 3,
+            totalBookCount = 3
+        ).emptyStateCopy()
+
+        assertEquals("No collections yet", copy.title)
+        assertEquals("Show all", copy.primaryAction)
+        assertFalse(copy.importsBooks)
+    }
 }

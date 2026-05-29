@@ -173,7 +173,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
             val message = runCatching { container.libraryBackupService.exportTo(uri) }
                 .fold(
                     onSuccess = {
-                        "Exported ${it.books} ${if (it.books == 1) "book" else "books"}, ${it.readingStates} progress states, and ${it.readingSessions} sessions"
+                        "Exported ${it.books} ${if (it.books == 1) "book" else "books"}, ${it.collections} ${if (it.collections == 1) "collection" else "collections"}, ${it.readingStates} progress states, and ${it.readingSessions} sessions"
                     },
                     onFailure = { it.message ?: "Library export failed" }
                 )
@@ -234,11 +234,13 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     private fun com.xreader.app.repository.LibraryBackupRepository.ImportResult.summaryMessage(): String {
-        val changed = booksUpdated + readingStatesImported + readingSessionsImported
-        val skipped = readingStatesSkipped + readingSessionsSkipped
+        val changed = booksUpdated + collectionsImported + collectionMembershipsImported + readingStatesImported + readingSessionsImported
+        val skipped = collectionMembershipsSkipped + readingStatesSkipped + readingSessionsSkipped
         val base = "Imported $changed library ${if (changed == 1) "item" else "items"}"
         val details = buildList {
             if (booksUpdated > 0) add("$booksUpdated metadata updates")
+            if (collectionsImported > 0) add("$collectionsImported collections")
+            if (collectionMembershipsImported > 0) add("$collectionMembershipsImported collection links")
             if (skipped > 0) add("$skipped skipped")
             if (missingBooks > 0) add("$missingBooks missing books")
             if (invalidItems > 0) add("$invalidItems invalid")

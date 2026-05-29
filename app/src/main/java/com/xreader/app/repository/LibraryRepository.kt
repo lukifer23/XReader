@@ -4,8 +4,12 @@ import android.net.Uri
 import androidx.room.withTransaction
 import com.xreader.app.core.TextTools
 import com.xreader.app.data.AuthorEntity
+import com.xreader.app.data.BookCollectionEntity
+import com.xreader.app.data.BookCollectionName
 import com.xreader.app.data.BookDao
 import com.xreader.app.data.BookEntity
+import com.xreader.app.data.CollectionDao
+import com.xreader.app.data.CollectionEntity
 import com.xreader.app.data.GenreEntity
 import com.xreader.app.data.SearchDao
 import com.xreader.app.data.SearchIndexEntity
@@ -20,12 +24,18 @@ data class MetadataUpdateResult(
     val updatedBooks: Int,
 )
 
+data class CollectionUpdateResult(
+    val collectionName: String,
+    val changed: Boolean,
+)
+
 class LibraryRepository(
     private val database: XReaderDatabase,
     private val importService: ImportService,
     private val clock: Clock = Clock.systemUTC(),
 ) {
     private val bookDao: BookDao = database.books()
+    private val collectionDao: CollectionDao = database.collections()
     private val searchDao: SearchDao = database.search()
     private val libraryDetailsBackfillRunning = AtomicBoolean(false)
 
@@ -35,6 +45,8 @@ class LibraryRepository(
     fun observeSeries(): Flow<List<String>> = bookDao.observeSeries()
     fun observeGenres(): Flow<List<String>> = bookDao.observeGenres()
     fun observeYears(): Flow<List<Int>> = bookDao.observeYears()
+    fun observeCollections(): Flow<List<CollectionEntity>> = collectionDao.observeCollections()
+    fun observeBookCollectionNames(): Flow<List<BookCollectionName>> = collectionDao.observeBookCollectionNames()
 
     suspend fun getBook(id: Long): BookEntity? = bookDao.getBook(id)
     suspend fun import(uri: Uri): ImportService.ImportResult = importService.import(uri)
@@ -60,6 +72,42 @@ class LibraryRepository(
 
     suspend fun setFinished(bookId: Long, finished: Boolean) =
         bookDao.setFinished(bookId, finished, clock.millis())
+
+    suspend fun addBookToCollection(bookId: Long, rawName: String): CollectionUpdateResult = database.withTransaction {
+        requireNotNull(bookDao.getBook(bookId)) { "Book not found" }
+        val name = rawName.cleanCollectionName()
+        val now = clock.millis()
+        val existing = collectionDao.collectionByName(name)
+        val collectionId = existing?.id
+            ?: collectionDao.insertCollection(
+                CollectionEntity(
+                    name = name,
+                    createdAt = now,
+                    updatedAt = now
+                )
+            ).takeIf { it > 0 }
+            ?: requireNotNull(collectionDao.collectionByName(name)?.id) { "Could not create collection" }
+        val changed = collectionDao.insertBookCollection(
+            BookCollectionEntity(
+                bookId = bookId,
+                collectionId = collectionId,
+                addedAt = now
+            )
+        ) > 0
+        collectionDao.touchCollection(collectionId, now)
+        CollectionUpdateResult(collectionName = existing?.name ?: name, changed = changed)
+    }
+
+    suspend fun removeBookFromCollection(bookId: Long, collectionId: Long): CollectionUpdateResult = database.withTransaction {
+        val collection = requireNotNull(collectionDao.collectionById(collectionId)) { "Collection not found" }
+        val changed = collectionDao.deleteBookCollection(bookId = bookId, collectionId = collectionId) > 0
+        if (changed && collectionDao.memberCount(collectionId) == 0) {
+            collectionDao.deleteCollection(collectionId)
+        } else if (changed) {
+            collectionDao.touchCollection(collectionId, clock.millis())
+        }
+        CollectionUpdateResult(collectionName = collection.name, changed = changed)
+    }
 
     suspend fun deleteBook(book: BookEntity) {
         searchDao.deleteFtsForBook(book.id.toString())
@@ -152,4 +200,15 @@ class LibraryRepository(
 
     private fun String?.cleanMetadataValue(): String? =
         this?.trim()?.ifBlank { null }
+
+    private fun String.cleanCollectionName(): String {
+        val cleaned = trim().replace(Regex("\\s+"), " ")
+        require(cleaned.isNotBlank()) { "Collection name required" }
+        require(cleaned.length <= MAX_COLLECTION_NAME_LENGTH) { "Collection names can be up to $MAX_COLLECTION_NAME_LENGTH characters" }
+        return cleaned
+    }
+
+    private companion object {
+        const val MAX_COLLECTION_NAME_LENGTH = 80
+    }
 }

@@ -114,6 +114,28 @@ class LibraryGroupingTest {
         )
     }
 
+    @Test
+    fun collectionGroupsCanPlaceOneBookInMultipleCollections() {
+        val grouped = groupBooks(
+            LibraryGroup.COLLECTIONS,
+            listOf(
+                item(
+                    title = "Red Rising",
+                    collections = listOf(CollectionUiItem(1L, "Favorites"), CollectionUiItem(2L, "Sci-Fi"))
+                ),
+                item(
+                    title = "Dune",
+                    collections = listOf(CollectionUiItem(2L, "Sci-Fi"))
+                )
+            ),
+            LibrarySort.TITLE
+        )
+
+        assertEquals(listOf("Favorites", "Sci-Fi"), grouped.keys.toList())
+        assertEquals(listOf("Red Rising"), grouped.getValue("Favorites").map { it.book.title })
+        assertEquals(listOf("Dune", "Red Rising"), grouped.getValue("Sci-Fi").map { it.book.title })
+    }
+
     private fun item(
         title: String,
         author: String = "Author",
@@ -123,6 +145,7 @@ class LibraryGroupingTest {
         year: Int? = null,
         progress: Double? = null,
         lastReadAt: Long? = null,
+        collections: List<CollectionUiItem> = emptyList(),
     ): BookListItem =
         BookListItem(
             book = BookEntity(
@@ -157,6 +180,7 @@ class LibraryGroupingTest {
                     estimatedWpm = 0,
                     lastReadAt = lastReadAt ?: 1_700_000_000_000L
                 )
-            }
+            },
+            collections = collections
         )
 }

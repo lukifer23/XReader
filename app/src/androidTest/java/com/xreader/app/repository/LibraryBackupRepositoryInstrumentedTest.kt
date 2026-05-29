@@ -4,12 +4,16 @@ import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.xreader.app.data.BookCollectionEntity
 import com.xreader.app.data.BookEntity
 import com.xreader.app.data.BookFormat
+import com.xreader.app.data.CollectionEntity
 import com.xreader.app.data.ReadingSessionEntity
 import com.xreader.app.data.ReadingStateEntity
 import com.xreader.app.data.XReaderDatabase
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -72,7 +76,21 @@ class LibraryBackupRepositoryInstrumentedTest {
                 wpm = 252
             )
         )
-        val exported = LibraryBackupRepository(sourceDb.books(), sourceDb.reading(), clock).exportBackupJson()
+        val collectionId = sourceDb.collections().insertCollection(
+            CollectionEntity(
+                name = "Sci-Fi",
+                createdAt = 1_000,
+                updatedAt = 2_000
+            )
+        )
+        sourceDb.collections().insertBookCollection(
+            BookCollectionEntity(
+                bookId = sourceBookId,
+                collectionId = collectionId,
+                addedAt = 2_000
+            )
+        )
+        val exported = LibraryBackupRepository(sourceDb.books(), sourceDb.collections(), sourceDb.reading(), clock).exportBackupJson()
         val targetBookId = targetDb.books().insert(
             testBook(
                 title = "Fresh Import",
@@ -82,11 +100,15 @@ class LibraryBackupRepositoryInstrumentedTest {
                 finished = false
             )
         )
-        val targetRepository = LibraryBackupRepository(targetDb.books(), targetDb.reading(), clock)
+        val targetRepository = LibraryBackupRepository(targetDb.books(), targetDb.collections(), targetDb.reading(), clock)
 
         val imported = targetRepository.importBackupJson(exported.json)
 
+        assertEquals(1, exported.collections)
+        assertEquals("Sci-Fi", JSONObject(exported.json).getJSONArray("collections").getJSONObject(0).getString("name"))
         assertEquals(1, imported.booksUpdated)
+        assertEquals(1, imported.collectionsImported)
+        assertEquals(1, imported.collectionMembershipsImported)
         assertEquals(1, imported.readingStatesImported)
         assertEquals(1, imported.readingSessionsImported)
         assertEquals(0, imported.missingBooks)
@@ -103,10 +125,15 @@ class LibraryBackupRepositoryInstrumentedTest {
         assertEquals(260, restoredState.estimatedWpm)
         assertEquals(targetBookId, restoredState.bookId)
         assertEquals(1, targetDb.reading().allSessions().size)
+        assertEquals(listOf("Sci-Fi"), targetDb.collections().observeCollections().first().map { it.name })
+        assertEquals(listOf(targetBookId), targetDb.collections().allBookCollections().map { it.bookId })
 
         val secondImport = targetRepository.importBackupJson(exported.json)
 
         assertEquals(0, secondImport.booksUpdated)
+        assertEquals(0, secondImport.collectionsImported)
+        assertEquals(0, secondImport.collectionMembershipsImported)
+        assertEquals(1, secondImport.collectionMembershipsSkipped)
         assertEquals(0, secondImport.readingStatesImported)
         assertEquals(1, secondImport.readingStatesSkipped)
         assertEquals(0, secondImport.readingSessionsImported)

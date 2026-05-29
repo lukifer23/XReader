@@ -168,6 +168,37 @@ class LibraryRepositoryInstrumentedTest {
         assertEquals(original, db.books().getBook(id))
     }
 
+    @Test
+    fun collectionsAreCaseInsensitiveAndRemovedWhenEmpty() = runBlocking {
+        val id = db.books().insert(
+            book(
+                title = "Red Rising",
+                author = "Pierce Brown",
+                series = "Red Rising",
+                seriesIndex = 1.0,
+                genre = "Science Fiction"
+            )
+        )
+
+        val first = repository.addBookToCollection(id, "  Sci-Fi  ")
+        val duplicate = repository.addBookToCollection(id, "sci-fi")
+        val memberships = repository.observeBookCollectionNames().first()
+
+        assertEquals("Sci-Fi", first.collectionName)
+        assertEquals(true, first.changed)
+        assertEquals("Sci-Fi", duplicate.collectionName)
+        assertEquals(false, duplicate.changed)
+        assertEquals(1, memberships.size)
+        assertEquals("Sci-Fi", memberships.single().name)
+        assertEquals(listOf("Sci-Fi"), repository.observeCollections().first().map { it.name })
+
+        val removed = repository.removeBookFromCollection(id, memberships.single().collectionId)
+
+        assertEquals(true, removed.changed)
+        assertEquals(emptyList<String>(), repository.observeCollections().first().map { it.name })
+        assertEquals(emptyList<String>(), repository.observeBookCollectionNames().first().map { it.name })
+    }
+
     private fun book(
         title: String,
         author: String,

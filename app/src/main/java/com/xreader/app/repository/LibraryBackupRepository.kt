@@ -2,7 +2,10 @@ package com.xreader.app.repository
 
 import com.xreader.app.core.TextTools
 import com.xreader.app.data.AuthorEntity
+import com.xreader.app.data.BookCollectionEntity
 import com.xreader.app.data.BookDao
+import com.xreader.app.data.CollectionDao
+import com.xreader.app.data.CollectionEntity
 import com.xreader.app.data.GenreEntity
 import com.xreader.app.data.ReadingDao
 import com.xreader.app.data.ReadingSessionEntity
@@ -15,18 +18,23 @@ import kotlin.math.max
 
 class LibraryBackupRepository(
     private val bookDao: BookDao,
+    private val collectionDao: CollectionDao,
     private val readingDao: ReadingDao,
     private val clock: Clock = Clock.systemUTC(),
 ) {
     data class ExportResult(
         val json: String,
         val books: Int,
+        val collections: Int,
         val readingStates: Int,
         val readingSessions: Int,
     )
 
     data class ImportResult(
         val booksUpdated: Int,
+        val collectionsImported: Int,
+        val collectionMembershipsImported: Int,
+        val collectionMembershipsSkipped: Int,
         val readingStatesImported: Int,
         val readingStatesSkipped: Int,
         val readingSessionsImported: Int,
@@ -38,6 +46,9 @@ class LibraryBackupRepository(
     suspend fun exportBackupJson(): ExportResult {
         val books = bookDao.booksForBackup()
         val booksById = books.associateBy { it.id }
+        val collections = collectionDao.allCollections()
+        val bookCollections = collectionDao.allBookCollections()
+        val membershipsByCollection = bookCollections.groupBy { it.collectionId }
         val states = readingDao.allStates()
         val sessions = readingDao.allSessions()
         val root = JSONObject()
@@ -64,6 +75,30 @@ class LibraryBackupRepository(
                                 .putNullable("lastOpenedAt", book.lastOpenedAt)
                                 .put("updatedAt", book.updatedAt)
                         )
+                    }
+                }
+            )
+            .put(
+                "collections",
+                JSONArray().also { array ->
+                    collections.forEach { collection ->
+                        val checksums = membershipsByCollection[collection.id]
+                            .orEmpty()
+                            .mapNotNull { membership -> booksById[membership.bookId]?.checksum }
+                            .distinct()
+                        if (checksums.isNotEmpty()) {
+                            array.put(
+                                JSONObject()
+                                    .put("name", collection.name)
+                                    .put("updatedAt", collection.updatedAt)
+                                    .put(
+                                        "bookChecksums",
+                                        JSONArray().also { checksumsArray ->
+                                            checksums.forEach(checksumsArray::put)
+                                        }
+                                    )
+                            )
+                        }
                     }
                 }
             )
@@ -109,6 +144,7 @@ class LibraryBackupRepository(
         return ExportResult(
             json = root.toString(2),
             books = books.size,
+            collections = collections.count { collection -> membershipsByCollection[collection.id].orEmpty().isNotEmpty() },
             readingStates = states.size,
             readingSessions = sessions.size
         )
@@ -120,6 +156,9 @@ class LibraryBackupRepository(
         val booksByChecksum = bookDao.booksForBackup().associateBy { it.checksum }
         val missingChecksums = mutableSetOf<String>()
         var booksUpdated = 0
+        var collectionsImported = 0
+        var collectionMembershipsImported = 0
+        var collectionMembershipsSkipped = 0
         var readingStatesImported = 0
         var readingStatesSkipped = 0
         var readingSessionsImported = 0
@@ -165,6 +204,64 @@ class LibraryBackupRepository(
                 updated.series?.let { bookDao.insertSeries(SeriesEntity(name = it)) }
                 booksUpdated += 1
             }
+        }
+
+        val collections = root.optJSONArray("collections") ?: JSONArray()
+        for (index in 0 until collections.length()) {
+            val item = collections.optJSONObject(index) ?: run {
+                invalidItems += 1
+                continue
+            }
+            val name = runCatching { item.optString("name").cleanCollectionName() }.getOrElse {
+                invalidItems += 1
+                continue
+            }
+            val checksumArray = item.optJSONArray("bookChecksums") ?: run {
+                invalidItems += 1
+                continue
+            }
+            val matchedBooks = buildList {
+                for (checksumIndex in 0 until checksumArray.length()) {
+                    val checksum = checksumArray.optString(checksumIndex).takeIf { it.isNotBlank() } ?: run {
+                        invalidItems += 1
+                        continue
+                    }
+                    val book = booksByChecksum[checksum] ?: run {
+                        missingChecksums += checksum
+                        continue
+                    }
+                    add(book)
+                }
+            }.distinctBy { it.id }
+            if (matchedBooks.isEmpty()) continue
+
+            val now = clock.millis()
+            val existing = collectionDao.collectionByName(name)
+            val collectionId = existing?.id
+                ?: collectionDao.insertCollection(
+                    CollectionEntity(
+                        name = name,
+                        createdAt = now,
+                        updatedAt = max(now, item.optLong("updatedAt", now))
+                    )
+                ).takeIf { it > 0 }
+                ?: requireNotNull(collectionDao.collectionByName(name)?.id) { "Could not create collection" }
+            if (existing == null) collectionsImported += 1
+            matchedBooks.forEach { book ->
+                val inserted = collectionDao.insertBookCollection(
+                    BookCollectionEntity(
+                        bookId = book.id,
+                        collectionId = collectionId,
+                        addedAt = now
+                    )
+                ) > 0
+                if (inserted) {
+                    collectionMembershipsImported += 1
+                } else {
+                    collectionMembershipsSkipped += 1
+                }
+            }
+            collectionDao.touchCollection(collectionId, max(now, item.optLong("updatedAt", now)))
         }
 
         val states = root.optJSONArray("readingStates") ?: JSONArray()
@@ -248,6 +345,9 @@ class LibraryBackupRepository(
 
         return ImportResult(
             booksUpdated = booksUpdated,
+            collectionsImported = collectionsImported,
+            collectionMembershipsImported = collectionMembershipsImported,
+            collectionMembershipsSkipped = collectionMembershipsSkipped,
             readingStatesImported = readingStatesImported,
             readingStatesSkipped = readingStatesSkipped,
             readingSessionsImported = readingSessionsImported,
@@ -272,7 +372,15 @@ class LibraryBackupRepository(
     private fun JSONObject.optNullableDouble(name: String): Double? =
         if (!has(name) || isNull(name)) null else optDouble(name)
 
+    private fun String.cleanCollectionName(): String {
+        val cleaned = trim().replace(Regex("\\s+"), " ")
+        require(cleaned.isNotBlank()) { "Collection name required" }
+        require(cleaned.length <= MAX_COLLECTION_NAME_LENGTH) { "Collection names can be up to $MAX_COLLECTION_NAME_LENGTH characters" }
+        return cleaned
+    }
+
     private companion object {
         const val BACKUP_FORMAT = "com.xreader.library-metadata.v1"
+        const val MAX_COLLECTION_NAME_LENGTH = 80
     }
 }

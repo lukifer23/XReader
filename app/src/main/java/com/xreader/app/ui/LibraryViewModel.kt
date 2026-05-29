@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.xreader.app.AppContainer
 import com.xreader.app.data.BookEntity
+import com.xreader.app.data.CollectionEntity
 import com.xreader.app.data.ReadingStateEntity
 import com.xreader.app.data.SearchIndexEntity
 import com.xreader.app.settings.LibraryDensity
@@ -27,6 +28,7 @@ enum class LibraryGroup {
     SERIES,
     GENRES,
     YEARS,
+    COLLECTIONS,
     RECENT,
     UNREAD,
     IN_PROGRESS,
@@ -37,6 +39,12 @@ enum class LibraryGroup {
 data class BookListItem(
     val book: BookEntity,
     val state: ReadingStateEntity?,
+    val collections: List<CollectionUiItem> = emptyList(),
+)
+
+data class CollectionUiItem(
+    val id: Long,
+    val name: String,
 )
 
 data class BookHealthUiState(
@@ -51,6 +59,8 @@ data class LibraryUiState(
     val sort: LibrarySort = LibrarySort.RECENT,
     val density: LibraryDensity = LibraryDensity.COMFORTABLE,
     val books: List<BookListItem> = emptyList(),
+    val allBooks: List<BookListItem> = emptyList(),
+    val collections: List<CollectionUiItem> = emptyList(),
     val matchedBookCount: Int = 0,
     val totalBookCount: Int = 0,
     val importing: Boolean = false,
@@ -74,6 +84,8 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     private val queriedBooks = query.flatMapLatest { container.libraryRepository.observeBooks(it) }
     private val allBooks = container.libraryRepository.observeBooks("")
     private val states = container.readingRepository.observeStates()
+    private val collections = container.libraryRepository.observeCollections()
+    private val bookCollectionNames = container.libraryRepository.observeBookCollectionNames()
 
     private data class LibrarySelectionState(
         val query: String,
@@ -109,16 +121,28 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         val allItems: List<BookListItem>,
     )
 
-    private val bookItems = combine(queriedBooks, allBooks, states) { currentBooks, currentAllBooks, currentStates ->
+    private val bookItems = combine(
+        queriedBooks,
+        allBooks,
+        states,
+        bookCollectionNames
+    ) { currentBooks, currentAllBooks, currentStates, currentBookCollections ->
         val statesByBook = currentStates.associateBy { it.bookId }
+        val collectionsByBook = currentBookCollections
+            .groupBy { it.bookId }
+            .mapValues { (_, rows) ->
+                rows
+                    .distinctBy { it.collectionId }
+                    .map { CollectionUiItem(id = it.collectionId, name = it.name) }
+            }
         LibraryBooksState(
-            queriedItems = currentBooks.map { BookListItem(it, statesByBook[it.id]) },
-            allItems = currentAllBooks.map { BookListItem(it, statesByBook[it.id]) }
+            queriedItems = currentBooks.map { BookListItem(it, statesByBook[it.id], collectionsByBook[it.id].orEmpty()) },
+            allItems = currentAllBooks.map { BookListItem(it, statesByBook[it.id], collectionsByBook[it.id].orEmpty()) }
         )
     }
 
     val uiState: StateFlow<LibraryUiState> =
-        combine(chromeState, bookItems, bookHealth, repairingBookIds) { chrome, libraryBooks, health, repairing ->
+        combine(chromeState, bookItems, collections, bookHealth, repairingBookIds) { chrome, libraryBooks, currentCollections, health, repairing ->
             val selection = chrome.selection
             val visibleBooks = libraryBooks.queriedItems.filteredBy(selection.group).sortedForLibrary(selection.sort)
             LibraryUiState(
@@ -127,6 +151,8 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
                 sort = selection.sort,
                 density = selection.density,
                 books = visibleBooks,
+                allBooks = libraryBooks.allItems,
+                collections = currentCollections.toUiItems(),
                 matchedBookCount = libraryBooks.queriedItems.size,
                 totalBookCount = libraryBooks.allItems.size,
                 importing = chrome.importing,
@@ -237,6 +263,40 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    fun addToCollection(item: BookListItem, name: String) {
+        viewModelScope.launch {
+            runCatching { container.libraryRepository.addBookToCollection(item.book.id, name) }
+                .onSuccess { result ->
+                    message.value = if (result.changed) {
+                        "Added to ${result.collectionName}"
+                    } else {
+                        "Already in ${result.collectionName}"
+                    }
+                }
+                .onFailure { error ->
+                    Log.e("XReader", "Add to collection failed for ${item.book.id}", error)
+                    message.value = error.message ?: "Could not update collection"
+                }
+        }
+    }
+
+    fun removeFromCollection(item: BookListItem, collection: CollectionUiItem) {
+        viewModelScope.launch {
+            runCatching { container.libraryRepository.removeBookFromCollection(item.book.id, collection.id) }
+                .onSuccess { result ->
+                    message.value = if (result.changed) {
+                        "Removed from ${result.collectionName}"
+                    } else {
+                        "Collection already updated"
+                    }
+                }
+                .onFailure { error ->
+                    Log.e("XReader", "Remove from collection failed for ${item.book.id}", error)
+                    message.value = error.message ?: "Could not update collection"
+                }
+        }
+    }
+
     fun updateMetadata(
         book: BookEntity,
         title: String,
@@ -330,6 +390,7 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
             LibraryGroup.IN_PROGRESS -> filter { it.isLibraryInProgress() }
             LibraryGroup.FINISHED -> filter { it.isLibraryFinished() }
             LibraryGroup.FAVORITES -> filter { it.book.favorite }
+            LibraryGroup.COLLECTIONS -> filter { it.collections.isNotEmpty() }
             else -> this
         }
 
@@ -358,6 +419,9 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
 
     private fun bookCount(count: Int): String =
         if (count == 1) "1 book" else "$count books"
+
+    private fun List<CollectionEntity>.toUiItems(): List<CollectionUiItem> =
+        map { CollectionUiItem(id = it.id, name = it.name) }
 
     companion object {
         fun factory(container: AppContainer): ViewModelProvider.Factory =

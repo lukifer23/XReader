@@ -81,6 +81,42 @@ data class GenreEntity(
 )
 
 @Entity(
+    tableName = "collections",
+    indices = [Index(value = ["name"], unique = true)]
+)
+data class CollectionEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @ColumnInfo(collate = ColumnInfo.NOCASE) val name: String,
+    val createdAt: Long,
+    val updatedAt: Long,
+)
+
+@Entity(
+    tableName = "book_collections",
+    primaryKeys = ["bookId", "collectionId"],
+    foreignKeys = [
+        ForeignKey(
+            entity = BookEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["bookId"],
+            onDelete = ForeignKey.CASCADE
+        ),
+        ForeignKey(
+            entity = CollectionEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["collectionId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [Index(value = ["bookId"]), Index(value = ["collectionId"])]
+)
+data class BookCollectionEntity(
+    val bookId: Long,
+    val collectionId: Long,
+    val addedAt: Long,
+)
+
+@Entity(
     tableName = "reading_states",
     foreignKeys = [
         ForeignKey(

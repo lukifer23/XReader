@@ -58,7 +58,7 @@ class AppContainer(
         AnnotationBackupService(appContext, annotationRepository)
     }
     private val libraryBackupRepository: LibraryBackupRepository by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
-        LibraryBackupRepository(database.books(), database.reading())
+        LibraryBackupRepository(database.books(), database.collections(), database.reading())
     }
     val libraryBackupService: LibraryBackupService by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         LibraryBackupService(appContext, libraryBackupRepository)

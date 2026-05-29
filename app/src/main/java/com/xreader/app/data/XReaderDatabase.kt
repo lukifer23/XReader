@@ -14,6 +14,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         AuthorEntity::class,
         SeriesEntity::class,
         GenreEntity::class,
+        CollectionEntity::class,
+        BookCollectionEntity::class,
         ReadingStateEntity::class,
         ReadingSessionEntity::class,
         AnnotationEntity::class,
@@ -22,12 +24,13 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SearchIndexFtsEntity::class,
         DictionaryEntryEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
 abstract class XReaderDatabase : RoomDatabase() {
     abstract fun books(): BookDao
+    abstract fun collections(): CollectionDao
     abstract fun reading(): ReadingDao
     abstract fun annotations(): AnnotationDao
     abstract fun search(): SearchDao
@@ -43,7 +46,7 @@ abstract class XReaderDatabase : RoomDatabase() {
                     XReaderDatabase::class.java,
                     "xreader.db"
                 )
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .fallbackToDestructiveMigration(false)
                     .build()
                     .also { instance = it }
@@ -52,6 +55,36 @@ abstract class XReaderDatabase : RoomDatabase() {
         private val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE books ADD COLUMN coverImagePath TEXT")
+            }
+        }
+
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS collections (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        name TEXT COLLATE NOCASE NOT NULL,
+                        createdAt INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_collections_name ON collections(name)")
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS book_collections (
+                        bookId INTEGER NOT NULL,
+                        collectionId INTEGER NOT NULL,
+                        addedAt INTEGER NOT NULL,
+                        PRIMARY KEY(bookId, collectionId),
+                        FOREIGN KEY(bookId) REFERENCES books(id) ON UPDATE NO ACTION ON DELETE CASCADE,
+                        FOREIGN KEY(collectionId) REFERENCES collections(id) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_book_collections_bookId ON book_collections(bookId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_book_collections_collectionId ON book_collections(collectionId)")
             }
         }
     }

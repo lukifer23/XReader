@@ -202,6 +202,11 @@ internal fun groupBooks(
         LibraryGroup.YEARS -> books.groupBy { it.book.year?.toString() ?: NO_YEAR_LABEL }
             .mapValues { (_, items) -> items.sortedForLibrary(sort) }
             .sortedYearGroups(sort)
+        LibraryGroup.COLLECTIONS -> books
+            .flatMap { item -> item.collections.map { collection -> collection.name to item } }
+            .groupBy(keySelector = { it.first }, valueTransform = { it.second })
+            .mapValues { (_, items) -> items.distinctBy { it.book.id }.sortedForLibrary(sort) }
+            .sortedLibraryGroups(sort)
         else -> mapOf("" to books.sortedForLibrary(sort))
     }
 

@@ -29,7 +29,7 @@ This is the working competitive map for XReader. It should drive implementation 
 | Private app library | Implemented with SAF file/folder copies and checksum duplicates. | Some apps scan folders or request broad file access. | Preserve SAF-only imports and private copies. |
 | Resume/progress | Implemented with Readium locators and sessions. | Table stakes; sync apps add cloud resume. | Keep testing across restarts and screen sizes. |
 | Notes/highlights/bookmarks | Implemented with local JSON backup/import and human-readable Markdown export. | Table stakes in strong readers. | Keep export local and useful outside the app. |
-| Library grouping/sorting | Implemented across books, authors, series, genres, years, recent, unread, in progress, finished, and favorites; the existing sort control now applies to grouped views and in-group book order. | Strong readers support flexible organization; cluttered apps often expose too many parallel filters. | Keep the single compact control surface and make it behave predictably. |
+| Library grouping/sorting | Implemented across books, authors, series, genres, years, custom collections, recent, unread, in progress, finished, and favorites; the existing sort control now applies to grouped views and in-group book order. | Strong readers support flexible organization; cluttered apps often expose too many parallel filters. | Keep the single compact control surface and make it behave predictably. |
 | Dictionary | Offline WordNet implemented with common possessive, plural, irregular plural, and inflected-form lookup. | Many rely on external dictionaries or online lookup. | Strong differentiator; keep improving morphology/phrase handling. |
 | Search | Local full-text index plus Readium fallback. | Common, but quality varies by format. | Keep hardening PDF/EPUB extraction. |
 | Analytics | Active reading, WPM, streaks, range-aware activity, book/author/genre summaries, and local CSV/JSON export. | Moon+ and some ecosystems have stats. | Continue improving trend evidence and long-library performance. |
@@ -65,6 +65,7 @@ The research points to several areas that matter more than raw feature count:
 - ODT import. OpenDocument text files convert locally into EPUB with metadata, headings, paragraphs, lists, tables, and searchable text preserved in reading order.
 - Markdown notes export. Notes, highlights, and bookmarks can leave the app in a readable grouped document, while JSON remains the restore-oriented backup format.
 - Manual finished-state control. The book action menu can mark books finished or not finished, and library filters/counts/progress displays use one finished-state-aware classification.
+- Custom collections. The book action menu can add or remove a book from user-named collections, and the existing library group control can browse those collections without adding another permanent tab or top-level mode.
 
 ## Product Rules From The Research
 

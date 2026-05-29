@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -49,6 +50,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -197,6 +199,8 @@ internal fun LibraryRoute(
             onOpenSearchResult = openReaderAt,
             onToggleFavorite = viewModel::toggleFavorite,
             onSetFinished = viewModel::setFinished,
+            onAddToCollection = viewModel::addToCollection,
+            onRemoveFromCollection = viewModel::removeFromCollection,
             onShowAll = {
                 viewModel.setQuery("")
                 viewModel.setGroup(LibraryGroup.BOOKS)
@@ -316,6 +320,8 @@ internal fun LibraryScreen(
     onOpenSearchResult: (Long, String?) -> Unit,
     onToggleFavorite: (BookListItem) -> Unit,
     onSetFinished: (BookListItem, Boolean) -> Unit,
+    onAddToCollection: (BookListItem, String) -> Unit,
+    onRemoveFromCollection: (BookListItem, CollectionUiItem) -> Unit,
     onShowAll: () -> Unit,
     onUpdateMetadata: (BookEntity, String, String, Int?, String?, String?, Double?, Boolean) -> Unit,
     onReplaceCover: (BookEntity, Uri) -> Unit,
@@ -327,6 +333,7 @@ internal fun LibraryScreen(
     var editing by remember { mutableStateOf<BookEntity?>(null) }
     var deleteCandidate by remember { mutableStateOf<BookEntity?>(null) }
     var coverTarget by remember { mutableStateOf<BookEntity?>(null) }
+    var collectionsTarget by remember { mutableStateOf<BookListItem?>(null) }
     var searchExpanded by remember { mutableStateOf(false) }
     val supportedCoverMimeTypes = remember {
         arrayOf("image/jpeg", "image/png", "image/webp", "image/*")
@@ -438,6 +445,7 @@ internal fun LibraryScreen(
                             onOpen = { onOpenBook(item.book.id) },
                             onFavorite = { onToggleFavorite(item) },
                             onSetFinished = { finished -> onSetFinished(item, finished) },
+                            onCollections = { collectionsTarget = item },
                             onEdit = { editing = item.book },
                             onDelete = { deleteCandidate = item.book }
                         )
@@ -465,6 +473,16 @@ internal fun LibraryScreen(
                 onUpdateMetadata(book, title, author, year, genre, series, index, applyToSeries)
                 editing = null
             }
+        )
+    }
+    collectionsTarget?.let { target ->
+        val item = state.allBooks.firstOrNull { it.book.id == target.book.id } ?: target
+        BookCollectionsDialog(
+            item = item,
+            allCollections = state.collections,
+            onDismiss = { collectionsTarget = null },
+            onAdd = { name -> onAddToCollection(item, name) },
+            onRemove = { collection -> onRemoveFromCollection(item, collection) }
         )
     }
     deleteCandidate?.let { book ->
@@ -740,6 +758,12 @@ internal fun LibraryUiState.emptyStateCopy(): LibraryEmptyStateCopy =
             primaryAction = "Show all",
             importsBooks = false
         )
+        group == LibraryGroup.COLLECTIONS -> LibraryEmptyStateCopy(
+            title = "No collections yet",
+            body = "Add a book to a collection from its book actions.",
+            primaryAction = "Show all",
+            importsBooks = false
+        )
         else -> LibraryEmptyStateCopy(
             title = "Nothing here",
             body = "Switch filters to see the rest of your library.",
@@ -781,12 +805,117 @@ internal fun LibraryEmptyState(
 }
 
 @Composable
+internal fun BookCollectionsDialog(
+    item: BookListItem,
+    allCollections: List<CollectionUiItem>,
+    onDismiss: () -> Unit,
+    onAdd: (String) -> Unit,
+    onRemove: (CollectionUiItem) -> Unit,
+) {
+    var collectionName by remember(item.book.id) { mutableStateOf("") }
+    val currentIds = item.collections.mapTo(mutableSetOf()) { it.id }
+    val availableCollections = allCollections.filterNot { it.id in currentIds }
+    fun addCollection(name: String = collectionName) {
+        val cleaned = name.trim()
+        if (cleaned.isNotBlank()) {
+            onAdd(cleaned)
+            collectionName = ""
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Collections") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    item.book.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("On this book", style = MaterialTheme.typography.labelLarge)
+                    if (item.collections.isEmpty()) {
+                        Text(
+                            "No collections",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            item.collections.forEach { collection ->
+                                FilterChip(
+                                    selected = true,
+                                    onClick = { onRemove(collection) },
+                                    label = {
+                                        Text(
+                                            collection.name,
+                                            modifier = Modifier.widthIn(max = 220.dp),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    },
+                                    trailingIcon = { Icon(Icons.Filled.Close, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                                )
+                            }
+                        }
+                    }
+                }
+                if (availableCollections.isNotEmpty()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Add existing", style = MaterialTheme.typography.labelLarge)
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            availableCollections.forEach { collection ->
+                                FilterChip(
+                                    selected = false,
+                                    onClick = { addCollection(collection.name) },
+                                    label = {
+                                        Text(
+                                            collection.name,
+                                            modifier = Modifier.widthIn(max = 220.dp),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = collectionName,
+                        onValueChange = { collectionName = it },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        label = { Text("New collection") }
+                    )
+                    Button(
+                        onClick = { addCollection() },
+                        enabled = collectionName.isNotBlank()
+                    ) {
+                        Text("Add")
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } }
+    )
+}
+
+@Composable
 internal fun BookRow(
     item: BookListItem,
     density: LibraryDensity,
     onOpen: () -> Unit,
     onFavorite: () -> Unit,
     onSetFinished: (Boolean) -> Unit,
+    onCollections: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -867,6 +996,14 @@ internal fun BookRow(
                         onClick = {
                             menuOpen = false
                             onSetFinished(!item.book.finished)
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Collections") },
+                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null) },
+                        onClick = {
+                            menuOpen = false
+                            onCollections()
                         }
                     )
                     DropdownMenuItem(

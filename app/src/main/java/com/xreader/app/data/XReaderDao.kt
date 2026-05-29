@@ -9,6 +9,12 @@ import androidx.room.Update
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 
+data class BookCollectionName(
+    val bookId: Long,
+    val collectionId: Long,
+    val name: String,
+)
+
 @Dao
 interface BookDao {
     @Query(
@@ -120,6 +126,52 @@ interface BookDao {
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertGenre(genre: GenreEntity): Long
+}
+
+@Dao
+interface CollectionDao {
+    @Query("SELECT * FROM collections ORDER BY name COLLATE NOCASE ASC")
+    fun observeCollections(): Flow<List<CollectionEntity>>
+
+    @Query("SELECT * FROM collections ORDER BY name COLLATE NOCASE ASC")
+    suspend fun allCollections(): List<CollectionEntity>
+
+    @Query("SELECT * FROM book_collections")
+    suspend fun allBookCollections(): List<BookCollectionEntity>
+
+    @Query(
+        """
+        SELECT book_collections.bookId AS bookId, collections.id AS collectionId, collections.name AS name
+        FROM book_collections
+        INNER JOIN collections ON collections.id = book_collections.collectionId
+        ORDER BY collections.name COLLATE NOCASE ASC
+        """
+    )
+    fun observeBookCollectionNames(): Flow<List<BookCollectionName>>
+
+    @Query("SELECT * FROM collections WHERE id = :collectionId")
+    suspend fun collectionById(collectionId: Long): CollectionEntity?
+
+    @Query("SELECT * FROM collections WHERE name = :name COLLATE NOCASE LIMIT 1")
+    suspend fun collectionByName(name: String): CollectionEntity?
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertCollection(collection: CollectionEntity): Long
+
+    @Query("UPDATE collections SET updatedAt = :updatedAt WHERE id = :collectionId")
+    suspend fun touchCollection(collectionId: Long, updatedAt: Long)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertBookCollection(entity: BookCollectionEntity): Long
+
+    @Query("DELETE FROM book_collections WHERE bookId = :bookId AND collectionId = :collectionId")
+    suspend fun deleteBookCollection(bookId: Long, collectionId: Long): Int
+
+    @Query("SELECT COUNT(*) FROM book_collections WHERE collectionId = :collectionId")
+    suspend fun memberCount(collectionId: Long): Int
+
+    @Query("DELETE FROM collections WHERE id = :collectionId")
+    suspend fun deleteCollection(collectionId: Long): Int
 }
 
 @Dao
