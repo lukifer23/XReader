@@ -184,6 +184,7 @@ internal fun ReadiumPublicationView(
                 latestLocatorHandler(locator)
                 val index = publication.positionIndexFor(locator).coerceAtLeast(0)
                 controller.currentPage = index
+                controller.currentUnit = index
                 controller.pageCount = publication.units.size.coerceAtLeast(1)
             },
             context = context,
@@ -245,6 +246,7 @@ internal fun ReadiumPublicationView(
             latestLocatorHandler(locator)
             val index = publication.positionIndexFor(locator).coerceAtLeast(0)
             controller.currentPage = index
+            controller.currentUnit = index
             controller.pageCount = publication.units.size.coerceAtLeast(1)
         }
     }

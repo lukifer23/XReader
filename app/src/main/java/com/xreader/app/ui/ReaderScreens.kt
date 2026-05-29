@@ -204,7 +204,7 @@ internal fun ReaderScreen(
 ) {
     val publication = state.publication as? OpenPublication.Readium ?: return
     val units = publication.units
-    val pagingController = remember(publication.book.id) { ReaderPagingController() }
+    val pagingController = remember(publication.book.id) { ReaderPagingController(initialUnit = state.currentUnit) }
     var searchOpen by remember(publication.book.id) { mutableStateOf(false) }
     var navigationOpen by remember(publication.book.id) { mutableStateOf(false) }
     var readerSettingsOpen by remember(publication.book.id) { mutableStateOf(false) }
@@ -282,7 +282,7 @@ internal fun ReaderScreen(
                 fullScreen = state.settings.fullScreen,
                 onToggleFullScreen = onToggleFullScreen,
                 readAloud = state.readAloud,
-                onToggleReadAloud = { onToggleReadAloud(pagingController.currentPage) },
+                onToggleReadAloud = { onToggleReadAloud(pagingController.currentUnit) },
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .zIndex(2f)
@@ -353,8 +353,9 @@ internal fun ReaderScreen(
     }
 }
 
-internal class ReaderPagingController {
-    var currentPage by mutableIntStateOf(0)
+internal class ReaderPagingController(initialUnit: Int = 0) {
+    var currentPage by mutableIntStateOf(initialUnit.coerceAtLeast(0))
+    var currentUnit by mutableIntStateOf(initialUnit.coerceAtLeast(0))
     var pageCount by mutableIntStateOf(1)
     var goToPage: (Int) -> Unit = {}
     var goToUnit: (Int) -> Unit = {}
