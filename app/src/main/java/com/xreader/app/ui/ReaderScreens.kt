@@ -6,7 +6,6 @@ import android.app.Activity
 import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -669,90 +668,6 @@ internal fun ReaderQuickSettingsDialog(
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } }
-    )
-}
-
-@Composable
-internal fun ReaderSearchDialog(
-    state: ReaderUiState,
-    onQuery: (String) -> Unit,
-    onRun: () -> Unit,
-    onDismiss: () -> Unit,
-    onJump: (String) -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Search") },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 220.dp, max = 420.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(
-                        value = state.searchQuery,
-                        onValueChange = onQuery,
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        label = { Text("Search this book") }
-                    )
-                    IconButton(onClick = onRun) {
-                        Icon(Icons.Filled.Search, contentDescription = "Run search")
-                    }
-                }
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    when {
-                        state.searchRunning -> {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(top = 18.dp),
-                                horizontalArrangement = Arrangement.Center
-                            ) {
-                                CircularProgressIndicator()
-                            }
-                        }
-                        state.searchPerformed && state.searchResults.isEmpty() -> {
-                            Text(
-                                text = "No matches found.",
-                                modifier = Modifier.padding(8.dp),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        !state.searchPerformed -> {
-                            Text(
-                                text = "Enter a word or phrase.",
-                                modifier = Modifier.padding(8.dp),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        else -> {
-                            state.searchResults.forEach { result ->
-                                Text(
-                                    text = "${result.title}: ${result.snippet}",
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { onJump(result.locatorJson) }
-                                        .padding(8.dp),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    maxLines = 3,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Done") }
-        }
     )
 }
 

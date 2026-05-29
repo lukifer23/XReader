@@ -76,6 +76,7 @@ class ReaderViewModel(
     private var tracker: ReadingAnalyticsTracker? = null
     private var readerClosed = false
     private var saveJob: Job? = null
+    private var searchJob: Job? = null
     private var lastReadingState: ReadingStateEntity? = null
     private var ignoreStoredStateUntilFirstLocator = initialLocatorOverride != null
     private var deferredObserversStarted = false
@@ -390,17 +391,47 @@ class ReaderViewModel(
     }
 
     fun setSearchQuery(value: String) {
-        _uiState.update { it.copy(searchQuery = value) }
+        val previousQuery = _uiState.value.searchQuery.trim()
+        val nextQuery = value.trim()
+        if (previousQuery != nextQuery) {
+            searchJob?.cancel()
+            searchJob = null
+        }
+        _uiState.update {
+            if (previousQuery == nextQuery) {
+                it.copy(searchQuery = value)
+            } else {
+                it.copy(
+                    searchQuery = value,
+                    searchResults = emptyList(),
+                    searchRunning = false,
+                    searchPerformed = false
+                )
+            }
+        }
     }
 
     fun runSearch() {
         val query = _uiState.value.searchQuery.trim()
         if (query.isBlank()) {
+            searchJob?.cancel()
+            searchJob = null
             _uiState.update { it.copy(searchResults = emptyList(), searchRunning = false, searchPerformed = false) }
             return
         }
-        viewModelScope.launch {
-            val publication = _uiState.value.publication as? OpenPublication.Readium ?: return@launch
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
+            val publication = _uiState.value.publication as? OpenPublication.Readium
+            if (publication == null) {
+                _uiState.update { current ->
+                    if (current.searchQuery.trim() == query) {
+                        current.copy(searchResults = emptyList(), searchRunning = false, searchPerformed = true)
+                    } else {
+                        current
+                    }
+                }
+                return@launch
+            }
             _uiState.update { it.copy(searchRunning = true, searchPerformed = false) }
             val readiumResults = withTimeoutOrNull(1_500L) {
                 runCatching { container.publicationService.search(publication, query) }
@@ -409,13 +440,19 @@ class ReaderViewModel(
             val results = readiumResults.ifEmpty {
                 fallbackSearchResults(publication, query)
             }
-            _uiState.update {
-                it.copy(searchResults = results, searchRunning = false, searchPerformed = true)
+            _uiState.update { current ->
+                if (current.searchQuery.trim() == query) {
+                    current.copy(searchResults = results, searchRunning = false, searchPerformed = true)
+                } else {
+                    current
+                }
             }
         }
     }
 
     fun clearSearch() {
+        searchJob?.cancel()
+        searchJob = null
         _uiState.update {
             it.copy(searchQuery = "", searchResults = emptyList(), searchRunning = false, searchPerformed = false)
         }
@@ -728,6 +765,7 @@ class ReaderViewModel(
     }
 
     override fun onCleared() {
+        searchJob?.cancel()
         flushSession()
         _uiState.value.publication?.close()
         super.onCleared()
