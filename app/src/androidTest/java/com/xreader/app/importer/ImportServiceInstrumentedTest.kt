@@ -2,6 +2,8 @@ package com.xreader.app.importer
 
 import android.content.Context
 import android.content.ContextWrapper
+import android.graphics.Bitmap
+import android.graphics.Color
 import android.net.Uri
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
@@ -17,7 +19,10 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.io.ByteArrayOutputStream
 import java.io.File
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 
 @RunWith(AndroidJUnit4::class)
 class ImportServiceInstrumentedTest {
@@ -74,6 +79,30 @@ class ImportServiceInstrumentedTest {
         val rabbitResults = db.search().searchBook(result.bookId, "normalizedBody:rabbit*")
         assertTrue(aliceResults.any { it.body.contains("Alice", ignoreCase = true) })
         assertTrue(rabbitResults.any { it.body.contains("White Rabbit", ignoreCase = true) })
+    }
+
+    @Test
+    fun importsCbzAsPrivateFixedLayoutEpub() = runBlocking {
+        val source = File(root, "source/Space Comic.cbz").apply {
+            parentFile?.mkdirs()
+        }
+        ZipOutputStream(source.outputStream().buffered()).use { zip ->
+            zip.writeEntry("page2.png", pngBytes(Color.GREEN))
+            zip.writeEntry("page1.png", pngBytes(Color.BLUE))
+        }
+
+        val result = ImportService(context, db).import(Uri.fromFile(source))
+
+        assertFalse(result.duplicate)
+        val book = requireNotNull(db.books().getBook(result.bookId))
+        assertEquals(BookFormat.EPUB, book.format)
+        assertEquals("cbz", book.sourceExtension)
+        assertEquals("Space Comic", book.title)
+        assertEquals(2, book.pageCount)
+        assertEquals(0, book.wordCount)
+        assertTrue(File(context.filesDir, book.filePath).exists())
+        assertTrue(book.coverImagePath?.let { File(context.filesDir, it).exists() } == true)
+        assertEquals(0, db.search().indexedRowCountForBook(result.bookId))
     }
 
     @Test
@@ -138,5 +167,21 @@ class ImportServiceInstrumentedTest {
         assertFalse(repair.failed)
         assertTrue(repair.searchRows > 0)
         assertEquals(repair.searchRows, service.bookHealth(result.bookId).searchRows)
+    }
+
+    private fun ZipOutputStream.writeEntry(name: String, bytes: ByteArray) {
+        putNextEntry(ZipEntry(name))
+        write(bytes)
+        closeEntry()
+    }
+
+    private fun pngBytes(color: Int): ByteArray {
+        val bitmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+        bitmap.eraseColor(color)
+        return ByteArrayOutputStream().use { output ->
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
+            bitmap.recycle()
+            output.toByteArray()
+        }
     }
 }

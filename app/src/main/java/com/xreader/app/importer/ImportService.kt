@@ -69,6 +69,7 @@ class ImportService(
 
     private val epubParser = EpubParser()
     private val txtConverter = TxtToEpubConverter()
+    private val cbzConverter = CbzToEpubConverter()
     private val pdfTools = PdfTools(context)
 
     suspend fun importMany(uris: List<Uri>): ImportBatchResult = withContext(Dispatchers.IO) {
@@ -119,10 +120,18 @@ class ImportService(
         val stagedFile = File(stagingDir, "$checksum-${System.nanoTime()}.$storedExtension")
 
         try {
-            if (sourceExtension == "txt") {
-                txtConverter.convert(tmp, stagedFile, displayName.substringBeforeLast('.'))
-            } else {
-                tmp.copyTo(stagedFile, overwrite = true)
+            val convertedPageCount = when (sourceExtension) {
+                "txt" -> {
+                    txtConverter.convert(tmp, stagedFile, displayName.substringBeforeLast('.'))
+                    null
+                }
+                "cbz" -> {
+                    cbzConverter.convert(tmp, stagedFile, displayName.substringBeforeLast('.')).pageCount
+                }
+                else -> {
+                    tmp.copyTo(stagedFile, overwrite = true)
+                    null
+                }
             }
             tmp.delete()
 
@@ -158,7 +167,7 @@ class ImportService(
                 checksum = checksum,
                 fileSizeBytes = storedFile.length(),
                 wordCount = wordCount,
-                pageCount = parsed.pageCount,
+                pageCount = parsed.pageCount ?: convertedPageCount,
                 importedAt = now,
                 updatedAt = now
             )
@@ -680,11 +689,14 @@ class ImportService(
     }
 
     private companion object {
-        val SUPPORTED_BOOK_EXTENSIONS = setOf("epub", "pdf", "txt")
+        val SUPPORTED_BOOK_EXTENSIONS = setOf("epub", "pdf", "txt", "cbz")
         val SUPPORTED_BOOK_MIME_TYPES = setOf(
             "application/epub+zip",
             "application/pdf",
-            "text/plain"
+            "text/plain",
+            "application/zip",
+            "application/x-cbz",
+            "application/vnd.comicbook+zip"
         )
         const val CUSTOM_COVER_MAX_EDGE = 1400
         const val CUSTOM_COVER_JPEG_QUALITY = 90

@@ -114,7 +114,7 @@ class PublicationService(
         }
 
     private fun List<Locator>.toReadingUnits(book: BookEntity): List<ReadingUnit> {
-        val estimatedWordsPerPosition = if (isEmpty()) {
+        val estimatedWordsPerPosition = if (isEmpty() || book.wordCount <= 0) {
             0
         } else {
             (book.wordCount.toDouble() / size.toDouble()).roundToInt().coerceAtLeast(1)

@@ -360,7 +360,8 @@ class EpubParser {
 
     private fun htmlToUnits(input: InputStream, chapterIndex: Int, entryName: String): List<ReadingUnit> {
         val document = Jsoup.parse(input, null, "")
-        document.select("script,style,nav[epub|type=toc],nav[type=toc]").remove()
+        document.select("script,style,nav").remove()
+        document.select("img,svg,image").remove()
         val heading = document.select("h1,h2,h3,title").firstOrNull()?.text()?.trim().orEmpty()
         val blocks = document.select("h1,h2,h3,h4,p,li,blockquote")
             .map { it.text().trim() }
@@ -396,6 +397,7 @@ class EpubParser {
                 "css" -> "text/css"
                 "jpg", "jpeg" -> "image/jpeg"
                 "png" -> "image/png"
+                "webp" -> "image/webp"
                 "svg" -> "image/svg+xml"
                 else -> "application/octet-stream"
             }

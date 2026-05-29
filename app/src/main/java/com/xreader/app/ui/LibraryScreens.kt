@@ -103,6 +103,9 @@ internal fun LibraryRoute(
             "application/epub+zip",
             "application/pdf",
             "text/plain",
+            "application/zip",
+            "application/x-cbz",
+            "application/vnd.comicbook+zip",
             "application/octet-stream"
         )
     }
@@ -725,11 +728,11 @@ internal fun BookRow(
                 )
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
-                        Text(item.book.format.name, modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp), style = MaterialTheme.typography.bodySmall)
+                        Text(bookFormatLabel(item.book), modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp), style = MaterialTheme.typography.bodySmall)
                     }
                     Text("${(progress * 100).roundToInt()}% read", style = MaterialTheme.typography.bodySmall)
                     if (!compact) {
-                        Text(wordCountLabel(item.book.wordCount), style = MaterialTheme.typography.bodySmall)
+                        Text(bookLengthLabel(item.book), style = MaterialTheme.typography.bodySmall)
                     }
                     item.book.genre?.let {
                         Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)

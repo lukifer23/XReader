@@ -62,8 +62,10 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.xreader.app.data.AnnotationKind
+import com.xreader.app.data.BookEntity
 import com.xreader.app.data.ReaderTheme
 import com.xreader.app.settings.LibrarySort
+import java.util.Locale
 import kotlin.math.roundToInt
 
 @Composable
@@ -333,6 +335,20 @@ internal const val READER_WEBVIEW_WARMUP_DELAY_MS = 3_500L
 
 internal fun wordCountLabel(words: Int): String =
     if (words >= 1_000) "${(words / 1_000.0).roundToInt()}k words" else "$words words"
+
+internal fun bookFormatLabel(book: BookEntity): String =
+    when (book.sourceExtension.lowercase(Locale.US)) {
+        "txt" -> "TXT"
+        "cbz" -> "CBZ"
+        else -> book.format.name
+    }
+
+internal fun bookLengthLabel(book: BookEntity): String =
+    if (book.wordCount <= 0 && book.pageCount != null) {
+        "${book.pageCount} ${if (book.pageCount == 1) "page" else "pages"}"
+    } else {
+        wordCountLabel(book.wordCount)
+    }
 
 internal fun formatDuration(millis: Long): String {
     val minutes = (millis / 60_000).coerceAtLeast(0)
