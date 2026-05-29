@@ -96,6 +96,30 @@ internal fun ReadiumPublicationView(
     val latestTapEdgeInsetPx by rememberUpdatedState(tapEdgeInsetPx)
     val selectionScope = rememberCoroutineScope()
     var navigator by remember(publication.book.id) { mutableStateOf<OverflowableNavigator?>(null) }
+    val keyListener = remember(publication.book.id) {
+        View.OnKeyListener { view, keyCode, event ->
+            val active = navigator ?: return@OnKeyListener false
+            if (!shouldHandleReaderHardwareKey(event.action, event.repeatCount)) return@OnKeyListener false
+            return@OnKeyListener when (resolveReaderHardwareKeyAction(keyCode)) {
+                ReaderHardwareKeyAction.BACKWARD -> {
+                    active.goBackward(animated = latestSettings.pageTurnAnimations)
+                    view.post { active.publicationView.prepareReaderInputRecursively(keyListener = null) }
+                    true
+                }
+                ReaderHardwareKeyAction.FORWARD -> {
+                    active.goForward(animated = latestSettings.pageTurnAnimations)
+                    view.post { active.publicationView.prepareReaderInputRecursively(keyListener = null) }
+                    true
+                }
+                ReaderHardwareKeyAction.CHROME -> {
+                    view.post { active.publicationView.prepareReaderInputRecursively(keyListener = null) }
+                    latestToggleChrome()
+                    true
+                }
+                null -> false
+            }
+        }
+    }
 
     if (activity == null) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -171,7 +195,6 @@ internal fun ReadiumPublicationView(
                 }
             }
         }
-
         val factory = publication.fragmentFactory(
             initialLocator = initialLocator,
             settings = settings,
@@ -199,11 +222,12 @@ internal fun ReadiumPublicationView(
             }
         }
         navigator = activity.supportFragmentManager.findFragmentByTag(tag) as? OverflowableNavigator
-        navigator?.publicationView?.disableScrollbarsRecursively()
+        navigator?.publicationView?.prepareReaderInputRecursively(keyListener)
         navigator?.addInputListener(inputListener)
 
         onDispose {
             navigator?.removeInputListener(inputListener)
+            navigator?.publicationView?.clearReaderKeyListenersRecursively()
             navigator = null
             activity.supportFragmentManager.findFragmentByTag(tag)?.let { fragment ->
                 activity.supportFragmentManager.commitNow(allowStateLoss = true) {
@@ -265,7 +289,7 @@ internal fun ReadiumPublicationView(
     LaunchedEffect(navigator, publication.book.id) {
         val active = navigator ?: return@LaunchedEffect
         repeat(16) {
-            active.publicationView.disableScrollbarsRecursively()
+            active.publicationView.prepareReaderInputRecursively(keyListener)
             delay(250)
         }
     }
@@ -374,12 +398,38 @@ private fun Context.openExternal(url: String) {
 }
 
 private fun View.disableScrollbarsRecursively() {
-    isVerticalScrollBarEnabled = false
-    isHorizontalScrollBarEnabled = false
-    overScrollMode = View.OVER_SCROLL_NEVER
+    disableScrollbars()
     if (this is ViewGroup) {
         for (index in 0 until childCount) {
             getChildAt(index).disableScrollbarsRecursively()
+        }
+    }
+}
+
+private fun View.disableScrollbars() {
+    isVerticalScrollBarEnabled = false
+    isHorizontalScrollBarEnabled = false
+    overScrollMode = View.OVER_SCROLL_NEVER
+}
+
+private fun View.prepareReaderInputRecursively(keyListener: View.OnKeyListener?) {
+    disableScrollbars()
+    isFocusable = true
+    isFocusableInTouchMode = true
+    keyListener?.let(::setOnKeyListener)
+    if (this is ViewGroup) {
+        for (index in 0 until childCount) {
+            getChildAt(index).prepareReaderInputRecursively(keyListener)
+        }
+    }
+    if (hasFocus().not()) requestFocus()
+}
+
+private fun View.clearReaderKeyListenersRecursively() {
+    setOnKeyListener(null)
+    if (this is ViewGroup) {
+        for (index in 0 until childCount) {
+            getChildAt(index).clearReaderKeyListenersRecursively()
         }
     }
 }

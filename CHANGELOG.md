@@ -25,7 +25,7 @@ Initial public repository snapshot.
 - Unified library search, sorting, density, and grouping controls to reduce duplicate chrome; sorting now applies predictably to grouped library views and in-group book order.
 - Library metadata and health UI split into focused components to keep future polish changes lower-risk.
 - Per-book library health checks and targeted repair from the metadata dialog.
-- In-reader navigation by swipe, calibrated tap zones, hardware keys, TOC, bookmarks, search results, progress scrubber, and Back-based return history after manual jumps.
+- In-reader navigation by swipe, calibrated tap zones, hardware keyboard/DPAD keys, TOC, bookmarks, search results, progress scrubber, and Back-based return history after manual jumps.
 - Bookmarks now use the exact visible Readium location when available, while still recognizing older unit-level bookmarks.
 - Toolbar-created notes now attach to the exact visible reader location instead of only the coarse reading unit.
 - The in-reader navigation sheet now separates Contents, Bookmarks, and Notes into compact tabs instead of one mixed scroll.

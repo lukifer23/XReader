@@ -71,6 +71,7 @@ Manual metadata edits can optionally apply the edited genre and series name to o
 
 - persisted initial locator resume
 - calibrated tap-zone page navigation
+- hardware keyboard and DPAD page navigation without hijacking volume keys
 - chrome toggle
 - bounded return history for manual TOC, bookmark, note, and search-result jumps
 - selection actions for highlight, note, and dictionary lookup
@@ -134,7 +135,7 @@ Device checks should cover:
 
 - importing EPUB/PDF/TXT
 - opening a real EPUB and PDF
-- page navigation by swipe, tap, hardware key, TOC, bookmark, search result, scrubber, and Back-based return after manual jumps
+- page navigation by swipe, tap, hardware keyboard/DPAD keys, TOC, bookmark, search result, scrubber, and Back-based return after manual jumps
 - resume after process/app restart
 - adding/removing notes, highlights, and bookmarks
 - dictionary lookup from selected text
