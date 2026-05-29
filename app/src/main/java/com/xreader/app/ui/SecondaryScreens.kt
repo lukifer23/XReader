@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -882,30 +883,146 @@ private fun ReadAloudVoiceSettings(
     selectedVoiceName: String?,
     onSelected: (String?) -> Unit,
 ) {
+    var pickerOpen by remember { mutableStateOf(false) }
+    val selectedLabel = selectedVoiceLabel(voices, selectedVoiceName)
+    val selectedVoiceAvailable = selectedVoiceName == null || voices.any { it.name == selectedVoiceName }
+
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text("Read aloud voice", style = MaterialTheme.typography.titleSmall)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(
-                selected = selectedVoiceName == null,
-                onClick = { onSelected(null) },
-                label = { Text("Device default") }
-            )
-            voices.forEach { voice ->
-                FilterChip(
-                    selected = selectedVoiceName == voice.name,
-                    onClick = { onSelected(voice.name) },
-                    label = {
-                        Text(
-                            text = voice.label,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = selectedLabel,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
+                if (!selectedVoiceAvailable) {
+                    Text(
+                        text = "Unavailable on this device",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+            TextButton(onClick = { pickerOpen = true }) {
+                Text("Choose")
             }
         }
     }
+
+    if (pickerOpen) {
+        ReadAloudVoicePickerDialog(
+            voices = voices,
+            selectedVoiceName = selectedVoiceName,
+            onDismiss = { pickerOpen = false },
+            onSelected = { voiceName ->
+                onSelected(voiceName)
+                pickerOpen = false
+            }
+        )
+    }
 }
+
+@Composable
+private fun ReadAloudVoicePickerDialog(
+    voices: List<ReadAloudVoiceOption>,
+    selectedVoiceName: String?,
+    onDismiss: () -> Unit,
+    onSelected: (String?) -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Read aloud voice") },
+        text = {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 360.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                item {
+                    ReadAloudVoiceChoiceRow(
+                        label = "Device default",
+                        selected = selectedVoiceName == null,
+                        onClick = { onSelected(null) }
+                    )
+                }
+                items(voices, key = { it.name }) { voice ->
+                    ReadAloudVoiceChoiceRow(
+                        label = voice.label,
+                        selected = selectedVoiceName == voice.name,
+                        onClick = { onSelected(voice.name) }
+                    )
+                }
+                if (voices.isEmpty()) {
+                    item {
+                        Text(
+                            text = "No installed voices found.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        }
+    )
+}
+
+@Composable
+private fun ReadAloudVoiceChoiceRow(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    TextButton(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            if (selected) {
+                Icon(
+                    imageVector = Icons.Filled.Done,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
+                )
+            } else {
+                Spacer(Modifier.size(20.dp))
+            }
+            Text(
+                text = label,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+private fun selectedVoiceLabel(
+    voices: List<ReadAloudVoiceOption>,
+    selectedVoiceName: String?,
+): String =
+    selectedVoiceName?.let { selected ->
+        voices.firstOrNull { it.name == selected }?.label ?: "Selected voice unavailable"
+    } ?: "Device default"
 
 private fun activityTitle(
     range: AnalyticsRange,
