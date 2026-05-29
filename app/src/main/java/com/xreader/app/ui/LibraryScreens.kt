@@ -98,6 +98,7 @@ internal fun LibraryRoute(
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
     var importMenuOpen by remember { mutableStateOf(false) }
+    var importDialogOpen by remember { mutableStateOf(false) }
     val supportedBookMimeTypes = remember {
         arrayOf(
             "application/epub+zip",
@@ -136,6 +137,14 @@ internal fun LibraryRoute(
     val openFolderImportPicker = {
         if (!state.importing) folderLauncher.launch(null)
     }
+    fun runImportAction(action: LibraryImportAction) {
+        importMenuOpen = false
+        importDialogOpen = false
+        when (action) {
+            LibraryImportAction.FILES -> openFileImportPicker()
+            LibraryImportAction.FOLDER -> openFolderImportPicker()
+        }
+    }
 
     LaunchedEffect(state.message) {
         val message = state.message ?: return@LaunchedEffect
@@ -163,21 +172,9 @@ internal fun LibraryRoute(
                             }
                         }
                         DropdownMenu(expanded = importMenuOpen, onDismissRequest = { importMenuOpen = false }) {
-                            DropdownMenuItem(
-                                text = { Text("Import files") },
-                                leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null) },
-                                onClick = {
-                                    importMenuOpen = false
-                                    openFileImportPicker()
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Import folder") },
-                                leadingIcon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null) },
-                                onClick = {
-                                    importMenuOpen = false
-                                    openFolderImportPicker()
-                                }
+                            LibraryImportActionMenuItems(
+                                enabled = !state.importing,
+                                onAction = ::runImportAction
                             )
                         }
                     }
@@ -195,7 +192,7 @@ internal fun LibraryRoute(
             onGroup = viewModel::setGroup,
             onSort = viewModel::setSort,
             onToggleDensity = viewModel::toggleDensity,
-            onImport = openFileImportPicker,
+            onImport = { importDialogOpen = true },
             onOpenBook = { openReaderAt(it, null) },
             onOpenSearchResult = openReaderAt,
             onToggleFavorite = viewModel::toggleFavorite,
@@ -211,6 +208,97 @@ internal fun LibraryRoute(
             onDeleteBook = viewModel::deleteBook,
             modifier = Modifier.padding(padding)
         )
+    }
+    if (importDialogOpen) {
+        LibraryImportDialog(
+            importing = state.importing,
+            onDismiss = { importDialogOpen = false },
+            onAction = ::runImportAction
+        )
+    }
+}
+
+internal enum class LibraryImportAction {
+    FILES,
+    FOLDER,
+}
+
+@Composable
+private fun LibraryImportActionMenuItems(
+    enabled: Boolean,
+    onAction: (LibraryImportAction) -> Unit,
+) {
+    DropdownMenuItem(
+        text = { Text("Import files") },
+        leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null) },
+        enabled = enabled,
+        onClick = { onAction(LibraryImportAction.FILES) }
+    )
+    DropdownMenuItem(
+        text = { Text("Import folder") },
+        leadingIcon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null) },
+        enabled = enabled,
+        onClick = { onAction(LibraryImportAction.FOLDER) }
+    )
+}
+
+@Composable
+internal fun LibraryImportDialog(
+    importing: Boolean,
+    onDismiss: () -> Unit,
+    onAction: (LibraryImportAction) -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Import books") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (importing) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        Text("Importing books")
+                    }
+                } else {
+                    LibraryImportActionButton(
+                        label = "Import files",
+                        icon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                        onClick = { onAction(LibraryImportAction.FILES) }
+                    )
+                    LibraryImportActionButton(
+                        label = "Import folder",
+                        icon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null) },
+                        onClick = { onAction(LibraryImportAction.FOLDER) }
+                    )
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
+
+@Composable
+private fun LibraryImportActionButton(
+    label: String,
+    icon: @Composable () -> Unit,
+    onClick: () -> Unit,
+) {
+    TextButton(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            icon()
+            Text(label)
+        }
     }
 }
 
