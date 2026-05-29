@@ -17,7 +17,7 @@ This is the working product roadmap for the personal APK line. Items should appe
 ## Library Polish
 
 - Add broader bulk metadata tools beyond the current matching-series genre/series cleanup.
-- Add sort controls within each group.
+- Continue tuning grouped-library navigation now that Authors, Series, Genres, and Years honor the existing sort control for both group order and in-group book order.
 
 ## Later
 

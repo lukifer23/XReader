@@ -182,42 +182,104 @@ internal fun ErrorScreen(error: String, onBack: () -> Unit) {
     }
 }
 
-internal fun groupBooks(group: LibraryGroup, books: List<BookListItem>): Map<String, List<BookListItem>> =
+internal fun groupBooks(
+    group: LibraryGroup,
+    books: List<BookListItem>,
+    sort: LibrarySort,
+): Map<String, List<BookListItem>> =
     when (group) {
         LibraryGroup.AUTHORS -> books.groupBy { it.book.author }
-            .sortedLibraryGroups()
+            .mapValues { (_, items) -> items.sortedForLibrary(sort) }
+            .sortedLibraryGroups(sort)
         LibraryGroup.SERIES -> books.groupBy { it.book.series ?: NO_SERIES_LABEL }
-            .mapValues { (_, items) ->
-                items.sortedWith(
-                    compareBy<BookListItem> { it.book.seriesIndex ?: Double.MAX_VALUE }
-                        .thenBy { it.book.year ?: Int.MAX_VALUE }
-                        .thenBy { it.book.sortTitle }
-                )
-            }
-            .sortedLibraryGroups(emptyLabel = NO_SERIES_LABEL)
+            .mapValues { (_, items) -> items.sortedForLibrary(sort) }
+            .sortedLibraryGroups(sort, emptyLabel = NO_SERIES_LABEL)
         LibraryGroup.GENRES -> books.groupBy { it.book.genre ?: NO_GENRE_LABEL }
-            .sortedLibraryGroups(emptyLabel = NO_GENRE_LABEL)
+            .mapValues { (_, items) -> items.sortedForLibrary(sort) }
+            .sortedLibraryGroups(sort, emptyLabel = NO_GENRE_LABEL)
         LibraryGroup.YEARS -> books.groupBy { it.book.year?.toString() ?: NO_YEAR_LABEL }
-            .sortedYearGroups()
-        else -> mapOf("" to books)
+            .mapValues { (_, items) -> items.sortedForLibrary(sort) }
+            .sortedYearGroups(sort)
+        else -> mapOf("" to books.sortedForLibrary(sort))
     }
 
-private fun Map<String, List<BookListItem>>.sortedLibraryGroups(emptyLabel: String? = null): Map<String, List<BookListItem>> =
-    entries
-        .sortedWith(
-            compareBy<Map.Entry<String, List<BookListItem>>> { if (it.key == emptyLabel) 1 else 0 }
-                .thenBy { it.key.lowercase() }
+internal fun List<BookListItem>.sortedForLibrary(sort: LibrarySort): List<BookListItem> =
+    when (sort) {
+        LibrarySort.RECENT -> sortedWith(
+            compareByDescending<BookListItem> { it.libraryRecentTimestamp() }
+                .thenBy { it.book.sortTitle.lowercase() }
         )
+        LibrarySort.TITLE -> sortedWith(
+            compareBy<BookListItem> { it.book.sortTitle.lowercase() }
+                .thenBy { it.book.author.lowercase() }
+        )
+        LibrarySort.AUTHOR -> sortedWith(
+            compareBy<BookListItem> { it.book.author.lowercase() }
+                .thenBy { it.book.sortTitle.lowercase() }
+        )
+        LibrarySort.PROGRESS -> sortedWith(
+            compareByDescending<BookListItem> { it.displayLibraryProgress() }
+                .thenBy { it.book.sortTitle.lowercase() }
+        )
+        LibrarySort.SERIES -> sortedWith(
+            compareBy<BookListItem> { it.book.series?.lowercase() ?: it.book.sortTitle.lowercase() }
+                .thenBy { it.book.seriesIndex ?: Double.MAX_VALUE }
+                .thenBy { it.book.year ?: Int.MAX_VALUE }
+                .thenBy { it.book.sortTitle.lowercase() }
+        )
+    }
+
+private fun Map<String, List<BookListItem>>.sortedLibraryGroups(
+    sort: LibrarySort,
+    emptyLabel: String? = null,
+): Map<String, List<BookListItem>> =
+    entries
+        .sortedWith { left, right ->
+            val leftEmpty = if (left.key == emptyLabel) 1 else 0
+            val rightEmpty = if (right.key == emptyLabel) 1 else 0
+            if (leftEmpty != rightEmpty) {
+                leftEmpty.compareTo(rightEmpty)
+            } else {
+                sort.groupComparator().compare(left, right)
+            }
+        }
         .associateTo(LinkedHashMap()) { it.key to it.value }
 
-private fun Map<String, List<BookListItem>>.sortedYearGroups(): Map<String, List<BookListItem>> =
+private fun Map<String, List<BookListItem>>.sortedYearGroups(sort: LibrarySort): Map<String, List<BookListItem>> =
     entries
-        .sortedWith(
-            compareBy<Map.Entry<String, List<BookListItem>>> { if (it.key == NO_YEAR_LABEL) 1 else 0 }
-                .thenByDescending { it.key.toIntOrNull() ?: Int.MIN_VALUE }
-                .thenBy { it.key }
-        )
+        .sortedWith { left, right ->
+            val leftEmpty = if (left.key == NO_YEAR_LABEL) 1 else 0
+            val rightEmpty = if (right.key == NO_YEAR_LABEL) 1 else 0
+            if (leftEmpty != rightEmpty) {
+                leftEmpty.compareTo(rightEmpty)
+            } else {
+                val sorted = sort.yearGroupComparator().compare(left, right)
+                if (sorted != 0) sorted else left.key.compareTo(right.key)
+            }
+        }
         .associateTo(LinkedHashMap()) { it.key to it.value }
+
+private fun LibrarySort.groupComparator(): Comparator<Map.Entry<String, List<BookListItem>>> =
+    when (this) {
+        LibrarySort.RECENT -> compareByDescending<Map.Entry<String, List<BookListItem>>> {
+            it.value.maxOfOrNull { item -> item.libraryRecentTimestamp() } ?: Long.MIN_VALUE
+        }.thenBy { it.key.lowercase() }
+        LibrarySort.PROGRESS -> compareByDescending<Map.Entry<String, List<BookListItem>>> {
+            it.value.map { item -> item.displayLibraryProgress() }.average().takeUnless(Double::isNaN) ?: 0.0
+        }.thenBy { it.key.lowercase() }
+        else -> compareBy { it.key.lowercase() }
+    }
+
+private fun LibrarySort.yearGroupComparator(): Comparator<Map.Entry<String, List<BookListItem>>> =
+    when (this) {
+        LibrarySort.RECENT -> compareByDescending<Map.Entry<String, List<BookListItem>>> {
+            it.value.maxOfOrNull { item -> item.libraryRecentTimestamp() } ?: Long.MIN_VALUE
+        }.thenByDescending { it.key.toIntOrNull() ?: Int.MIN_VALUE }
+        LibrarySort.PROGRESS -> compareByDescending<Map.Entry<String, List<BookListItem>>> {
+            it.value.map { item -> item.displayLibraryProgress() }.average().takeUnless(Double::isNaN) ?: 0.0
+        }.thenByDescending { it.key.toIntOrNull() ?: Int.MIN_VALUE }
+        else -> compareByDescending { it.key.toIntOrNull() ?: Int.MIN_VALUE }
+    }
 
 private const val NO_SERIES_LABEL = "No series"
 private const val NO_GENRE_LABEL = "No genre"
@@ -228,6 +290,9 @@ internal fun BookListItem.rawLibraryProgress(): Double =
 
 internal fun BookListItem.displayLibraryProgress(): Double =
     if (book.finished) 1.0 else rawLibraryProgress()
+
+internal fun BookListItem.libraryRecentTimestamp(): Long =
+    state?.lastReadAt ?: book.lastOpenedAt ?: book.importedAt
 
 internal fun BookListItem.isLibraryFinished(): Boolean =
     book.finished || rawLibraryProgress() >= 0.995

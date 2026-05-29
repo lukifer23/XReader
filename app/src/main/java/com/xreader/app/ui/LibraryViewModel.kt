@@ -120,7 +120,7 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     val uiState: StateFlow<LibraryUiState> =
         combine(chromeState, bookItems, bookHealth, repairingBookIds) { chrome, libraryBooks, health, repairing ->
             val selection = chrome.selection
-            val visibleBooks = libraryBooks.queriedItems.filteredBy(selection.group).sortedFor(selection.sort)
+            val visibleBooks = libraryBooks.queriedItems.filteredBy(selection.group).sortedForLibrary(selection.sort)
             LibraryUiState(
                 query = selection.query,
                 group = selection.group,
@@ -332,35 +332,6 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
             LibraryGroup.FAVORITES -> filter { it.book.favorite }
             else -> this
         }
-
-    private fun List<BookListItem>.sortedFor(sort: LibrarySort): List<BookListItem> =
-        when (sort) {
-            LibrarySort.RECENT -> sortedWith(
-                compareByDescending<BookListItem> { it.recentTimestamp() }
-                    .thenBy { it.book.sortTitle.lowercase() }
-            )
-            LibrarySort.TITLE -> sortedWith(
-                compareBy<BookListItem> { it.book.sortTitle.lowercase() }
-                    .thenBy { it.book.author.lowercase() }
-            )
-            LibrarySort.AUTHOR -> sortedWith(
-                compareBy<BookListItem> { it.book.author.lowercase() }
-                    .thenBy { it.book.sortTitle.lowercase() }
-            )
-            LibrarySort.PROGRESS -> sortedWith(
-                compareByDescending<BookListItem> { it.displayLibraryProgress() }
-                    .thenBy { it.book.sortTitle.lowercase() }
-            )
-            LibrarySort.SERIES -> sortedWith(
-                compareBy<BookListItem> { it.book.series?.lowercase() ?: it.book.sortTitle.lowercase() }
-                    .thenBy { it.book.seriesIndex ?: Double.MAX_VALUE }
-                    .thenBy { it.book.year ?: Int.MAX_VALUE }
-                    .thenBy { it.book.sortTitle.lowercase() }
-            )
-        }
-
-    private fun BookListItem.recentTimestamp(): Long =
-        state?.lastReadAt ?: book.lastOpenedAt ?: book.importedAt
 
     private fun com.xreader.app.importer.ImportService.BookRepairResult.summaryMessage(book: BookEntity): String {
         if (failed) return "Could not repair ${book.title}"
