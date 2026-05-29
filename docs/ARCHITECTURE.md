@@ -40,7 +40,7 @@ Search uses a normal table plus an FTS table. Book deletion removes search rows 
 
 ## Import Flow
 
-1. Android Storage Access Framework returns a document URI.
+1. Android Storage Access Framework returns one or more document URIs, or a folder tree URI.
 2. `ImportService` copies the selected file to a temporary app cache file.
 3. The file checksum is calculated to prevent duplicate imports.
 4. TXT files are converted into a minimal EPUB package.
@@ -51,6 +51,8 @@ Search uses a normal table plus an FTS table. Book deletion removes search rows 
 EPUB cover extraction checks explicit OPF cover metadata, EPUB 3 `cover-image` properties, EPUB 2 guide cover references, guide XHTML/HTML title pages that point at image assets, and conservative manifest-image fallbacks.
 
 The manual Settings repair action and the per-book metadata repair action reuse this parsing/indexing path against stored private-library files. They refresh covers, metadata fields that are empty or safe to improve, word/page counts, and search rows. They preserve user-edited title and author values. Covers manually replaced from local image files are stored as app-private downsampled JPEGs and are not overwritten by repair.
+
+Folder imports walk SAF document trees recursively, filter to EPUB, PDF, and TXT documents, and summarize imported, duplicate, unsupported, and failed files. They do not require broad all-files access.
 
 Manual metadata edits can optionally apply the edited genre and series name to other books by the same author that match the old or new series name. The bulk cleanup runs in a Room transaction and keeps per-book fields such as title, year, and series index isolated to each book.
 

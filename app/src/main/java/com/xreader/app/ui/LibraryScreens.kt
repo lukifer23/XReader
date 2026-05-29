@@ -2,6 +2,7 @@
 
 package com.xreader.app.ui
 
+import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -71,6 +72,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -97,6 +99,8 @@ internal fun LibraryRoute(
     val viewModel: LibraryViewModel = viewModel(factory = LibraryViewModel.factory(container))
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
+    var importMenuOpen by remember { mutableStateOf(false) }
     val supportedBookMimeTypes = remember {
         arrayOf(
             "application/epub+zip",
@@ -105,11 +109,25 @@ internal fun LibraryRoute(
             "application/octet-stream"
         )
     }
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) viewModel.import(uri)
+    val fileLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        if (uris.isNotEmpty()) viewModel.importFiles(uris)
     }
-    val openImportPicker = {
-        if (!state.importing) launcher.launch(supportedBookMimeTypes)
+    val folderLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
+            viewModel.importFolder(uri)
+        }
+    }
+    val openFileImportPicker = {
+        if (!state.importing) fileLauncher.launch(supportedBookMimeTypes)
+    }
+    val openFolderImportPicker = {
+        if (!state.importing) folderLauncher.launch(null)
     }
 
     LaunchedEffect(state.message) {
@@ -124,16 +142,36 @@ internal fun LibraryRoute(
             TopAppBar(
                 title = { Text("XReader", fontWeight = FontWeight.SemiBold) },
                 actions = {
-                    TooltipIconButton(
-                        label = if (state.importing) "Importing books" else "Import books",
-                        onClick = openImportPicker,
-                        enabled = !state.importing,
-                        modifier = Modifier.size(44.dp)
-                    ) {
-                        if (state.importing) {
-                            CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
-                        } else {
-                            Icon(Icons.Filled.Add, contentDescription = null)
+                    Box {
+                        TooltipIconButton(
+                            label = if (state.importing) "Importing books" else "Import books",
+                            onClick = { importMenuOpen = true },
+                            enabled = !state.importing,
+                            modifier = Modifier.size(44.dp)
+                        ) {
+                            if (state.importing) {
+                                CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                            } else {
+                                Icon(Icons.Filled.Add, contentDescription = null)
+                            }
+                        }
+                        DropdownMenu(expanded = importMenuOpen, onDismissRequest = { importMenuOpen = false }) {
+                            DropdownMenuItem(
+                                text = { Text("Import files") },
+                                leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                                onClick = {
+                                    importMenuOpen = false
+                                    openFileImportPicker()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Import folder") },
+                                leadingIcon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null) },
+                                onClick = {
+                                    importMenuOpen = false
+                                    openFolderImportPicker()
+                                }
+                            )
                         }
                     }
                     ThemeToggleButton(theme = currentTheme, onClick = onToggleTheme)
@@ -150,7 +188,7 @@ internal fun LibraryRoute(
             onGroup = viewModel::setGroup,
             onSort = viewModel::setSort,
             onToggleDensity = viewModel::toggleDensity,
-            onImport = openImportPicker,
+            onImport = openFileImportPicker,
             onOpenBook = { openReaderAt(it, null) },
             onOpenSearchResult = openReaderAt,
             onToggleFavorite = viewModel::toggleFavorite,

@@ -38,6 +38,8 @@ class LibraryRepository(
 
     suspend fun getBook(id: Long): BookEntity? = bookDao.getBook(id)
     suspend fun import(uri: Uri): ImportService.ImportResult = importService.import(uri)
+    suspend fun importMany(uris: List<Uri>): ImportService.ImportBatchResult = importService.importMany(uris)
+    suspend fun importFolder(uri: Uri): ImportService.ImportBatchResult = importService.importFolder(uri)
     suspend fun backfillMissingCovers() = importService.backfillMissingCovers()
     suspend fun backfillLibraryDetails() {
         if (!libraryDetailsBackfillRunning.compareAndSet(false, true)) return

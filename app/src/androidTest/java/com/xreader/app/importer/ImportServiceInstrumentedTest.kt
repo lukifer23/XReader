@@ -8,6 +8,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.xreader.app.data.BookFormat
 import com.xreader.app.data.XReaderDatabase
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -59,6 +60,40 @@ class ImportServiceInstrumentedTest {
 
         val searchResults = db.search().searchBook(result.bookId, "normalizedBody:smoke*")
         assertTrue(searchResults.any { it.body.contains("smoke", ignoreCase = true) })
+    }
+
+    @Test
+    fun importsManyBooksAndReportsDuplicatesAndUnsupportedFiles() = runBlocking {
+        val first = File(root, "source/batch_one.txt").apply {
+            parentFile?.mkdirs()
+            writeText("Batch one\n\nA real text import.")
+        }
+        val second = File(root, "source/batch_two.txt").apply {
+            parentFile?.mkdirs()
+            writeText("Batch two\n\nAnother real text import.")
+        }
+        val unsupported = File(root, "source/not_a_book.jpg").apply {
+            parentFile?.mkdirs()
+            writeText("not an image or a book")
+        }
+        val service = ImportService(context, db)
+
+        val imported = service.importMany(listOf(Uri.fromFile(first), Uri.fromFile(second)))
+
+        assertEquals(2, imported.scanned)
+        assertEquals(2, imported.imported)
+        assertEquals(0, imported.duplicates)
+        assertEquals(0, imported.unsupported)
+        assertEquals(0, imported.failed)
+        assertEquals(2, db.books().observeBooks("").first().size)
+
+        val repeated = service.importMany(listOf(Uri.fromFile(first), Uri.fromFile(unsupported)))
+
+        assertEquals(2, repeated.scanned)
+        assertEquals(0, repeated.imported)
+        assertEquals(1, repeated.duplicates)
+        assertEquals(1, repeated.unsupported)
+        assertEquals(0, repeated.failed)
     }
 
     @Test

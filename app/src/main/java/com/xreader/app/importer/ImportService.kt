@@ -5,6 +5,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import com.xreader.app.core.TextTools
 import com.xreader.app.data.BookDao
@@ -35,6 +36,14 @@ class ImportService(
         val duplicate: Boolean,
     )
 
+    data class ImportBatchResult(
+        val scanned: Int,
+        val imported: Int,
+        val duplicates: Int,
+        val unsupported: Int,
+        val failed: Int,
+    )
+
     data class LibraryRepairResult(
         val scanned: Int,
         val coversUpdated: Int,
@@ -62,10 +71,23 @@ class ImportService(
     private val txtConverter = TxtToEpubConverter()
     private val pdfTools = PdfTools(context)
 
+    suspend fun importMany(uris: List<Uri>): ImportBatchResult = withContext(Dispatchers.IO) {
+        importUris(uris.distinct())
+    }
+
+    suspend fun importFolder(treeUri: Uri): ImportBatchResult = withContext(Dispatchers.IO) {
+        val scan = scanTreeForBooks(treeUri)
+        val imports = importUris(scan.bookUris.distinct())
+        imports.copy(
+            scanned = imports.scanned + scan.unsupportedFiles,
+            unsupported = imports.unsupported + scan.unsupportedFiles
+        )
+    }
+
     suspend fun import(uri: Uri): ImportResult = withContext(Dispatchers.IO) {
         val displayName = context.contentResolver.displayName(uri)
         val sourceExtension = TextTools.extension(displayName)
-        require(sourceExtension in setOf("epub", "pdf", "txt")) {
+        require(sourceExtension in SUPPORTED_BOOK_EXTENSIONS) {
             "Unsupported file type: .$sourceExtension"
         }
 
@@ -163,6 +185,37 @@ class ImportService(
             stagedFile.delete()
             throw error
         }
+    }
+
+    private suspend fun importUris(uris: List<Uri>): ImportBatchResult {
+        var imported = 0
+        var duplicates = 0
+        var unsupported = 0
+        var failed = 0
+        uris.forEach { uri ->
+            runCatching { import(uri) }
+                .onSuccess { result ->
+                    if (result.duplicate) {
+                        duplicates += 1
+                    } else {
+                        imported += 1
+                    }
+                }
+                .onFailure { error ->
+                    if (error.isUnsupportedImport()) {
+                        unsupported += 1
+                    } else {
+                        failed += 1
+                    }
+                }
+        }
+        return ImportBatchResult(
+            scanned = uris.size,
+            imported = imported,
+            duplicates = duplicates,
+            unsupported = unsupported,
+            failed = failed
+        )
     }
 
     suspend fun deleteStoredFile(book: BookEntity) = withContext(Dispatchers.IO) {
@@ -558,6 +611,61 @@ class ImportService(
         return uri.lastPathSegment?.substringAfterLast('/') ?: "book"
     }
 
+    private data class FolderScanResult(
+        val bookUris: List<Uri>,
+        val unsupportedFiles: Int,
+    )
+
+    private fun scanTreeForBooks(treeUri: Uri): FolderScanResult {
+        val rootDocumentId = DocumentsContract.getTreeDocumentId(treeUri)
+        val rootDocumentUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, rootDocumentId)
+        val bookUris = mutableListOf<Uri>()
+        var unsupportedFiles = 0
+        val visitedDirectories = mutableSetOf<String>()
+        fun scanDirectory(directoryUri: Uri) {
+            val directoryId = DocumentsContract.getDocumentId(directoryUri)
+            if (!visitedDirectories.add(directoryId)) return
+            val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, directoryId)
+            context.contentResolver.query(
+                childrenUri,
+                arrayOf(
+                    DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                    DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+                    DocumentsContract.Document.COLUMN_MIME_TYPE
+                ),
+                null,
+                null,
+                null
+            )?.use { cursor ->
+                val idIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+                val nameIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+                val mimeIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_MIME_TYPE)
+                while (cursor.moveToNext()) {
+                    val documentId = cursor.getString(idIndex)
+                    val displayName = cursor.getString(nameIndex).orEmpty()
+                    val mimeType = cursor.getString(mimeIndex).orEmpty()
+                    val documentUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, documentId)
+                    if (mimeType == DocumentsContract.Document.MIME_TYPE_DIR) {
+                        scanDirectory(documentUri)
+                    } else if (isSupportedBook(displayName, mimeType)) {
+                        bookUris += documentUri
+                    } else {
+                        unsupportedFiles += 1
+                    }
+                }
+            }
+        }
+        scanDirectory(rootDocumentUri)
+        return FolderScanResult(bookUris = bookUris, unsupportedFiles = unsupportedFiles)
+    }
+
+    private fun isSupportedBook(displayName: String, mimeType: String): Boolean =
+        TextTools.extension(displayName) in SUPPORTED_BOOK_EXTENSIONS ||
+            mimeType in SUPPORTED_BOOK_MIME_TYPES
+
+    private fun Throwable.isUnsupportedImport(): Boolean =
+        message?.startsWith("Unsupported file type:") == true
+
     private fun sha256(file: File): String {
         val digest = MessageDigest.getInstance("SHA-256")
         file.inputStream().buffered().use { input ->
@@ -572,6 +680,12 @@ class ImportService(
     }
 
     private companion object {
+        val SUPPORTED_BOOK_EXTENSIONS = setOf("epub", "pdf", "txt")
+        val SUPPORTED_BOOK_MIME_TYPES = setOf(
+            "application/epub+zip",
+            "application/pdf",
+            "text/plain"
+        )
         const val CUSTOM_COVER_MAX_EDGE = 1400
         const val CUSTOM_COVER_JPEG_QUALITY = 90
     }

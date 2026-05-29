@@ -169,16 +169,39 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     fun import(uri: Uri) {
+        importFiles(listOf(uri))
+    }
+
+    fun importFiles(uris: List<Uri>) {
+        if (uris.isEmpty()) return
         viewModelScope.launch {
             importing.value = true
             try {
-                runCatching { container.libraryRepository.import(uri) }
+                runCatching { container.libraryRepository.importMany(uris) }
                     .onSuccess { result ->
-                        message.value = if (result.duplicate) "Already in library" else "Imported book"
+                        message.value = result.summaryMessage()
                     }
                     .onFailure { error ->
-                        Log.e("XReader", "Import failed for $uri", error)
+                        Log.e("XReader", "Import failed for ${uris.size} selected files", error)
                         message.value = error.message ?: "Import failed"
+                    }
+            } finally {
+                importing.value = false
+            }
+        }
+    }
+
+    fun importFolder(uri: Uri) {
+        viewModelScope.launch {
+            importing.value = true
+            try {
+                runCatching { container.libraryRepository.importFolder(uri) }
+                    .onSuccess { result ->
+                        message.value = result.summaryMessage()
+                    }
+                    .onFailure { error ->
+                        Log.e("XReader", "Folder import failed for $uri", error)
+                        message.value = error.message ?: "Folder import failed"
                     }
             } finally {
                 importing.value = false
@@ -337,6 +360,22 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         val base = "Repaired ${book.title}; rebuilt $searchRows search rows"
         return if (details.isEmpty()) base else "$base; updated ${details.joinToString(", ")}"
     }
+
+    private fun com.xreader.app.importer.ImportService.ImportBatchResult.summaryMessage(): String {
+        if (scanned == 0) return "No EPUB, PDF, or TXT files found"
+        if (imported == 1 && duplicates == 0 && unsupported == 0 && failed == 0) return "Imported book"
+        if (imported == 0 && duplicates == 1 && unsupported == 0 && failed == 0) return "Already in library"
+        val parts = buildList {
+            if (imported > 0) add("Imported ${bookCount(imported)}")
+            if (duplicates > 0) add("${bookCount(duplicates)} already in library")
+            if (unsupported > 0) add("$unsupported unsupported")
+            if (failed > 0) add("$failed failed")
+        }
+        return parts.ifEmpty { listOf("No books imported") }.joinToString("; ")
+    }
+
+    private fun bookCount(count: Int): String =
+        if (count == 1) "1 book" else "$count books"
 
     companion object {
         fun factory(container: AppContainer): ViewModelProvider.Factory =

@@ -26,7 +26,7 @@ This is the working competitive map for XReader. It should drive implementation 
 | MOBI/AZW3 | Not implemented in UI. | Common in Moon+, ReadEra, PocketBook, FBReader. | Later, only with real local conversion. |
 | DJVU/FB2/CBZ/CBR/DOC/RTF/ODT | Not implemented. | Broad-format apps cover many of these. | Later; avoid format sprawl before EPUB/PDF/TXT are excellent. |
 | No ads/no account | Implemented. | ReadEra and Lithium lead here; Moon+ free has ads; sync apps require accounts. | Preserve. |
-| Private app library | Implemented with SAF copies and checksum duplicates. | Some apps scan folders or request broad file access. | Preserve; add folder import only through SAF. |
+| Private app library | Implemented with SAF file/folder copies and checksum duplicates. | Some apps scan folders or request broad file access. | Preserve SAF-only imports and private copies. |
 | Resume/progress | Implemented with Readium locators and sessions. | Table stakes; sync apps add cloud resume. | Keep testing across restarts and screen sizes. |
 | Notes/highlights/bookmarks | Implemented with local export/import. | Table stakes in strong readers. | Add richer export targets later. |
 | Dictionary | Offline WordNet implemented. | Many rely on external dictionaries or online lookup. | Strong differentiator; keep improving morphology/phrase handling. |
@@ -56,6 +56,7 @@ The research points to several areas that matter more than raw feature count:
 - Per-book reader appearance. Books can keep their own font, spacing, alignment, publisher-style, and PDF fit choices without changing global reading behavior.
 - Reader spacing presets. Compact, comfort, and accessible presets provide fast setup while still using the same manual font, line-height, and margin controls.
 - Read aloud. The reader can speak forward from the visible position through Android TextToSpeech using XReader's private full-text index, with persisted speed control and no permanent reader chrome.
+- Batch SAF import. The library can import multiple files or a whole SAF folder without broad storage permission, while preserving checksum duplicate handling.
 
 ## Product Rules From The Research
 

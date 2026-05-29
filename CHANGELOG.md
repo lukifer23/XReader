@@ -10,6 +10,7 @@ Initial public repository snapshot.
 - EPUB and PDF reading through Readium Kotlin.
 - TXT import converted into minimal EPUB packages.
 - SAF-based private library imports.
+- Batch file and folder import through Android's Storage Access Framework.
 - Duplicate detection by checksum.
 - Local Room database for books, reading state, sessions, notes, bookmarks, search, and dictionary entries.
 - Library organization, metadata editing, favorites, finished state, and progress display.
