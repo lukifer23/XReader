@@ -26,6 +26,7 @@ Initial public repository snapshot.
 - Library metadata and health UI split into focused components to keep future polish changes lower-risk.
 - Per-book library health checks and targeted repair from the metadata dialog.
 - In-reader navigation by swipe, calibrated tap zones, hardware keys, TOC, bookmarks, search results, and progress scrubber.
+- Bookmarks now use the exact visible Readium location when available, while still recognizing older unit-level bookmarks.
 - Reader themes, fullscreen mode, typography controls, PDF fit controls, page animation toggle, configurable tap-zone sizing, and real font-family options.
 - Compact, comfort, and accessible reader spacing presets for fast typography setup.
 - Per-book reader appearance overrides for font size, line height, margins, font family, publisher styles, alignment, and PDF fit.

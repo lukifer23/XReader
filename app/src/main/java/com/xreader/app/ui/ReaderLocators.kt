@@ -1,9 +1,11 @@
 package com.xreader.app.ui
 
+import com.xreader.app.data.BookmarkEntity
 import com.xreader.app.data.ReadingStateEntity
 import com.xreader.app.reader.OpenPublication
 import com.xreader.app.reader.ReadingUnit
 import kotlin.math.roundToInt
+import org.json.JSONArray
 import org.json.JSONObject
 import org.readium.r2.shared.publication.Locator
 
@@ -84,6 +86,26 @@ internal fun String.toReadiumLocatorOrNull(): Locator? {
     return runCatching { Locator.fromJSON(JSONObject(this)) }.getOrNull()
 }
 
+internal fun List<BookmarkEntity>.bookmarkAtReaderLocation(
+    visibleLocatorJson: String?,
+    fallbackUnitLocator: String?,
+): BookmarkEntity? {
+    val visible = visibleLocatorJson.cleanLocator()
+    val fallback = fallbackUnitLocator.cleanLocator()
+    val visibleKey = visible?.toBookmarkLocatorKey()
+    val fallbackKey = fallback?.toBookmarkLocatorKey()
+    return firstOrNull { bookmark -> visible != null && bookmark.locator.trim() == visible }
+        ?: firstOrNull { bookmark ->
+            val bookmarkKey = bookmark.locator.toBookmarkLocatorKey()
+            bookmarkKey != null && visibleKey != null && bookmarkKey.sameLocationAs(visibleKey)
+        }
+        ?: firstOrNull { bookmark -> fallback != null && bookmark.locator.trim() == fallback }
+        ?: firstOrNull { bookmark ->
+            val bookmarkKey = bookmark.locator.toBookmarkLocatorKey()
+            bookmarkKey != null && fallbackKey != null && bookmarkKey.sameLocationAs(fallbackKey)
+        }
+}
+
 private fun positionIndexFor(
     locator: Locator,
     positions: List<Locator>,
@@ -110,3 +132,112 @@ private fun positionIndexFor(
 private fun locatorToUnitOrNull(locator: String, units: List<ReadingUnit>): Int? =
     units.indexOfFirst { it.locator == locator }.takeIf { it >= 0 }
         ?: locator.substringAfter(':', "").substringBefore(':').toIntOrNull()
+
+private fun String?.cleanLocator(): String? =
+    this?.trim()?.takeIf { it.isNotBlank() }
+
+private fun String.toBookmarkLocatorKey(): BookmarkLocatorKey? {
+    val jsonKey = jsonBookmarkLocatorKey() ?: rawBookmarkLocatorKey()
+    return toReadiumLocatorOrNull()?.let { locator ->
+        BookmarkLocatorKey(
+            href = locator.href.toString().takeIf { it.isNotBlank() } ?: jsonKey?.href ?: return@let null,
+            fragments = locator.locations.fragments.ifEmpty { jsonKey?.fragments.orEmpty() },
+            position = locator.locations.position ?: jsonKey?.position,
+            totalProgression = locator.locations.totalProgression?.quantized() ?: jsonKey?.totalProgression,
+            progression = locator.locations.progression?.quantized() ?: jsonKey?.progression
+        )
+    } ?: jsonKey
+}
+
+private fun BookmarkLocatorKey.sameLocationAs(other: BookmarkLocatorKey): Boolean {
+    if (position != null && other.position != null) {
+        return position == other.position
+    }
+    if (totalProgression != null && other.totalProgression != null) {
+        return totalProgression == other.totalProgression
+    }
+    if (href != other.href) return false
+    if (fragments.isNotEmpty() || other.fragments.isNotEmpty()) {
+        return fragments == other.fragments
+    }
+    if (progression != null && other.progression != null) {
+        return progression == other.progression
+    }
+    return position == null &&
+        other.position == null &&
+        totalProgression == null &&
+        other.totalProgression == null &&
+        progression == null &&
+        other.progression == null
+}
+
+private fun Double.quantized(): Int =
+    (coerceIn(0.0, 1.0) * 10_000).roundToInt()
+
+private data class BookmarkLocatorKey(
+    val href: String,
+    val fragments: List<String>,
+    val position: Int?,
+    val totalProgression: Int?,
+    val progression: Int?,
+)
+
+private fun String.jsonBookmarkLocatorKey(): BookmarkLocatorKey? {
+    if (!trimStart().startsWith("{")) return null
+    return runCatching {
+        val root = JSONObject(this)
+        val href = root.optString("href").takeIf { it.isNotBlank() } ?: return@runCatching null
+        val locations = root.optJSONObject("locations")
+        BookmarkLocatorKey(
+            href = href,
+            fragments = locations?.optJSONArray("fragments")?.toStringList().orEmpty(),
+            position = locations?.optIntOrNull("position"),
+            totalProgression = locations?.optDoubleOrNull("totalProgression")?.quantized(),
+            progression = locations?.optDoubleOrNull("progression")?.quantized()
+        )
+    }.getOrNull()
+}
+
+private fun JSONObject.optIntOrNull(name: String): Int? =
+    if (has(name) && !isNull(name)) optInt(name) else null
+
+private fun JSONObject.optDoubleOrNull(name: String): Double? =
+    if (has(name) && !isNull(name)) optDouble(name) else null
+
+private fun JSONArray.toStringList(): List<String> =
+    (0 until length()).mapNotNull { index -> optString(index).takeIf { it.isNotBlank() } }
+
+private fun String.rawBookmarkLocatorKey(): BookmarkLocatorKey? {
+    if (!trimStart().startsWith("{")) return null
+    val href = HREF_REGEX.find(this)?.groupValues?.getOrNull(1)?.takeIf { it.isNotBlank() } ?: return null
+    return BookmarkLocatorKey(
+        href = href,
+        fragments = FRAGMENTS_REGEX.find(this)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.let { fragmentBody ->
+                STRING_VALUE_REGEX.findAll(fragmentBody)
+                    .mapNotNull { it.groupValues.getOrNull(1) }
+                    .toList()
+            }
+            .orEmpty(),
+        position = POSITION_REGEX.find(this)?.groupValues?.getOrNull(1)?.toIntOrNull(),
+        totalProgression = TOTAL_PROGRESSION_REGEX.find(this)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.toDoubleOrNull()
+            ?.quantized(),
+        progression = PROGRESSION_REGEX.find(this)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.toDoubleOrNull()
+            ?.quantized()
+    )
+}
+
+private val HREF_REGEX = Regex("\"href\"\\s*:\\s*\"([^\"]+)\"")
+private val FRAGMENTS_REGEX = Regex("\"fragments\"\\s*:\\s*\\[(.*?)]")
+private val STRING_VALUE_REGEX = Regex("\"([^\"]+)\"")
+private val POSITION_REGEX = Regex("\"position\"\\s*:\\s*(\\d+)")
+private val TOTAL_PROGRESSION_REGEX = Regex("\"totalProgression\"\\s*:\\s*(-?\\d+(?:\\.\\d+)?)")
+private val PROGRESSION_REGEX = Regex("(?<!total)\"progression\"\\s*:\\s*(-?\\d+(?:\\.\\d+)?)")

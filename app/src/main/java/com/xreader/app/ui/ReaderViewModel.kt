@@ -565,16 +565,39 @@ class ReaderViewModel(
         }
     }
 
-    fun toggleBookmark() {
-        val unit = currentReadingUnit() ?: return
+    fun toggleBookmark(
+        visibleUnit: Int? = null,
+        visibleLocator: String? = null,
+    ) {
         val publication = _uiState.value.publication ?: return
         val total = publication.units.size.coerceAtLeast(1)
-        val progress = (_uiState.value.currentUnit + 1).toDouble() / total.toDouble()
+        val readiumLocator = visibleLocator?.toReadiumLocatorOrNull()
+        val resolvedUnit = readiumLocator
+            ?.let { publication.positionIndexFor(it) }
+            ?: visibleUnit
+            ?: _uiState.value.currentUnit
+        val currentUnit = resolvedUnit.coerceIn(0, total - 1)
+        val unit = publication.units.getOrNull(currentUnit) ?: return
+        val locator = readiumLocator?.toJSON()?.toString()
+            ?: visibleLocator?.takeIf { it.isNotBlank() }
+            ?: unit.locator
+        val existing = _uiState.value.bookmarks.bookmarkAtReaderLocation(
+            visibleLocatorJson = locator,
+            fallbackUnitLocator = unit.locator
+        )
+        if (existing != null) {
+            viewModelScope.launch { container.annotationRepository.deleteBookmark(existing.id) }
+            return
+        }
+        val progress = readiumLocator?.locations?.totalProgression
+            ?: if (total <= 1) 1.0 else currentUnit.toDouble() / (total - 1).toDouble()
+        val label = readiumLocator?.title
+            ?: unit.heading.ifBlank { "Position ${currentUnit + 1}" }
         viewModelScope.launch {
             container.annotationRepository.toggleBookmark(
                 bookId = bookId,
-                locator = unit.locator,
-                label = unit.heading.ifBlank { "Position ${_uiState.value.currentUnit + 1}" },
+                locator = locator,
+                label = label,
                 progress = progress.coerceIn(0.0, 1.0)
             )
         }

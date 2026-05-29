@@ -1,9 +1,11 @@
 package com.xreader.app.ui
 
+import com.xreader.app.data.BookmarkEntity
 import com.xreader.app.data.ReadingStateEntity
 import com.xreader.app.reader.ReadingUnit
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -71,6 +73,48 @@ class ReaderLocatorTest {
         assertFalse(resolved.fromInitialOverride)
     }
 
+    @Test
+    fun bookmarkAtReaderLocationMatchesExactVisibleLocator() {
+        val locator = locator(position = 7, progression = 0.42)
+        val bookmarks = listOf(bookmark(id = 10, locator = locator))
+
+        assertEquals(10L, bookmarks.bookmarkAtReaderLocation(locator, fallbackUnitLocator = null)?.id)
+    }
+
+    @Test
+    fun bookmarkAtReaderLocationMatchesEquivalentReadiumPosition() {
+        val bookmarks = listOf(
+            bookmark(id = 11, locator = """{"href":"chapter.xhtml","type":"application/xhtml+xml","locations":{"position":4,"totalProgression":0.24}}""")
+        )
+        val visible = """{"href":"other.xhtml","type":"application/xhtml+xml","locations":{"position":4,"totalProgression":0.24001}}"""
+
+        assertEquals(11L, bookmarks.bookmarkAtReaderLocation(visible, fallbackUnitLocator = null)?.id)
+    }
+
+    @Test
+    fun bookmarkAtReaderLocationKeepsSeparateVisibleProgressionsDistinct() {
+        val bookmarks = listOf(
+            bookmark(id = 12, locator = """{"href":"chapter.xhtml","type":"application/xhtml+xml","locations":{"totalProgression":0.20}}""")
+        )
+        val visible = """{"href":"chapter.xhtml","type":"application/xhtml+xml","locations":{"totalProgression":0.45}}"""
+
+        assertNull(bookmarks.bookmarkAtReaderLocation(visible, fallbackUnitLocator = null))
+    }
+
+    @Test
+    fun bookmarkAtReaderLocationFallsBackToLegacyUnitLocator() {
+        val legacyUnitLocator = "epub:2:14"
+        val bookmarks = listOf(bookmark(id = 13, locator = legacyUnitLocator))
+
+        assertEquals(
+            13L,
+            bookmarks.bookmarkAtReaderLocation(
+                visibleLocatorJson = """{"href":"chapter.xhtml","type":"application/xhtml+xml","locations":{"position":2}}""",
+                fallbackUnitLocator = legacyUnitLocator
+            )?.id
+        )
+    }
+
     private fun unit(
         index: Int,
         locator: String = "locator-$index",
@@ -97,4 +141,23 @@ class ReaderLocatorTest {
             estimatedWpm = 0,
             lastReadAt = 1_700_000_000_000
         )
+
+    private fun bookmark(
+        id: Long,
+        locator: String,
+    ): BookmarkEntity =
+        BookmarkEntity(
+            id = id,
+            bookId = 42,
+            locator = locator,
+            label = "Bookmark $id",
+            progress = 0.5,
+            createdAt = 1_700_000_000_000
+        )
+
+    private fun locator(
+        position: Int,
+        progression: Double,
+    ): String =
+        """{"href":"chapter.xhtml","type":"application/xhtml+xml","locations":{"position":$position,"totalProgression":$progression}}"""
 }

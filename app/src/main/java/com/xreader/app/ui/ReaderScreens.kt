@@ -190,7 +190,7 @@ internal fun ReaderScreen(
     onOpenNote: () -> Unit,
     onCloseNote: () -> Unit,
     onAddNote: (String) -> Unit,
-    onBookmark: () -> Unit,
+    onBookmark: (Int, String?) -> Unit,
     onDeleteBookmark: (Long) -> Unit,
     onDeleteAnnotation: (Long) -> Unit,
     onToggleTheme: () -> Unit,
@@ -274,11 +274,19 @@ internal fun ReaderScreen(
             ReaderTopChrome(
                 title = publication.book.title,
                 progress = state.state?.progress ?: 0.0,
-                bookmarked = state.bookmarks.any { it.locator == units.getOrNull(state.currentUnit)?.locator },
+                bookmarked = state.bookmarks.bookmarkAtReaderLocation(
+                    visibleLocatorJson = pagingController.currentLocatorJson,
+                    fallbackUnitLocator = units.getOrNull(pagingController.currentUnit)?.locator
+                ) != null,
                 onBack = onBack,
                 onContents = { navigationOpen = true },
                 onSearch = { searchOpen = true },
-                onBookmark = onBookmark,
+                onBookmark = {
+                    onBookmark(
+                        pagingController.currentUnit,
+                        pagingController.currentLocatorJson
+                    )
+                },
                 onNote = onOpenNote,
                 onSettings = { readerSettingsOpen = true },
                 modifier = Modifier
