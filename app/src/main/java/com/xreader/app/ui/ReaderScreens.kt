@@ -168,6 +168,8 @@ internal fun ReaderRoute(
         onToggleReadAloud = { visibleUnit, visibleLocator ->
             viewModel.toggleReadAloud(visibleUnit, visibleLocator)
         },
+        onReadAloudPrevious = viewModel::skipReadAloudPrevious,
+        onReadAloudNext = viewModel::skipReadAloudNext,
         onClearReadAloudMessage = viewModel::clearReadAloudMessage
     )
 }
@@ -211,6 +213,8 @@ internal fun ReaderScreen(
     onPdfFit: (ReaderPdfFit) -> Unit,
     onBookAppearanceEnabled: (Boolean) -> Unit,
     onToggleReadAloud: (Int, String?) -> Unit,
+    onReadAloudPrevious: () -> Unit,
+    onReadAloudNext: () -> Unit,
     onClearReadAloudMessage: () -> Unit,
 ) {
     val publication = state.publication as? OpenPublication.Readium ?: return
@@ -353,6 +357,8 @@ internal fun ReaderScreen(
                         pagingController.currentLocatorJson
                     )
                 },
+                onReadAloudPrevious = onReadAloudPrevious,
+                onReadAloudNext = onReadAloudNext,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .zIndex(2f)
@@ -555,6 +561,8 @@ internal fun ReaderBottomBar(
     onToggleFullScreen: () -> Unit,
     readAloud: ReadAloudState,
     onToggleReadAloud: () -> Unit,
+    onReadAloudPrevious: () -> Unit,
+    onReadAloudNext: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var sliderValue by remember(progress) { mutableFloatStateOf(progress.toFloat().coerceIn(0f, 1f)) }
@@ -568,30 +576,68 @@ internal fun ReaderBottomBar(
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
         contentColor = MaterialTheme.colorScheme.onSurface
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        Column(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            ThemeToggleButton(theme = theme, onClick = onToggleTheme)
-            FullScreenToggleButton(fullScreen = fullScreen, onClick = onToggleFullScreen)
-            ReadAloudButton(readAloud = readAloud, onClick = onToggleReadAloud)
-            IconButton(onClick = onPrevious, modifier = Modifier.size(44.dp)) {
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous page")
+            if (readAloud.playing) {
+                Text(
+                    text = readAloudStatusText(readAloud),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
-            Slider(
-                value = sliderValue,
-                onValueChange = { sliderValue = it },
-                onValueChangeFinished = { onSeek(sliderValue) },
-                modifier = Modifier.weight(1f)
-            )
-            Text(
-                text = "${page + 1}/$pageCount",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            IconButton(onClick = onNext, modifier = Modifier.size(44.dp)) {
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next page")
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                ThemeToggleButton(theme = theme, onClick = onToggleTheme)
+                FullScreenToggleButton(fullScreen = fullScreen, onClick = onToggleFullScreen)
+                if (readAloud.playing) {
+                    TooltipIconButton(
+                        label = "Previous read-aloud passage",
+                        onClick = onReadAloudPrevious,
+                        enabled = readAloudCanSkipPrevious(readAloud),
+                        modifier = Modifier.size(44.dp)
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = null)
+                    }
+                }
+                ReadAloudButton(readAloud = readAloud, onClick = onToggleReadAloud)
+                if (readAloud.playing) {
+                    TooltipIconButton(
+                        label = "Next read-aloud passage",
+                        onClick = onReadAloudNext,
+                        enabled = readAloudCanSkipNext(readAloud),
+                        modifier = Modifier.size(44.dp)
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+                    }
+                }
+                if (!readAloud.playing) {
+                    IconButton(onClick = onPrevious, modifier = Modifier.size(44.dp)) {
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous page")
+                    }
+                }
+                Slider(
+                    value = sliderValue,
+                    onValueChange = { sliderValue = it },
+                    onValueChangeFinished = { onSeek(sliderValue) },
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    text = "${page + 1}/$pageCount",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (!readAloud.playing) {
+                    IconButton(onClick = onNext, modifier = Modifier.size(44.dp)) {
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next page")
+                    }
+                }
             }
         }
     }

@@ -397,6 +397,14 @@ class ReaderViewModel(
         container.readAloudEngine.clearMessage(bookId)
     }
 
+    fun skipReadAloudPrevious() {
+        container.readAloudEngine.skipToPrevious(bookId)
+    }
+
+    fun skipReadAloudNext() {
+        container.readAloudEngine.skipToNext(bookId)
+    }
+
     fun setSearchQuery(value: String) {
         val previousQuery = _uiState.value.searchQuery.trim()
         val nextQuery = value.trim()

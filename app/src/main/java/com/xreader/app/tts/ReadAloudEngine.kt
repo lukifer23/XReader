@@ -164,6 +164,18 @@ class ReadAloudEngine(
         }
     }
 
+    fun skipToPrevious(bookId: Long? = null) {
+        scope.launch(Dispatchers.Main.immediate) {
+            skipBy(bookId = bookId, delta = -1)
+        }
+    }
+
+    fun skipToNext(bookId: Long? = null) {
+        scope.launch(Dispatchers.Main.immediate) {
+            skipBy(bookId = bookId, delta = 1)
+        }
+    }
+
     fun stop(bookId: Long? = null) {
         scope.launch(Dispatchers.Main.immediate) {
             stopInternal(bookId)
@@ -316,6 +328,31 @@ class ReadAloudEngine(
                 )
             }
         }
+    }
+
+    private fun skipBy(bookId: Long?, delta: Int) {
+        val current = activeSpeech ?: return
+        if (bookId != null && current.bookId != bookId) return
+        val targetIndex = readAloudSkipTargetIndex(
+            currentChunk = current.chunkIndex,
+            totalChunks = current.chunks.size,
+            delta = delta
+        ) ?: return
+        var candidate = targetIndex
+        while (candidate in current.chunks.indices) {
+            val segments = ReadAloudPlanner.splitForSpeech(current.chunks[candidate].text)
+            if (segments.isNotEmpty()) {
+                activeSpeech = current.copy(
+                    chunkIndex = candidate,
+                    segments = segments,
+                    segmentIndex = 0
+                )
+                speakCurrentSegment()
+                return
+            }
+            candidate += delta
+        }
+        if (delta > 0) stopInternal(current.bookId)
     }
 
     private fun advanceSpeech() {
@@ -480,3 +517,13 @@ internal fun readAloudAudioFocusStopMessage(focusChange: Int): String? =
         AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> "Read aloud stopped because another app needed audio."
         else -> null
     }
+
+internal fun readAloudSkipTargetIndex(
+    currentChunk: Int,
+    totalChunks: Int,
+    delta: Int,
+): Int? {
+    if (totalChunks <= 0 || delta == 0) return null
+    val target = currentChunk + delta
+    return target.takeIf { it in 0 until totalChunks }
+}
