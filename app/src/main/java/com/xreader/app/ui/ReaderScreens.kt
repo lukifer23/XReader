@@ -528,6 +528,18 @@ internal class ReaderPagingController(
     var goToUnit: (Int) -> Unit = {}
     var goToLocator: (String) -> Unit = {}
     var goToProgress: (Float) -> Unit = {}
+
+    fun updateVisiblePosition(
+        page: Int,
+        locatorJson: String?,
+        pageCount: Int,
+    ) {
+        val boundedPage = page.coerceIn(0, (pageCount - 1).coerceAtLeast(0))
+        currentPage = boundedPage
+        currentUnit = boundedPage
+        currentLocatorJson = locatorJson
+        this.pageCount = pageCount.coerceAtLeast(1)
+    }
 }
 
 @Composable
@@ -760,6 +772,9 @@ internal fun ReaderQuickSettingsDialog(
     showPdfControls: Boolean,
 ) {
     var advancedTypographyOpen by remember { mutableStateOf(false) }
+    var notesOpen by remember { mutableStateOf(false) }
+    var controlsOpen by remember { mutableStateOf(false) }
+    var readAloudOpen by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Reader settings") },
@@ -774,17 +789,6 @@ internal fun ReaderQuickSettingsDialog(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Book-specific appearance", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
                     Switch(checked = bookAppearanceEnabled, onCheckedChange = onBookAppearanceEnabled)
-                }
-                Text("Highlight color", style = MaterialTheme.typography.titleMedium)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ReaderHighlightColor.entries.forEach { color ->
-                        FilterChip(
-                            selected = ReaderHighlightColor.optionFor(settings.highlightColor) == color,
-                            onClick = { onHighlightColor(color.hex) },
-                            label = { Text(color.label) },
-                            leadingIcon = { AnnotationColorSwatch(color.hex) }
-                        )
-                    }
                 }
                 Text("Spacing preset", style = MaterialTheme.typography.titleMedium)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -826,6 +830,10 @@ internal fun ReaderQuickSettingsDialog(
                         Text("Hyphenation", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
                         Switch(checked = settings.hyphenation, onCheckedChange = onHyphenation)
                     }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Publisher styles", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                        Switch(checked = settings.publisherStyles, onCheckedChange = onPublisherStyles)
+                    }
                     Text("Alignment", style = MaterialTheme.typography.titleMedium)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         ReaderTextAlign.entries.forEach { alignment ->
@@ -833,6 +841,23 @@ internal fun ReaderQuickSettingsDialog(
                                 selected = settings.textAlign == alignment,
                                 onClick = { onTextAlign(alignment) },
                                 label = { Text(alignment.name.lowercase().replaceFirstChar(Char::titlecase)) }
+                            )
+                        }
+                    }
+                }
+                ReaderSettingsExpandableSection(
+                    title = "Notes and highlights",
+                    expanded = notesOpen,
+                    onToggle = { notesOpen = !notesOpen }
+                ) {
+                    Text("Highlight color", style = MaterialTheme.typography.titleMedium)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ReaderHighlightColor.entries.forEach { color ->
+                            FilterChip(
+                                selected = ReaderHighlightColor.optionFor(settings.highlightColor) == color,
+                                onClick = { onHighlightColor(color.hex) },
+                                label = { Text(color.label) },
+                                leadingIcon = { AnnotationColorSwatch(color.hex) }
                             )
                         }
                     }
@@ -859,54 +884,88 @@ internal fun ReaderQuickSettingsDialog(
                         }
                     }
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Publisher styles", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-                    Switch(checked = settings.publisherStyles, onCheckedChange = onPublisherStyles)
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Tap zones", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-                    Switch(checked = settings.tapZonesEnabled, onCheckedChange = onTapZonesEnabled)
-                }
-                if (settings.tapZonesEnabled) {
-                    Text("Tap zone size", style = MaterialTheme.typography.titleMedium)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        ReaderTapZonePreset.entries.forEach { preset ->
-                            FilterChip(
-                                selected = settings.tapZonePreset == preset,
-                                onClick = { onTapZonePreset(preset) },
-                                label = { Text(preset.label) }
-                            )
+                ReaderSettingsExpandableSection(
+                    title = "Controls and comfort",
+                    expanded = controlsOpen,
+                    onToggle = { controlsOpen = !controlsOpen }
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Tap zones", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                        Switch(checked = settings.tapZonesEnabled, onCheckedChange = onTapZonesEnabled)
+                    }
+                    if (settings.tapZonesEnabled) {
+                        Text("Tap zone size", style = MaterialTheme.typography.titleMedium)
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            ReaderTapZonePreset.entries.forEach { preset ->
+                                FilterChip(
+                                    selected = settings.tapZonePreset == preset,
+                                    onClick = { onTapZonePreset(preset) },
+                                    label = { Text(preset.label) }
+                                )
+                            }
                         }
                     }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Page animations", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                        Switch(checked = settings.pageTurnAnimations, onCheckedChange = onPageTurnAnimations)
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Keep screen awake", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                        Switch(checked = settings.keepScreenAwake, onCheckedChange = onKeepScreenAwake)
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Volume buttons turn pages", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                        Switch(checked = settings.volumeKeysTurnPages, onCheckedChange = onVolumeKeysTurnPages)
+                    }
+                    SettingSlider("Reader dim", settings.screenDim, 0f..MAX_READER_DIM_AMOUNT, onScreenDim)
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Page animations", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-                    Switch(checked = settings.pageTurnAnimations, onCheckedChange = onPageTurnAnimations)
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Keep screen awake", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-                    Switch(checked = settings.keepScreenAwake, onCheckedChange = onKeepScreenAwake)
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Volume buttons turn pages", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-                    Switch(checked = settings.volumeKeysTurnPages, onCheckedChange = onVolumeKeysTurnPages)
-                }
-                SettingSlider("Reader dim", settings.screenDim, 0f..MAX_READER_DIM_AMOUNT, onScreenDim)
-                SettingSlider("Read aloud speed", settings.readAloudRate, 0.7f..1.4f, onReadAloudRate)
-                Text("Sleep timer", style = MaterialTheme.typography.titleMedium)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ReadAloudSleepTimer.entries.forEach { timer ->
-                        FilterChip(
-                            selected = settings.readAloudSleepTimer == timer,
-                            onClick = { onReadAloudSleepTimer(timer) },
-                            label = { Text(timer.label) }
-                        )
+                ReaderSettingsExpandableSection(
+                    title = "Read aloud",
+                    expanded = readAloudOpen,
+                    onToggle = { readAloudOpen = !readAloudOpen }
+                ) {
+                    SettingSlider("Speed", settings.readAloudRate, 0.7f..1.4f, onReadAloudRate)
+                    Text("Sleep timer", style = MaterialTheme.typography.titleMedium)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ReadAloudSleepTimer.entries.forEach { timer ->
+                            FilterChip(
+                                selected = settings.readAloudSleepTimer == timer,
+                                onClick = { onReadAloudSleepTimer(timer) },
+                                label = { Text(timer.label) }
+                            )
+                        }
                     }
                 }
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } }
     )
+}
+
+@Composable
+private fun ReaderSettingsExpandableSection(
+    title: String,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        TextButton(
+            onClick = onToggle,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(title, modifier = Modifier.weight(1f))
+            Icon(
+                if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                contentDescription = null
+            )
+        }
+        if (expanded) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                content()
+            }
+        }
+    }
 }
 
 @Composable

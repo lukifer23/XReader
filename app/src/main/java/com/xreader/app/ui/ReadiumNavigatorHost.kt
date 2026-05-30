@@ -140,6 +140,16 @@ internal fun ReadiumPublicationView(
         return
     }
 
+    fun publishLocator(locator: Locator) {
+        latestLocatorHandler(locator)
+        val index = publication.positionIndexFor(locator).coerceAtLeast(0)
+        controller.updateVisiblePosition(
+            page = index,
+            locatorJson = locator.toJSON().toString(),
+            pageCount = publication.units.size.coerceAtLeast(1)
+        )
+    }
+
     AndroidView(
         modifier = modifier.fillMaxSize(),
         factory = { FrameLayout(it).apply { id = containerId } }
@@ -216,14 +226,7 @@ internal fun ReadiumPublicationView(
         val factory = publication.fragmentFactory(
             initialLocator = initialLocator,
             settings = settings,
-            onLocator = { locator ->
-                latestLocatorHandler(locator)
-                val index = publication.positionIndexFor(locator).coerceAtLeast(0)
-                controller.currentPage = index
-                controller.currentUnit = index
-                controller.currentLocatorJson = locator.toJSON().toString()
-                controller.pageCount = publication.units.size.coerceAtLeast(1)
-            },
+            onLocator = ::publishLocator,
             context = context,
             selectionActionModeCallback = selectionActionModeCallback
         )
@@ -261,27 +264,20 @@ internal fun ReadiumPublicationView(
         controller.goToPage = { page ->
             val index = page.coerceIn(0, publication.positions.lastIndex.coerceAtLeast(0))
             publication.positions.getOrNull(index)?.let { locator ->
-                controller.currentPage = index
-                controller.currentUnit = index
-                controller.currentLocatorJson = locator.toJSON().toString()
+                publishLocator(locator)
                 navigator?.go(locator, animated = latestSettings.pageTurnAnimations)
             }
         }
         controller.goToUnit = { unit ->
             val index = unit.coerceIn(0, publication.positions.lastIndex.coerceAtLeast(0))
             publication.positions.getOrNull(index)?.let { locator ->
-                controller.currentPage = index
-                controller.currentUnit = index
-                controller.currentLocatorJson = locator.toJSON().toString()
+                publishLocator(locator)
                 navigator?.go(locator, animated = latestSettings.pageTurnAnimations)
             }
         }
         controller.goToLocator = { locatorJson ->
             locatorJson.toReadiumLocator()?.let {
-                val index = publication.positionIndexFor(it).coerceAtLeast(0)
-                controller.currentPage = index
-                controller.currentUnit = index
-                controller.currentLocatorJson = it.toJSON().toString()
+                publishLocator(it)
                 navigator?.go(it, animated = latestSettings.pageTurnAnimations)
             } ?: controller.goToUnit(locatorToUnit(locatorJson, publication.units))
         }
@@ -295,12 +291,7 @@ internal fun ReadiumPublicationView(
         val active = navigator ?: return@LaunchedEffect
         active.currentLocator.collect { locator ->
             active.publicationView.disableScrollbarsRecursively()
-            latestLocatorHandler(locator)
-            val index = publication.positionIndexFor(locator).coerceAtLeast(0)
-            controller.currentPage = index
-            controller.currentUnit = index
-            controller.currentLocatorJson = locator.toJSON().toString()
-            controller.pageCount = publication.units.size.coerceAtLeast(1)
+            publishLocator(locator)
         }
     }
 
