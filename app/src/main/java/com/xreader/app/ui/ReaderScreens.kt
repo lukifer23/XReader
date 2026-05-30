@@ -339,6 +339,7 @@ internal fun ReaderScreen(
             ReaderTopChrome(
                 title = publication.book.title,
                 progress = state.state?.progress ?: 0.0,
+                eta = readingEtaLabel(state.book, state.state),
                 bookmarked = state.bookmarks.bookmarkAtReaderLocation(
                     visibleLocatorJson = pagingController.currentLocatorJson,
                     fallbackUnitLocator = units.getOrNull(pagingController.currentUnit)?.locator
@@ -533,6 +534,7 @@ internal class ReaderPagingController(
 internal fun ReaderTopChrome(
     title: String,
     progress: Double,
+    eta: String?,
     bookmarked: Boolean,
     onBack: () -> Unit,
     canReturn: Boolean,
@@ -544,6 +546,10 @@ internal fun ReaderTopChrome(
     onSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val progressText = listOfNotNull(
+        "${(progress * 100).roundToInt()}% read",
+        eta
+    ).joinToString(" • ")
     Surface(
         modifier = modifier
             .fillMaxWidth()
@@ -568,7 +574,7 @@ internal fun ReaderTopChrome(
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    "${(progress * 100).roundToInt()}% read",
+                    progressText,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

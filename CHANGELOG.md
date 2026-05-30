@@ -57,6 +57,7 @@ Initial public repository snapshot.
 - Library full-text search results identify the source book and author, center snippets on the matched query, and support the keyboard search action.
 - In-reader search dialog polish with keyboard search action, clear affordance, result counts, stale-result clearing, and cancellation of superseded searches.
 - Reading analytics for active time, WPM estimate, streaks, range-aware activity, and book/author/genre summaries.
+- Reader chrome and the Continue Reading card show conservative time-left estimates when WPM and word-count data are available.
 - Reading stats activity chart with 7-day, 30-day, 13-week, and all-time ranges, current/best streaks, and optimized grouped session aggregation.
 - Local CSV and JSON export for reading analytics summaries across all stats ranges.
 - Manual Settings action to repair covers, metadata, and search indexes from stored library files.

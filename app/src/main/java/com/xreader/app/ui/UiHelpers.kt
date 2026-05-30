@@ -65,8 +65,10 @@ import androidx.core.view.WindowInsetsControllerCompat
 import com.xreader.app.data.AnnotationKind
 import com.xreader.app.data.BookEntity
 import com.xreader.app.data.ReaderTheme
+import com.xreader.app.data.ReadingStateEntity
 import com.xreader.app.settings.LibrarySort
 import java.util.Locale
+import kotlin.math.ceil
 import kotlin.math.roundToInt
 
 @Composable
@@ -428,6 +430,27 @@ internal fun bookLengthLabel(book: BookEntity): String =
     } else {
         wordCountLabel(book.wordCount)
     }
+
+internal fun readingEtaLabel(
+    book: BookEntity?,
+    state: ReadingStateEntity?,
+): String? {
+    val wordCount = book?.wordCount?.takeIf { it > 0 } ?: return null
+    val progress = state?.progress?.coerceIn(0.0, 1.0) ?: return null
+    val wpm = state.estimatedWpm.takeIf { it > 0 } ?: return null
+    if (progress <= 0.0 || progress >= 0.995) return null
+    val remainingWords = (wordCount * (1.0 - progress)).roundToInt()
+    if (remainingWords <= 0) return null
+    val minutes = ceil(remainingWords / wpm.toDouble()).toLong().coerceAtLeast(1L)
+    return "${formatEtaMinutes(minutes)} left"
+}
+
+private fun formatEtaMinutes(minutes: Long): String {
+    if (minutes < 60L) return "${minutes}m"
+    val hours = minutes / 60L
+    val remaining = minutes % 60L
+    return if (remaining == 0L) "${hours}h" else "${hours}h ${remaining}m"
+}
 
 internal fun formatDuration(millis: Long): String {
     val minutes = (millis / 60_000).coerceAtLeast(0)

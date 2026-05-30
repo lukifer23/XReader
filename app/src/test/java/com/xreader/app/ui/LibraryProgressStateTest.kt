@@ -38,7 +38,39 @@ class LibraryProgressStateTest {
         assertEquals(0.42, item.displayLibraryProgress(), 0.0)
     }
 
-    private fun item(progress: Double, finished: Boolean): BookListItem =
+    @Test
+    fun etaUsesProgressWordCountAndWpm() {
+        val item = item(progress = 0.5, finished = false, estimatedWpm = 250)
+
+        assertEquals("2h 40m left", readingEtaLabel(item.book, item.state))
+    }
+
+    @Test
+    fun etaRoundsUpShortRemainingTime() {
+        val item = item(progress = 0.994, finished = false, estimatedWpm = 250)
+
+        assertEquals("2m left", readingEtaLabel(item.book, item.state))
+    }
+
+    @Test
+    fun etaStaysHiddenForNearlyFinishedBooks() {
+        val item = item(progress = 0.999, finished = false, estimatedWpm = 250)
+
+        assertEquals(null, readingEtaLabel(item.book, item.state))
+    }
+
+    @Test
+    fun etaStaysHiddenUntilWpmIsKnown() {
+        val item = item(progress = 0.5, finished = false, estimatedWpm = 0)
+
+        assertEquals(null, readingEtaLabel(item.book, item.state))
+    }
+
+    private fun item(
+        progress: Double,
+        finished: Boolean,
+        estimatedWpm: Int = 0,
+    ): BookListItem =
         BookListItem(
             book = book(finished = finished),
             state = ReadingStateEntity(
@@ -48,7 +80,7 @@ class LibraryProgressStateTest {
                 currentUnit = 4,
                 totalUnits = 10,
                 activeMillis = 0L,
-                estimatedWpm = 0,
+                estimatedWpm = estimatedWpm,
                 lastReadAt = 1_700_000_000_000L
             )
         )

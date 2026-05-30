@@ -747,6 +747,7 @@ internal fun ContinueReadingCard(
 ) {
     val progress = item.displayLibraryProgress()
     val wpm = item.state?.estimatedWpm?.takeIf { it > 0 }
+    val eta = readingEtaLabel(item.book, item.state)
     Card(
         onClick = onOpen,
         modifier = Modifier.fillMaxWidth(),
@@ -774,7 +775,7 @@ internal fun ContinueReadingCard(
                     modifier = Modifier.fillMaxWidth()
                 )
                 Text(
-                    listOfNotNull("${(progress * 100).roundToInt()}% read", wpm?.let { "$it WPM" }).joinToString(" • "),
+                    listOfNotNull("${(progress * 100).roundToInt()}% read", eta, wpm?.let { "$it WPM" }).joinToString(" • "),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
