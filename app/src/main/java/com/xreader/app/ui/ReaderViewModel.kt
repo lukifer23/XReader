@@ -437,6 +437,7 @@ class ReaderViewModel(
                 chunks = chunks,
                 currentUnit = startPosition?.unitIndex ?: _uiState.value.currentUnit.coerceAtLeast(0),
                 currentLocator = startPosition?.locatorJson ?: _uiState.value.state?.locator?.takeIf { it.isNotBlank() },
+                bookTitle = _uiState.value.book?.title ?: "XReader",
                 speechRate = _uiState.value.settings.readAloudRate,
                 voiceName = _uiState.value.settings.readAloudVoiceName,
                 sleepTimerDurationMillis = _uiState.value.settings.readAloudSleepTimer.durationMillis

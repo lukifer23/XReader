@@ -1,8 +1,10 @@
 package com.xreader.app.tts
 
 import android.media.AudioManager
+import android.media.session.PlaybackState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ReadAloudEngineTest {
@@ -36,5 +38,50 @@ class ReadAloudEngineTest {
         assertNull(readAloudSkipTargetIndex(currentChunk = 2, totalChunks = 3, delta = 1))
         assertNull(readAloudSkipTargetIndex(currentChunk = 0, totalChunks = 0, delta = 1))
         assertNull(readAloudSkipTargetIndex(currentChunk = 0, totalChunks = 3, delta = 0))
+    }
+
+    @Test
+    fun mediaActionsReflectReadAloudTransportState() {
+        val playing = readAloudMediaActions(
+            playing = true,
+            paused = false,
+            canSkipPrevious = true,
+            canSkipNext = true
+        )
+        assertHasAction(playing, PlaybackState.ACTION_PLAY_PAUSE)
+        assertHasAction(playing, PlaybackState.ACTION_PAUSE)
+        assertHasAction(playing, PlaybackState.ACTION_STOP)
+        assertHasAction(playing, PlaybackState.ACTION_SKIP_TO_PREVIOUS)
+        assertHasAction(playing, PlaybackState.ACTION_SKIP_TO_NEXT)
+
+        val paused = readAloudMediaActions(
+            playing = false,
+            paused = true,
+            canSkipPrevious = false,
+            canSkipNext = true
+        )
+        assertHasAction(paused, PlaybackState.ACTION_PLAY_PAUSE)
+        assertHasAction(paused, PlaybackState.ACTION_PLAY)
+        assertHasAction(paused, PlaybackState.ACTION_STOP)
+        assertNoAction(paused, PlaybackState.ACTION_SKIP_TO_PREVIOUS)
+        assertHasAction(paused, PlaybackState.ACTION_SKIP_TO_NEXT)
+
+        assertEquals(
+            0L,
+            readAloudMediaActions(
+                playing = false,
+                paused = false,
+                canSkipPrevious = true,
+                canSkipNext = true
+            )
+        )
+    }
+
+    private fun assertHasAction(actions: Long, action: Long) {
+        assertTrue(actions and action != 0L)
+    }
+
+    private fun assertNoAction(actions: Long, action: Long) {
+        assertTrue(actions and action == 0L)
     }
 }

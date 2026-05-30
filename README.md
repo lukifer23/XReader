@@ -29,7 +29,7 @@ Implemented:
 - Swipe, calibrated tap-zone, hardware-key, optional volume-button, searchable TOC/bookmark/note navigation, search-result, find-next/find-previous, and scrubber navigation.
 - Reader themes: light, dark, sepia, and OLED black.
 - Reader typography and behavior controls: spacing presets, font size, font weight, line height, margins, alignment, hyphenation, publisher styles, PDF fit/layout, fullscreen, keep-screen-awake, app-local reader dimming, page animation toggle, tap-zone sizing, optional volume-button page turns, real Readium/CSS-resolvable font choices including OpenDyslexic, and per-book appearance overrides.
-- Read aloud from the visible reading position through Android TextToSpeech using page-aligned local indexed book text, with persisted spoken position, pause/resume, previous/next passage controls, speech speed, sleep timer, and installed offline voice selection.
+- Read aloud from the visible reading position through Android TextToSpeech using page-aligned local indexed book text, with persisted spoken position, pause/resume, previous/next passage controls, speech speed, sleep timer, installed offline voice selection, audio-focus handling, and Android media-session transport controls for headset/Bluetooth/play-pause/next/previous/stop actions.
 - Grouped Settings screen for reader appearance, typography, reading behavior, library display, and maintenance.
 - Bookmarks, highlights, tagged notes, global notes with tag filtering, in-book annotation lists, human-readable Markdown notes export, local notes/bookmark JSON export/import, and library metadata/progress backup.
 - Offline English dictionary backed by bundled Princeton WordNet data, with common plural, possessive, and inflected-form lookup.

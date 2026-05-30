@@ -69,6 +69,41 @@ class ReadAloudEngine(
     val state: StateFlow<ReadAloudState> = _state.asStateFlow()
     private val _voices = MutableStateFlow<List<ReadAloudVoiceOption>>(emptyList())
     val voices: StateFlow<List<ReadAloudVoiceOption>> = _voices.asStateFlow()
+    private val mediaSession = ReadAloudMediaSessionController(
+        context = appContext,
+        callbacks = object : ReadAloudMediaSessionCallbacks {
+            override fun onPlayRequested() {
+                val state = _state.value
+                if (state.paused && state.activeBookId != null) resumeInternal(state.activeBookId)
+            }
+
+            override fun onPauseRequested() {
+                val state = _state.value
+                if (state.playing && state.activeBookId != null) pauseInternal(state.activeBookId)
+            }
+
+            override fun onPlayPauseRequested() {
+                val state = _state.value
+                val bookId = state.activeBookId ?: return
+                when {
+                    state.playing -> pauseInternal(bookId)
+                    state.paused -> resumeInternal(bookId)
+                }
+            }
+
+            override fun onStopRequested() {
+                _state.value.activeBookId?.let(::stopInternal)
+            }
+
+            override fun onSkipToPreviousRequested() {
+                _state.value.activeBookId?.let { skipBy(bookId = it, delta = -1) }
+            }
+
+            override fun onSkipToNextRequested() {
+                _state.value.activeBookId?.let { skipBy(bookId = it, delta = 1) }
+            }
+        }
+    )
 
     private var tts: TextToSpeech? = null
     private var activeSpeech: ActiveSpeech? = null
@@ -82,6 +117,7 @@ class ReadAloudEngine(
         chunks: List<ReadAloudChunk>,
         currentUnit: Int,
         currentLocator: String? = null,
+        bookTitle: String,
         speechRate: Float = DEFAULT_SPEECH_RATE,
         voiceName: String? = null,
         sleepTimerDurationMillis: Long? = null,
@@ -129,6 +165,7 @@ class ReadAloudEngine(
             activeSpeech = ActiveSpeech(
                 bookId = bookId,
                 chunks = chunks,
+                bookTitle = bookTitle,
                 chunkIndex = chunkIndex,
                 segments = segments,
                 segmentIndex = 0
@@ -200,6 +237,7 @@ class ReadAloudEngine(
             stopInternal()
             tts?.shutdown()
             tts = null
+            mediaSession.release()
             _voices.value = emptyList()
         }
     }
@@ -477,6 +515,14 @@ class ReadAloudEngine(
             sleepTimerEndsAtMillis = sleepTimerEndsAtMillis,
             message = message
         )
+        mediaSession.update(
+            bookTitle = current.bookTitle,
+            heading = chunk?.heading,
+            playing = playing,
+            paused = paused,
+            currentChunk = current.chunkIndex,
+            totalChunks = current.chunks.size
+        )
     }
 
     private fun stopInternal(bookId: Long? = null, cancelSleepTimer: Boolean = true) {
@@ -494,6 +540,7 @@ class ReadAloudEngine(
         activeSpeech = null
         pendingUtteranceId = null
         _state.value = ReadAloudState()
+        mediaSession.stop()
     }
 
     private fun updateVoiceOptions(engine: TextToSpeech? = tts): List<ReadAloudVoiceOption> {
@@ -570,6 +617,7 @@ class ReadAloudEngine(
     private data class ActiveSpeech(
         val bookId: Long,
         val chunks: List<ReadAloudChunk>,
+        val bookTitle: String,
         val chunkIndex: Int,
         val segments: List<String>,
         val segmentIndex: Int,
