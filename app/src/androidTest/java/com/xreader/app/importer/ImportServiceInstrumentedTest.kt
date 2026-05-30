@@ -229,6 +229,29 @@ class ImportServiceInstrumentedTest {
     }
 
     @Test
+    fun importsMarkdownAsPrivateEpubAndIndexesText() = runBlocking {
+        val source = File(root, "source/Orbital Notes.md").apply {
+            parentFile?.mkdirs()
+            writeText(markdownDocument())
+        }
+
+        val result = ImportService(context, db).import(Uri.fromFile(source))
+
+        assertFalse(result.duplicate)
+        val book = requireNotNull(db.books().getBook(result.bookId))
+        assertEquals(BookFormat.EPUB, book.format)
+        assertEquals("md", book.sourceExtension)
+        assertEquals("Orbital Field Notes", book.title)
+        assertEquals("Mina Patel", book.author)
+        assertEquals("Science Fiction", book.genre)
+        assertEquals(2026, book.year)
+        assertTrue(File(context.filesDir, book.filePath).exists())
+
+        val searchResults = db.search().searchBook(result.bookId, "normalizedBody:greenhouse*")
+        assertTrue(searchResults.any { it.body.contains("Greenhouse sealed", ignoreCase = true) })
+    }
+
+    @Test
     fun importsManyBooksAndReportsDuplicatesAndUnsupportedFiles() = runBlocking {
         val first = File(root, "source/batch_one.txt").apply {
             parentFile?.mkdirs()
@@ -391,6 +414,26 @@ class ImportServiceInstrumentedTest {
             <blockquote>Keep the lights low during first contact.</blockquote>
           </body>
         </html>
+        """.trimIndent()
+
+    private fun markdownDocument(): String =
+        """
+        ---
+        title: Orbital Field Notes
+        author: Mina Patel
+        genre: Science Fiction
+        language: en-US
+        date: 2026-05-30
+        ---
+
+        # Arrival
+
+        The survey ship docked quietly at dawn.
+
+        - Checklist complete.
+        - Greenhouse sealed.
+
+        > Keep the lights low during first contact.
         """.trimIndent()
 
     private fun docxDocumentXml(): String =
