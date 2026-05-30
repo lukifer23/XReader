@@ -42,6 +42,7 @@ class ImportService(
         val duplicates: Int,
         val unsupported: Int,
         val failed: Int,
+        val primaryBookId: Long? = null,
     )
 
     data class LibraryRepairResult(
@@ -237,9 +238,11 @@ class ImportService(
         var duplicates = 0
         var unsupported = 0
         var failed = 0
+        val importedOrDuplicateBookIds = mutableListOf<Long>()
         uris.forEach { uri ->
             runCatching { import(uri) }
                 .onSuccess { result ->
+                    importedOrDuplicateBookIds += result.bookId
                     if (result.duplicate) {
                         duplicates += 1
                     } else {
@@ -259,7 +262,9 @@ class ImportService(
             imported = imported,
             duplicates = duplicates,
             unsupported = unsupported,
-            failed = failed
+            failed = failed,
+            primaryBookId = importedOrDuplicateBookIds.singleOrNull()
+                ?.takeIf { imported + duplicates == 1 && unsupported == 0 && failed == 0 }
         )
     }
 

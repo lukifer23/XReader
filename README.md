@@ -19,7 +19,7 @@ Implemented:
 - DOCX import converted into EPUB with document metadata, headings, paragraphs, lists, tables, and searchable text extraction.
 - HTML, HTM, and XHTML import converted into EPUB with page metadata, headings, lists, tables, blockquotes, and searchable text extraction.
 - Markdown import converted into EPUB with front matter metadata, headings, lists, blockquotes, code blocks, and searchable text extraction.
-- Private app-library imports from selected files or SAF folders, with checksum duplicate detection.
+- Private app-library imports from selected files or SAF folders, with checksum duplicate detection and an `Open` action after single-book imports or duplicate re-imports.
 - Library organization by books, authors, series, genres, years, custom collections, recent, unread, in progress, finished, and favorites, with group-aware ordering.
 - Home-screen series continuation that suggests the next unfinished title after the most recently finished book in a series.
 - Persisted library sort and comfortable/compact density controls that apply in grouped and ungrouped views.

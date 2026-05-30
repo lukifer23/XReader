@@ -54,6 +54,13 @@ data class BookHealthUiState(
     val searchRows: Int,
 )
 
+data class LibraryMessage(
+    val id: Long,
+    val text: String,
+    val actionLabel: String? = null,
+    val openBookId: Long? = null,
+)
+
 data class LibraryUiState(
     val query: String = "",
     val group: LibraryGroup = LibraryGroup.BOOKS,
@@ -65,7 +72,7 @@ data class LibraryUiState(
     val matchedBookCount: Int = 0,
     val totalBookCount: Int = 0,
     val importing: Boolean = false,
-    val message: String? = null,
+    val message: LibraryMessage? = null,
     val librarySearchResults: List<com.xreader.app.data.SearchIndexEntity> = emptyList(),
     val bookHealth: Map<Long, BookHealthUiState> = emptyMap(),
     val repairingBookIds: Set<Long> = emptySet(),
@@ -80,7 +87,8 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     private val query = MutableStateFlow("")
     private val group = MutableStateFlow(LibraryGroup.BOOKS)
     private val importing = MutableStateFlow(false)
-    private val message = MutableStateFlow<String?>(null)
+    private val message = MutableStateFlow<LibraryMessage?>(null)
+    private var nextMessageId = 0L
     private val searchResults = MutableStateFlow<List<com.xreader.app.data.SearchIndexEntity>>(emptyList())
     private val bookHealth = MutableStateFlow<Map<Long, BookHealthUiState>>(emptyMap())
     private val repairingBookIds = MutableStateFlow<Set<Long>>(emptySet())
@@ -112,7 +120,7 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     private data class LibraryChromeState(
         val selection: LibrarySelectionState,
         val importing: Boolean,
-        val message: String?,
+        val message: LibraryMessage?,
         val searchResults: List<com.xreader.app.data.SearchIndexEntity>,
     )
 
@@ -239,6 +247,20 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         message.value = null
     }
 
+    private fun postMessage(
+        text: String,
+        actionLabel: String? = null,
+        openBookId: Long? = null,
+    ) {
+        nextMessageId += 1
+        message.value = LibraryMessage(
+            id = nextMessageId,
+            text = text,
+            actionLabel = actionLabel,
+            openBookId = openBookId
+        )
+    }
+
     fun import(uri: Uri) {
         importFiles(listOf(uri))
     }
@@ -250,11 +272,15 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
             try {
                 runCatching { container.libraryRepository.importMany(uris) }
                     .onSuccess { result ->
-                        message.value = result.summaryMessage()
+                        postMessage(
+                            text = result.summaryMessage(),
+                            actionLabel = result.openActionLabel(),
+                            openBookId = result.primaryBookId
+                        )
                     }
                     .onFailure { error ->
                         Log.e("XReader", "Import failed for ${uris.size} selected files", error)
-                        message.value = error.message ?: "Import failed"
+                        postMessage(error.message ?: "Import failed")
                     }
             } finally {
                 importing.value = false
@@ -268,11 +294,15 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
             try {
                 runCatching { container.libraryRepository.importFolder(uri) }
                     .onSuccess { result ->
-                        message.value = result.summaryMessage()
+                        postMessage(
+                            text = result.summaryMessage(),
+                            actionLabel = result.openActionLabel(),
+                            openBookId = result.primaryBookId
+                        )
                     }
                     .onFailure { error ->
                         Log.e("XReader", "Folder import failed for $uri", error)
-                        message.value = error.message ?: "Folder import failed"
+                        postMessage(error.message ?: "Folder import failed")
                     }
             } finally {
                 importing.value = false
@@ -300,11 +330,11 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     fun setFinished(item: BookListItem, finished: Boolean) {
         viewModelScope.launch {
             container.libraryRepository.setFinished(item.book.id, finished)
-            message.value = when {
+            postMessage(when {
                 finished -> "Marked finished"
                 item.rawLibraryProgress() >= 0.995 -> "Removed manual finish mark; progress is still complete"
                 else -> "Marked not finished"
-            }
+            })
         }
     }
 
@@ -312,15 +342,15 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             runCatching { container.libraryRepository.addBookToCollection(item.book.id, name) }
                 .onSuccess { result ->
-                    message.value = if (result.changed) {
+                    postMessage(if (result.changed) {
                         "Added to ${result.collectionName}"
                     } else {
                         "Already in ${result.collectionName}"
-                    }
+                    })
                 }
                 .onFailure { error ->
                     Log.e("XReader", "Add to collection failed for ${item.book.id}", error)
-                    message.value = error.message ?: "Could not update collection"
+                    postMessage(error.message ?: "Could not update collection")
                 }
         }
     }
@@ -329,15 +359,15 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             runCatching { container.libraryRepository.removeBookFromCollection(item.book.id, collection.id) }
                 .onSuccess { result ->
-                    message.value = if (result.changed) {
+                    postMessage(if (result.changed) {
                         "Removed from ${result.collectionName}"
                     } else {
                         "Collection already updated"
-                    }
+                    })
                 }
                 .onFailure { error ->
                     Log.e("XReader", "Remove from collection failed for ${item.book.id}", error)
-                    message.value = error.message ?: "Could not update collection"
+                    postMessage(error.message ?: "Could not update collection")
                 }
         }
     }
@@ -363,11 +393,11 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
                 seriesIndex = seriesIndex,
                 applyToSeries = applyToSeries
             )
-            message.value = when {
+            postMessage(when {
                 result.updatedBooks > 1 -> "Updated metadata for ${result.updatedBooks} books"
                 result.updatedBooks == 1 -> "Updated metadata"
                 else -> "Metadata already up to date"
-            }
+            })
         }
     }
 
@@ -376,11 +406,11 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
             runCatching { container.libraryRepository.replaceCover(book, uri) }
                 .onSuccess {
                     refreshBookHealth(book.id)
-                    message.value = "Updated cover"
+                    postMessage("Updated cover")
                 }
                 .onFailure { error ->
                     Log.e("XReader", "Cover replacement failed for ${book.id}", error)
-                    message.value = error.message ?: "Cover update failed"
+                    postMessage(error.message ?: "Cover update failed")
                 }
         }
     }
@@ -389,11 +419,11 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             runCatching { container.libraryRepository.exportBook(book, uri) }
                 .onSuccess { bytes ->
-                    message.value = "Saved ${book.title} (${bytes.toReadableFileSize()})"
+                    postMessage("Saved ${book.title} (${bytes.toReadableFileSize()})")
                 }
                 .onFailure { error ->
                     Log.e("XReader", "Book export failed for ${book.id}", error)
-                    message.value = error.message ?: "Book export failed"
+                    postMessage(error.message ?: "Book export failed")
                 }
         }
     }
@@ -412,7 +442,7 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
                 }
                 .onFailure { error ->
                     Log.e("XReader", "Book health check failed for $bookId", error)
-                    message.value = error.message ?: "Book health check failed"
+                    postMessage(error.message ?: "Book health check failed")
                 }
         }
     }
@@ -425,11 +455,11 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
                 .onSuccess { refreshBookHealth(book.id) }
                 .getOrElse { error ->
                     Log.e("XReader", "Book repair failed for ${book.id}", error)
-                    message.value = error.message ?: "Book repair failed"
+                    postMessage(error.message ?: "Book repair failed")
                     repairingBookIds.value = repairingBookIds.value - book.id
                     return@launch
                 }
-            message.value = result.summaryMessage(book)
+            postMessage(result.summaryMessage(book))
             repairingBookIds.value = repairingBookIds.value - book.id
         }
     }
@@ -437,7 +467,7 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     fun deleteBook(book: BookEntity) {
         viewModelScope.launch {
             container.libraryRepository.deleteBook(book)
-            message.value = "Removed book"
+            postMessage("Removed book")
         }
     }
 
@@ -461,6 +491,9 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         val base = "Repaired ${book.title}; rebuilt $searchRows search rows"
         return if (details.isEmpty()) base else "$base; updated ${details.joinToString(", ")}"
     }
+
+    private fun com.xreader.app.importer.ImportService.ImportBatchResult.openActionLabel(): String? =
+        if (primaryBookId != null) "Open" else null
 
     private fun com.xreader.app.importer.ImportService.ImportBatchResult.summaryMessage(): String {
         if (scanned == 0) return "No supported book files found"

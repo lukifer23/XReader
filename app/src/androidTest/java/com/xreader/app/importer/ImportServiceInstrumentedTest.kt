@@ -17,6 +17,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -313,6 +314,34 @@ class ImportServiceInstrumentedTest {
         assertEquals(1, repeated.duplicates)
         assertEquals(1, repeated.unsupported)
         assertEquals(0, repeated.failed)
+        assertNull(repeated.primaryBookId)
+    }
+
+    @Test
+    fun importManySingleBookReportsOpenableBookIdForNewAndDuplicateImports() = runBlocking {
+        val source = File(root, "source/single_openable.txt").apply {
+            parentFile?.mkdirs()
+            writeText("Single openable\n\nThis imported title should be actionable.")
+        }
+        val service = ImportService(context, db)
+
+        val imported = service.importMany(listOf(Uri.fromFile(source)))
+        val bookId = requireNotNull(imported.primaryBookId)
+
+        assertEquals(1, imported.scanned)
+        assertEquals(1, imported.imported)
+        assertEquals(0, imported.duplicates)
+        assertEquals(0, imported.unsupported)
+        assertEquals(0, imported.failed)
+
+        val duplicate = service.importMany(listOf(Uri.fromFile(source)))
+
+        assertEquals(1, duplicate.scanned)
+        assertEquals(0, duplicate.imported)
+        assertEquals(1, duplicate.duplicates)
+        assertEquals(0, duplicate.unsupported)
+        assertEquals(0, duplicate.failed)
+        assertEquals(bookId, duplicate.primaryBookId)
     }
 
     @Test

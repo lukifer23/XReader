@@ -55,6 +55,8 @@ The manual Settings repair action and the per-book metadata repair action reuse 
 
 Folder imports walk SAF document trees recursively, filter to EPUB, PDF, TXT, CBZ, FB2, `.fb2.zip`, RTF, ODT, DOCX, HTML, HTM, XHTML, MD, and Markdown documents, and summarize imported, duplicate, unsupported, and failed files. They do not require broad all-files access.
 
+Single-book imports and duplicate re-imports carry the target book id back to the library UI, where the snackbar exposes a contextual `Open` action. Batch and folder imports keep summary-only feedback unless the completed import set contains exactly one actionable book.
+
 Book rows expose a save-copy action that launches Android's `CreateDocument` picker and streams the app-private stored reader file to the selected URI. Converted imports such as TXT, CBZ, FB2, RTF, ODT, DOCX, HTML, and Markdown export as the actual EPUB file XReader stores for reading.
 
 Manual metadata edits canonicalize author, genre, and series values before persistence, then can optionally apply shared author, genre, and series metadata to other books that match the same old or new author and series pair. The bulk cleanup runs in a Room transaction and keeps per-book fields such as title, year, and series index isolated to each book.

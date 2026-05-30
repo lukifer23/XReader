@@ -59,6 +59,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -183,10 +184,17 @@ internal fun LibraryRoute(
         }
     }
 
-    LaunchedEffect(state.message) {
+    LaunchedEffect(state.message?.id) {
         val message = state.message ?: return@LaunchedEffect
-        snackbarHostState.showSnackbar(message)
+        val result = snackbarHostState.showSnackbar(
+            message = message.text,
+            actionLabel = message.actionLabel,
+            withDismissAction = message.actionLabel != null
+        )
         viewModel.clearMessage()
+        if (result == SnackbarResult.ActionPerformed && message.openBookId != null) {
+            openReaderAt(message.openBookId, null)
+        }
     }
 
     Scaffold(
