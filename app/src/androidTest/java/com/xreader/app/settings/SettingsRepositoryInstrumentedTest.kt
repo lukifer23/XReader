@@ -75,6 +75,7 @@ class SettingsRepositoryInstrumentedTest {
         repository.setTextAlign(ReaderTextAlign.JUSTIFY)
         repository.setPdfFit(ReaderPdfFit.CONTAIN)
         repository.setPdfScrollAxis(ReaderPdfScrollAxis.VERTICAL)
+        repository.setPageDirection(ReaderPageDirection.RIGHT_TO_LEFT)
         repository.setLibrarySort(LibrarySort.SERIES)
         repository.setLibraryDensity(LibraryDensity.COMPACT)
 
@@ -103,6 +104,7 @@ class SettingsRepositoryInstrumentedTest {
         assertEquals(ReaderTextAlign.JUSTIFY, readerSettings.textAlign)
         assertEquals(ReaderPdfFit.CONTAIN, readerSettings.pdfFit)
         assertEquals(ReaderPdfScrollAxis.VERTICAL, readerSettings.pdfScrollAxis)
+        assertEquals(ReaderPageDirection.RIGHT_TO_LEFT, readerSettings.pageDirection)
         assertEquals(LibrarySort.SERIES, librarySettings.sort)
         assertEquals(LibraryDensity.COMPACT, librarySettings.density)
 
@@ -132,7 +134,8 @@ class SettingsRepositoryInstrumentedTest {
             publisherStyles = true,
             textAlign = ReaderTextAlign.JUSTIFY,
             pdfFit = ReaderPdfFit.CONTAIN,
-            pdfScrollAxis = ReaderPdfScrollAxis.VERTICAL
+            pdfScrollAxis = ReaderPdfScrollAxis.VERTICAL,
+            pageDirection = ReaderPageDirection.RIGHT_TO_LEFT
         )
 
         repository.setBookAppearanceEnabled(bookId = 42L, enabled = true, seed = seed)
@@ -147,6 +150,7 @@ class SettingsRepositoryInstrumentedTest {
         repository.setBookTextAlign(bookId = 42L, value = ReaderTextAlign.START)
         repository.setBookPdfFit(bookId = 42L, value = ReaderPdfFit.HEIGHT)
         repository.setBookPdfScrollAxis(bookId = 42L, value = ReaderPdfScrollAxis.HORIZONTAL)
+        repository.setBookPageDirection(bookId = 42L, value = ReaderPageDirection.LEFT_TO_RIGHT)
 
         val appearance = requireNotNull(repository.bookAppearance(42L).first())
         assertEquals(ReaderSpacingPreset.COMPACT.fontScale, appearance.fontScale, 0.001f)
@@ -159,6 +163,7 @@ class SettingsRepositoryInstrumentedTest {
         assertEquals(ReaderTextAlign.START, appearance.textAlign)
         assertEquals(ReaderPdfFit.HEIGHT, appearance.pdfFit)
         assertEquals(ReaderPdfScrollAxis.HORIZONTAL, appearance.pdfScrollAxis)
+        assertEquals(ReaderPageDirection.LEFT_TO_RIGHT, appearance.pageDirection)
         assertNull(repository.bookAppearance(7L).first())
 
         repository.setBookAppearanceEnabled(bookId = 42L, enabled = false, seed = seed)

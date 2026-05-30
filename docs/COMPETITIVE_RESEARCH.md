@@ -65,7 +65,7 @@ The research points to several areas that matter more than raw feature count:
 - Undoable book removal. Removing a book uses the existing snackbar action path to defer the destructive delete, so accidental removals can be reversed without adding a recycle-bin screen.
 - Range-aware reading stats. The stats screen now supports 7-day, 30-day, 13-week, and all-time ranges, with grouped analytics and activity buckets recalculated for the selected period.
 - Local reading stats export. The stats screen can export all analytics ranges to CSV or JSON through Android's document picker, keeping the workflow local and user-controlled.
-- Per-book reader appearance. Books can keep their own font, font weight, spacing, hyphenation, alignment, publisher-style, and PDF fit choices without changing global reading behavior.
+- Per-book reader appearance. Books can keep their own font, font weight, spacing, hyphenation, alignment, publisher-style, PDF fit, and page-direction choices without changing global reading behavior, and local library backup restores those choices by checksum.
 - PDF layout comfort. PDFs can use page, width, or height fit, paged or vertical layout, and page-direction overrides for manuals, scans, and right-to-left page sets.
 - Keep screen awake. Reader sessions can opt into Android's screen-awake flag while the reader is visible, avoiding sleep interruptions without changing global phone settings.
 - Reader dimming. Night reading can use a reader-only dim overlay without requesting system brightness permissions or changing the rest of the phone.

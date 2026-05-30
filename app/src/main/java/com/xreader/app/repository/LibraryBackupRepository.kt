@@ -11,6 +11,15 @@ import com.xreader.app.data.ReadingDao
 import com.xreader.app.data.ReadingSessionEntity
 import com.xreader.app.data.ReadingStateEntity
 import com.xreader.app.data.SeriesEntity
+import com.xreader.app.settings.BookReaderAppearance
+import com.xreader.app.settings.ReaderFontFamily
+import com.xreader.app.settings.ReaderPageDirection
+import com.xreader.app.settings.ReaderPdfFit
+import com.xreader.app.settings.ReaderPdfScrollAxis
+import com.xreader.app.settings.ReaderTextAlign
+import com.xreader.app.settings.SettingsRepository
+import com.xreader.app.settings.normalizedReaderFontWeight
+import kotlinx.coroutines.flow.first
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.Clock
@@ -21,11 +30,13 @@ class LibraryBackupRepository(
     private val collectionDao: CollectionDao,
     private val readingDao: ReadingDao,
     private val clock: Clock = Clock.systemUTC(),
+    private val settingsRepository: SettingsRepository? = null,
 ) {
     data class ExportResult(
         val json: String,
         val books: Int,
         val collections: Int,
+        val readerAppearances: Int,
         val readingStates: Int,
         val readingSessions: Int,
     )
@@ -35,6 +46,8 @@ class LibraryBackupRepository(
         val collectionsImported: Int,
         val collectionMembershipsImported: Int,
         val collectionMembershipsSkipped: Int,
+        val readerAppearancesImported: Int,
+        val readerAppearancesSkipped: Int,
         val readingStatesImported: Int,
         val readingStatesSkipped: Int,
         val readingSessionsImported: Int,
@@ -51,6 +64,11 @@ class LibraryBackupRepository(
         val membershipsByCollection = bookCollections.groupBy { it.collectionId }
         val states = readingDao.allStates()
         val sessions = readingDao.allSessions()
+        val readerAppearances = settingsRepository?.let { repository ->
+            books.mapNotNull { book ->
+                repository.bookAppearance(book.id).first()?.let { appearance -> book to appearance }
+            }
+        }.orEmpty()
         val root = JSONObject()
             .put("format", BACKUP_FORMAT)
             .put("version", 1)
@@ -103,6 +121,14 @@ class LibraryBackupRepository(
                 }
             )
             .put(
+                "readerAppearances",
+                JSONArray().also { array ->
+                    readerAppearances.forEach { (book, appearance) ->
+                        array.put(appearance.toJson(book.checksum))
+                    }
+                }
+            )
+            .put(
                 "readingStates",
                 JSONArray().also { array ->
                     states.forEach { state ->
@@ -145,6 +171,7 @@ class LibraryBackupRepository(
             json = root.toString(2),
             books = books.size,
             collections = collections.count { collection -> membershipsByCollection[collection.id].orEmpty().isNotEmpty() },
+            readerAppearances = readerAppearances.size,
             readingStates = states.size,
             readingSessions = sessions.size
         )
@@ -159,6 +186,8 @@ class LibraryBackupRepository(
         var collectionsImported = 0
         var collectionMembershipsImported = 0
         var collectionMembershipsSkipped = 0
+        var readerAppearancesImported = 0
+        var readerAppearancesSkipped = 0
         var readingStatesImported = 0
         var readingStatesSkipped = 0
         var readingSessionsImported = 0
@@ -264,6 +293,36 @@ class LibraryBackupRepository(
             collectionDao.touchCollection(collectionId, max(now, item.optLong("updatedAt", now)))
         }
 
+        val readerAppearances = root.optJSONArray("readerAppearances") ?: JSONArray()
+        for (index in 0 until readerAppearances.length()) {
+            val item = readerAppearances.optJSONObject(index) ?: run {
+                invalidItems += 1
+                continue
+            }
+            val checksum = item.optString("bookChecksum").takeIf { it.isNotBlank() } ?: run {
+                invalidItems += 1
+                continue
+            }
+            val book = booksByChecksum[checksum] ?: run {
+                missingChecksums += checksum
+                continue
+            }
+            val appearance = item.toBookReaderAppearanceOrNull() ?: run {
+                invalidItems += 1
+                continue
+            }
+            val repository = settingsRepository ?: run {
+                readerAppearancesSkipped += 1
+                continue
+            }
+            if (repository.bookAppearance(book.id).first() == appearance) {
+                readerAppearancesSkipped += 1
+                continue
+            }
+            repository.setBookAppearance(book.id, appearance)
+            readerAppearancesImported += 1
+        }
+
         val states = root.optJSONArray("readingStates") ?: JSONArray()
         for (index in 0 until states.length()) {
             val item = states.optJSONObject(index) ?: run {
@@ -348,6 +407,8 @@ class LibraryBackupRepository(
             collectionsImported = collectionsImported,
             collectionMembershipsImported = collectionMembershipsImported,
             collectionMembershipsSkipped = collectionMembershipsSkipped,
+            readerAppearancesImported = readerAppearancesImported,
+            readerAppearancesSkipped = readerAppearancesSkipped,
             readingStatesImported = readingStatesImported,
             readingStatesSkipped = readingStatesSkipped,
             readingSessionsImported = readingSessionsImported,
@@ -371,6 +432,43 @@ class LibraryBackupRepository(
 
     private fun JSONObject.optNullableDouble(name: String): Double? =
         if (!has(name) || isNull(name)) null else optDouble(name)
+
+    private fun BookReaderAppearance.toJson(bookChecksum: String): JSONObject =
+        JSONObject()
+            .put("bookChecksum", bookChecksum)
+            .put("fontScale", fontScale)
+            .put("lineHeight", lineHeight)
+            .put("marginScale", marginScale)
+            .put("fontFamily", fontFamily.name)
+            .put("fontWeight", fontWeight)
+            .put("hyphenation", hyphenation)
+            .put("publisherStyles", publisherStyles)
+            .put("textAlign", textAlign.name)
+            .put("pdfFit", pdfFit.name)
+            .put("pdfScrollAxis", pdfScrollAxis.name)
+            .put("pageDirection", pageDirection.name)
+
+    private fun JSONObject.toBookReaderAppearanceOrNull(): BookReaderAppearance? =
+        runCatching {
+            BookReaderAppearance(
+                fontScale = optDouble("fontScale", 1.18).toFloat().coerceIn(0.75f, 1.65f),
+                lineHeight = optDouble("lineHeight", 1.42).toFloat().coerceIn(1.1f, 2.0f),
+                marginScale = optDouble("marginScale", 0.52).toFloat().coerceIn(0.35f, 1.8f),
+                fontFamily = enumValueOrNull<ReaderFontFamily>("fontFamily") ?: ReaderFontFamily.DEFAULT,
+                fontWeight = normalizedReaderFontWeight(optDouble("fontWeight", 1.0).toFloat()),
+                hyphenation = optBoolean("hyphenation", false),
+                publisherStyles = optBoolean("publisherStyles", false),
+                textAlign = enumValueOrNull<ReaderTextAlign>("textAlign") ?: ReaderTextAlign.START,
+                pdfFit = enumValueOrNull<ReaderPdfFit>("pdfFit") ?: ReaderPdfFit.WIDTH,
+                pdfScrollAxis = enumValueOrNull<ReaderPdfScrollAxis>("pdfScrollAxis") ?: ReaderPdfScrollAxis.HORIZONTAL,
+                pageDirection = enumValueOrNull<ReaderPageDirection>("pageDirection") ?: ReaderPageDirection.AUTO
+            )
+        }.getOrNull()
+
+    private inline fun <reified T : Enum<T>> JSONObject.enumValueOrNull(name: String): T? =
+        optString(name).takeIf { it.isNotBlank() }?.let { value ->
+            runCatching { enumValueOf<T>(value) }.getOrNull()
+        }
 
     private fun String.cleanCollectionName(): String {
         val cleaned = trim().replace(Regex("\\s+"), " ")

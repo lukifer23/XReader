@@ -264,13 +264,15 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     private fun com.xreader.app.repository.LibraryBackupRepository.ImportResult.summaryMessage(): String {
-        val changed = booksUpdated + collectionsImported + collectionMembershipsImported + readingStatesImported + readingSessionsImported
-        val skipped = collectionMembershipsSkipped + readingStatesSkipped + readingSessionsSkipped
+        val changed = booksUpdated + collectionsImported + collectionMembershipsImported +
+            readerAppearancesImported + readingStatesImported + readingSessionsImported
+        val skipped = collectionMembershipsSkipped + readerAppearancesSkipped + readingStatesSkipped + readingSessionsSkipped
         val base = "Imported $changed library ${if (changed == 1) "item" else "items"}"
         val details = buildList {
             if (booksUpdated > 0) add("$booksUpdated metadata updates")
             if (collectionsImported > 0) add("$collectionsImported collections")
             if (collectionMembershipsImported > 0) add("$collectionMembershipsImported collection links")
+            if (readerAppearancesImported > 0) add("$readerAppearancesImported reader settings")
             if (skipped > 0) add("$skipped skipped")
             if (missingBooks > 0) add("$missingBooks missing books")
             if (invalidItems > 0) add("$invalidItems invalid")

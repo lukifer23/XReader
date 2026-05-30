@@ -2,6 +2,7 @@ package com.xreader.app.settings
 
 import android.content.Context
 import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
@@ -249,18 +250,7 @@ class SettingsRepository(
         val keys = bookAppearanceKeys(bookId)
         dataStore.edit { prefs ->
             if (enabled) {
-                prefs[keys.enabled] = true
-                prefs[keys.fontScale] = seed.fontScale.coerceIn(0.75f, 1.65f)
-                prefs[keys.lineHeight] = seed.lineHeight.coerceIn(1.1f, 2.0f)
-                prefs[keys.marginScale] = seed.marginScale.coerceIn(0.35f, 1.8f)
-                prefs[keys.fontFamily] = seed.fontFamily.name
-                prefs[keys.fontWeight] = normalizedReaderFontWeight(seed.fontWeight)
-                prefs[keys.hyphenation] = seed.hyphenation
-                prefs[keys.publisherStyles] = seed.publisherStyles
-                prefs[keys.textAlign] = seed.textAlign.name
-                prefs[keys.pdfFit] = seed.pdfFit.name
-                prefs[keys.pdfScrollAxis] = seed.pdfScrollAxis.name
-                prefs[keys.pageDirection] = seed.pageDirection.name
+                prefs.putBookAppearance(keys, seed.bookAppearance())
             } else {
                 prefs.remove(keys.enabled)
                 prefs.remove(keys.fontScale)
@@ -275,6 +265,13 @@ class SettingsRepository(
                 prefs.remove(keys.pdfScrollAxis)
                 prefs.remove(keys.pageDirection)
             }
+        }
+    }
+
+    suspend fun setBookAppearance(bookId: Long, appearance: BookReaderAppearance) {
+        val keys = bookAppearanceKeys(bookId)
+        dataStore.edit { prefs ->
+            prefs.putBookAppearance(keys, appearance)
         }
     }
 
@@ -362,5 +359,23 @@ class SettingsRepository(
             pdfScrollAxis = stringPreferencesKey("${prefix}_pdf_scroll_axis"),
             pageDirection = stringPreferencesKey("${prefix}_page_direction")
         )
+    }
+
+    private fun MutablePreferences.putBookAppearance(
+        keys: BookAppearanceKeys,
+        appearance: BookReaderAppearance,
+    ) {
+        this[keys.enabled] = true
+        this[keys.fontScale] = appearance.fontScale.coerceIn(0.75f, 1.65f)
+        this[keys.lineHeight] = appearance.lineHeight.coerceIn(1.1f, 2.0f)
+        this[keys.marginScale] = appearance.marginScale.coerceIn(0.35f, 1.8f)
+        this[keys.fontFamily] = appearance.fontFamily.name
+        this[keys.fontWeight] = normalizedReaderFontWeight(appearance.fontWeight)
+        this[keys.hyphenation] = appearance.hyphenation
+        this[keys.publisherStyles] = appearance.publisherStyles
+        this[keys.textAlign] = appearance.textAlign.name
+        this[keys.pdfFit] = appearance.pdfFit.name
+        this[keys.pdfScrollAxis] = appearance.pdfScrollAxis.name
+        this[keys.pageDirection] = appearance.pageDirection.name
     }
 }

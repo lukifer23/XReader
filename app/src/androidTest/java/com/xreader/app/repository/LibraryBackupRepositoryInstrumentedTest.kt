@@ -1,6 +1,7 @@
 package com.xreader.app.repository
 
 import android.content.Context
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -11,6 +12,17 @@ import com.xreader.app.data.CollectionEntity
 import com.xreader.app.data.ReadingSessionEntity
 import com.xreader.app.data.ReadingStateEntity
 import com.xreader.app.data.XReaderDatabase
+import com.xreader.app.settings.ReaderFontFamily
+import com.xreader.app.settings.ReaderPageDirection
+import com.xreader.app.settings.ReaderPdfFit
+import com.xreader.app.settings.ReaderPdfScrollAxis
+import com.xreader.app.settings.ReaderSettings
+import com.xreader.app.settings.ReaderTextAlign
+import com.xreader.app.settings.SettingsRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
@@ -19,6 +31,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.io.File
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
@@ -26,6 +39,8 @@ import java.time.ZoneOffset
 @RunWith(AndroidJUnit4::class)
 class LibraryBackupRepositoryInstrumentedTest {
     private val context: Context = ApplicationProvider.getApplicationContext()
+    private val root = File(context.cacheDir, "library-backup-test-${System.nanoTime()}")
+    private val dataStoreScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val sourceDb = Room.inMemoryDatabaseBuilder(context, XReaderDatabase::class.java)
         .allowMainThreadQueries()
         .build()
@@ -36,6 +51,8 @@ class LibraryBackupRepositoryInstrumentedTest {
 
     @After
     fun cleanUp() {
+        dataStoreScope.cancel()
+        root.deleteRecursively()
         sourceDb.close()
         targetDb.close()
     }
@@ -90,7 +107,31 @@ class LibraryBackupRepositoryInstrumentedTest {
                 addedAt = 2_000
             )
         )
-        val exported = LibraryBackupRepository(sourceDb.books(), sourceDb.collections(), sourceDb.reading(), clock).exportBackupJson()
+        val sourceSettings = testSettingsRepository("source")
+        sourceSettings.setBookAppearanceEnabled(
+            bookId = sourceBookId,
+            enabled = true,
+            seed = ReaderSettings(
+                fontScale = 1.35f,
+                lineHeight = 1.6f,
+                marginScale = 0.85f,
+                fontFamily = ReaderFontFamily.ACCESSIBLE,
+                fontWeight = 1.25f,
+                hyphenation = true,
+                publisherStyles = false,
+                textAlign = ReaderTextAlign.JUSTIFY,
+                pdfFit = ReaderPdfFit.CONTAIN,
+                pdfScrollAxis = ReaderPdfScrollAxis.VERTICAL,
+                pageDirection = ReaderPageDirection.RIGHT_TO_LEFT
+            )
+        )
+        val exported = LibraryBackupRepository(
+            bookDao = sourceDb.books(),
+            collectionDao = sourceDb.collections(),
+            readingDao = sourceDb.reading(),
+            clock = clock,
+            settingsRepository = sourceSettings
+        ).exportBackupJson()
         val targetBookId = targetDb.books().insert(
             testBook(
                 title = "Fresh Import",
@@ -100,15 +141,28 @@ class LibraryBackupRepositoryInstrumentedTest {
                 finished = false
             )
         )
-        val targetRepository = LibraryBackupRepository(targetDb.books(), targetDb.collections(), targetDb.reading(), clock)
+        val targetSettings = testSettingsRepository("target")
+        val targetRepository = LibraryBackupRepository(
+            bookDao = targetDb.books(),
+            collectionDao = targetDb.collections(),
+            readingDao = targetDb.reading(),
+            clock = clock,
+            settingsRepository = targetSettings
+        )
 
         val imported = targetRepository.importBackupJson(exported.json)
 
         assertEquals(1, exported.collections)
+        assertEquals(1, exported.readerAppearances)
         assertEquals("Sci-Fi", JSONObject(exported.json).getJSONArray("collections").getJSONObject(0).getString("name"))
+        assertEquals(
+            ReaderPageDirection.RIGHT_TO_LEFT.name,
+            JSONObject(exported.json).getJSONArray("readerAppearances").getJSONObject(0).getString("pageDirection")
+        )
         assertEquals(1, imported.booksUpdated)
         assertEquals(1, imported.collectionsImported)
         assertEquals(1, imported.collectionMembershipsImported)
+        assertEquals(1, imported.readerAppearancesImported)
         assertEquals(1, imported.readingStatesImported)
         assertEquals(1, imported.readingSessionsImported)
         assertEquals(0, imported.missingBooks)
@@ -127,6 +181,13 @@ class LibraryBackupRepositoryInstrumentedTest {
         assertEquals(1, targetDb.reading().allSessions().size)
         assertEquals(listOf("Sci-Fi"), targetDb.collections().observeCollections().first().map { it.name })
         assertEquals(listOf(targetBookId), targetDb.collections().allBookCollections().map { it.bookId })
+        val restoredAppearance = requireNotNull(targetSettings.bookAppearance(targetBookId).first())
+        assertEquals(1.35f, restoredAppearance.fontScale, 0.001f)
+        assertEquals(ReaderFontFamily.ACCESSIBLE, restoredAppearance.fontFamily)
+        assertEquals(ReaderTextAlign.JUSTIFY, restoredAppearance.textAlign)
+        assertEquals(ReaderPdfFit.CONTAIN, restoredAppearance.pdfFit)
+        assertEquals(ReaderPdfScrollAxis.VERTICAL, restoredAppearance.pdfScrollAxis)
+        assertEquals(ReaderPageDirection.RIGHT_TO_LEFT, restoredAppearance.pageDirection)
 
         val secondImport = targetRepository.importBackupJson(exported.json)
 
@@ -134,10 +195,23 @@ class LibraryBackupRepositoryInstrumentedTest {
         assertEquals(0, secondImport.collectionsImported)
         assertEquals(0, secondImport.collectionMembershipsImported)
         assertEquals(1, secondImport.collectionMembershipsSkipped)
+        assertEquals(0, secondImport.readerAppearancesImported)
+        assertEquals(1, secondImport.readerAppearancesSkipped)
         assertEquals(0, secondImport.readingStatesImported)
         assertEquals(1, secondImport.readingStatesSkipped)
         assertEquals(0, secondImport.readingSessionsImported)
         assertEquals(1, secondImport.readingSessionsSkipped)
+    }
+
+    private fun testSettingsRepository(name: String): SettingsRepository {
+        val dataStore = PreferenceDataStoreFactory.create(
+            scope = dataStoreScope,
+            produceFile = {
+                root.mkdirs()
+                File(root, "$name.preferences_pb")
+            }
+        )
+        return SettingsRepository(context, dataStore)
     }
 
     private fun testBook(

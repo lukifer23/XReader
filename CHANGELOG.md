@@ -55,7 +55,7 @@ Initial public repository snapshot.
 - In-reader notes and highlights can be edited from the navigation sheet without leaving the book.
 - Human-readable Markdown export for notes, highlights, and bookmarks from the global notes screen.
 - Local JSON export/import for notes, highlights, and bookmarks matched back to books by checksum.
-- Local JSON export/import for library catalog metadata, favorites, finished state, reading progress, and reading sessions matched back to imported books by checksum.
+- Local JSON export/import for library catalog metadata, favorites, finished state, reading progress, reading sessions, and per-book reader appearance matched back to imported books by checksum.
 - Offline English dictionary backed by Princeton WordNet, with phrase, hyphenated-word, common plural, possessive, and inflected-form lookup.
 - Local full-text search with fallback from Readium search to the app search index.
 - Library full-text search results identify the source book and author, center snippets on the matched query, support the keyboard search action, and can expand beyond the compact preview without adding another search screen.
