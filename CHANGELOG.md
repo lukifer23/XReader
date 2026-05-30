@@ -21,6 +21,7 @@ Initial public repository snapshot.
 - Library organization, metadata editing, favorites, finished state, and progress display.
 - Predictable grouped-library ordering: years newest-first and missing series/genre/year buckets last.
 - Manual mark-finished and mark-not-finished actions from the compact book action menu, with finished-state-aware progress classification.
+- Compact author, genre, and series suggestions in the metadata editor to prevent accidental duplicate categories.
 - Opt-in bulk genre and series cleanup from the metadata editor for matching series books.
 - Persisted library sort and comfortable/compact density controls.
 - Quiet first-run import state plus distinct no-results states for search misses and empty library filters.

@@ -69,6 +69,9 @@ data class LibraryUiState(
     val librarySearchResults: List<com.xreader.app.data.SearchIndexEntity> = emptyList(),
     val bookHealth: Map<Long, BookHealthUiState> = emptyMap(),
     val repairingBookIds: Set<Long> = emptySet(),
+    val authorOptions: List<String> = emptyList(),
+    val genreOptions: List<String> = emptyList(),
+    val seriesOptions: List<String> = emptyList(),
 )
 
 @SuppressLint("LogNotTimber")
@@ -87,6 +90,17 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     private val states = container.readingRepository.observeStates()
     private val collections = container.libraryRepository.observeCollections()
     private val bookCollectionNames = container.libraryRepository.observeBookCollectionNames()
+    private val metadataOptions = combine(
+        container.libraryRepository.observeAuthors(),
+        container.libraryRepository.observeGenres(),
+        container.libraryRepository.observeSeries()
+    ) { authors, genres, series ->
+        LibraryMetadataOptionsState(
+            authorOptions = authors,
+            genreOptions = genres,
+            seriesOptions = series
+        )
+    }
 
     private data class LibrarySelectionState(
         val query: String,
@@ -122,6 +136,19 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         val allItems: List<BookListItem>,
     )
 
+    private data class LibraryMetadataOptionsState(
+        val authorOptions: List<String>,
+        val genreOptions: List<String>,
+        val seriesOptions: List<String>,
+    )
+
+    private data class LibrarySupportState(
+        val collections: List<CollectionEntity>,
+        val bookHealth: Map<Long, BookHealthUiState>,
+        val repairingBookIds: Set<Long>,
+        val metadataOptions: LibraryMetadataOptionsState,
+    )
+
     private val bookItems = combine(
         queriedBooks,
         allBooks,
@@ -142,8 +169,22 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         )
     }
 
+    private val supportState = combine(
+        collections,
+        bookHealth,
+        repairingBookIds,
+        metadataOptions
+    ) { currentCollections, health, repairing, options ->
+        LibrarySupportState(
+            collections = currentCollections,
+            bookHealth = health,
+            repairingBookIds = repairing,
+            metadataOptions = options
+        )
+    }
+
     val uiState: StateFlow<LibraryUiState> =
-        combine(chromeState, bookItems, collections, bookHealth, repairingBookIds) { chrome, libraryBooks, currentCollections, health, repairing ->
+        combine(chromeState, bookItems, supportState) { chrome, libraryBooks, support ->
             val selection = chrome.selection
             val visibleBooks = libraryBooks.queriedItems.filteredBy(selection.group).sortedForLibrary(selection.sort)
             LibraryUiState(
@@ -153,14 +194,17 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
                 density = selection.density,
                 books = visibleBooks,
                 allBooks = libraryBooks.allItems,
-                collections = currentCollections.toUiItems(),
+                collections = support.collections.toUiItems(),
                 matchedBookCount = libraryBooks.queriedItems.size,
                 totalBookCount = libraryBooks.allItems.size,
                 importing = chrome.importing,
                 message = chrome.message,
                 librarySearchResults = chrome.searchResults,
-                bookHealth = health,
-                repairingBookIds = repairing
+                bookHealth = support.bookHealth,
+                repairingBookIds = support.repairingBookIds,
+                authorOptions = support.metadataOptions.authorOptions,
+                genreOptions = support.metadataOptions.genreOptions,
+                seriesOptions = support.metadataOptions.seriesOptions
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState())
 
