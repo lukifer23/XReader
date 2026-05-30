@@ -42,6 +42,7 @@ class SettingsRepository(
         val textAlign = stringPreferencesKey("text_align")
         val pdfFit = stringPreferencesKey("pdf_fit")
         val pdfScrollAxis = stringPreferencesKey("pdf_scroll_axis")
+        val pageDirection = stringPreferencesKey("page_direction")
         val highlightColor = stringPreferencesKey("highlight_color")
         val idleTimeoutMillis = longPreferencesKey("idle_timeout_millis")
         val librarySort = stringPreferencesKey("library_sort")
@@ -60,6 +61,7 @@ class SettingsRepository(
         val textAlign: Key<String>,
         val pdfFit: Key<String>,
         val pdfScrollAxis: Key<String>,
+        val pageDirection: Key<String>,
     )
 
     val settings: Flow<ReaderSettings> =
@@ -93,6 +95,8 @@ class SettingsRepository(
                     ?: ReaderPdfFit.WIDTH,
                 pdfScrollAxis = prefs[Keys.pdfScrollAxis]?.let { runCatching { ReaderPdfScrollAxis.valueOf(it) }.getOrNull() }
                     ?: ReaderPdfScrollAxis.HORIZONTAL,
+                pageDirection = prefs[Keys.pageDirection]?.let { runCatching { ReaderPageDirection.valueOf(it) }.getOrNull() }
+                    ?: ReaderPageDirection.AUTO,
                 highlightColor = ReaderHighlightColor.normalized(prefs[Keys.highlightColor]),
                 idleTimeoutMillis = prefs[Keys.idleTimeoutMillis] ?: 90_000L
             )
@@ -117,7 +121,9 @@ class SettingsRepository(
                     pdfFit = prefs[keys.pdfFit]?.let { runCatching { ReaderPdfFit.valueOf(it) }.getOrNull() }
                         ?: ReaderPdfFit.WIDTH,
                     pdfScrollAxis = prefs[keys.pdfScrollAxis]?.let { runCatching { ReaderPdfScrollAxis.valueOf(it) }.getOrNull() }
-                        ?: ReaderPdfScrollAxis.HORIZONTAL
+                        ?: ReaderPdfScrollAxis.HORIZONTAL,
+                    pageDirection = prefs[keys.pageDirection]?.let { runCatching { ReaderPageDirection.valueOf(it) }.getOrNull() }
+                        ?: ReaderPageDirection.AUTO
                 )
             }
         }
@@ -231,6 +237,10 @@ class SettingsRepository(
         dataStore.edit { it[Keys.pdfScrollAxis] = value.name }
     }
 
+    suspend fun setPageDirection(value: ReaderPageDirection) {
+        dataStore.edit { it[Keys.pageDirection] = value.name }
+    }
+
     suspend fun setHighlightColor(value: String) {
         dataStore.edit { it[Keys.highlightColor] = ReaderHighlightColor.normalized(value) }
     }
@@ -250,6 +260,7 @@ class SettingsRepository(
                 prefs[keys.textAlign] = seed.textAlign.name
                 prefs[keys.pdfFit] = seed.pdfFit.name
                 prefs[keys.pdfScrollAxis] = seed.pdfScrollAxis.name
+                prefs[keys.pageDirection] = seed.pageDirection.name
             } else {
                 prefs.remove(keys.enabled)
                 prefs.remove(keys.fontScale)
@@ -262,6 +273,7 @@ class SettingsRepository(
                 prefs.remove(keys.textAlign)
                 prefs.remove(keys.pdfFit)
                 prefs.remove(keys.pdfScrollAxis)
+                prefs.remove(keys.pageDirection)
             }
         }
     }
@@ -315,6 +327,10 @@ class SettingsRepository(
         dataStore.edit { it[bookAppearanceKeys(bookId).pdfScrollAxis] = value.name }
     }
 
+    suspend fun setBookPageDirection(bookId: Long, value: ReaderPageDirection) {
+        dataStore.edit { it[bookAppearanceKeys(bookId).pageDirection] = value.name }
+    }
+
     suspend fun setLibrarySort(value: LibrarySort) {
         dataStore.edit { it[Keys.librarySort] = value.name }
     }
@@ -343,7 +359,8 @@ class SettingsRepository(
             publisherStyles = booleanPreferencesKey("${prefix}_publisher_styles"),
             textAlign = stringPreferencesKey("${prefix}_text_align"),
             pdfFit = stringPreferencesKey("${prefix}_pdf_fit"),
-            pdfScrollAxis = stringPreferencesKey("${prefix}_pdf_scroll_axis")
+            pdfScrollAxis = stringPreferencesKey("${prefix}_pdf_scroll_axis"),
+            pageDirection = stringPreferencesKey("${prefix}_page_direction")
         )
     }
 }

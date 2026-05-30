@@ -18,6 +18,12 @@ enum class ReaderPdfScrollAxis(val label: String) {
     VERTICAL("Scroll"),
 }
 
+enum class ReaderPageDirection(val label: String) {
+    AUTO("Auto"),
+    LEFT_TO_RIGHT("Left to right"),
+    RIGHT_TO_LEFT("Right to left"),
+}
+
 enum class ReaderTapZonePreset(
     val label: String,
     val sideFraction: Float,
@@ -116,6 +122,7 @@ data class ReaderSettings(
     val textAlign: ReaderTextAlign = ReaderTextAlign.START,
     val pdfFit: ReaderPdfFit = ReaderPdfFit.WIDTH,
     val pdfScrollAxis: ReaderPdfScrollAxis = ReaderPdfScrollAxis.HORIZONTAL,
+    val pageDirection: ReaderPageDirection = ReaderPageDirection.AUTO,
     val highlightColor: String = ReaderHighlightColor.defaultHex,
     val idleTimeoutMillis: Long = 90_000L,
 )
@@ -141,6 +148,7 @@ data class BookReaderAppearance(
     val textAlign: ReaderTextAlign,
     val pdfFit: ReaderPdfFit,
     val pdfScrollAxis: ReaderPdfScrollAxis,
+    val pageDirection: ReaderPageDirection,
 )
 
 fun ReaderSettings.bookAppearance(): BookReaderAppearance =
@@ -154,7 +162,8 @@ fun ReaderSettings.bookAppearance(): BookReaderAppearance =
         publisherStyles = publisherStyles,
         textAlign = textAlign,
         pdfFit = pdfFit,
-        pdfScrollAxis = pdfScrollAxis
+        pdfScrollAxis = pdfScrollAxis,
+        pageDirection = pageDirection
     )
 
 fun ReaderSettings.withBookAppearance(appearance: BookReaderAppearance?): ReaderSettings =
@@ -171,7 +180,8 @@ fun ReaderSettings.withBookAppearance(appearance: BookReaderAppearance?): Reader
             publisherStyles = appearance.publisherStyles,
             textAlign = appearance.textAlign,
             pdfFit = appearance.pdfFit,
-            pdfScrollAxis = appearance.pdfScrollAxis
+            pdfScrollAxis = appearance.pdfScrollAxis,
+            pageDirection = appearance.pageDirection
         )
     }
 

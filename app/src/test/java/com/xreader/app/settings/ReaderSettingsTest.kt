@@ -21,6 +21,7 @@ class ReaderSettingsTest {
         assertFalse(ReaderSettings().volumeKeysTurnPages)
         assertEquals(ReaderPdfFit.WIDTH, ReaderSettings().pdfFit)
         assertEquals(ReaderPdfScrollAxis.HORIZONTAL, ReaderSettings().pdfScrollAxis)
+        assertEquals(ReaderPageDirection.AUTO, ReaderSettings().pageDirection)
         assertEquals(0f, ReaderSettings().screenDim, 0.001f)
     }
 
@@ -46,6 +47,7 @@ class ReaderSettingsTest {
     fun pdfControlsUseReaderFriendlyLabels() {
         assertEquals(listOf("Page", "Width", "Height"), ReaderPdfFit.entries.map { it.label })
         assertEquals(listOf("Paged", "Scroll"), ReaderPdfScrollAxis.entries.map { it.label })
+        assertEquals(listOf("Auto", "Left to right", "Right to left"), ReaderPageDirection.entries.map { it.label })
     }
 
     @Test
@@ -63,6 +65,7 @@ class ReaderSettingsTest {
             textAlign = ReaderTextAlign.JUSTIFY,
             pdfFit = ReaderPdfFit.HEIGHT,
             pdfScrollAxis = ReaderPdfScrollAxis.VERTICAL,
+            pageDirection = ReaderPageDirection.RIGHT_TO_LEFT,
             keepScreenAwake = true,
             volumeKeysTurnPages = true,
             screenDim = 0.3f
@@ -79,6 +82,7 @@ class ReaderSettingsTest {
         assertEquals(ReaderTextAlign.JUSTIFY, accessible.textAlign)
         assertEquals(ReaderPdfFit.HEIGHT, accessible.pdfFit)
         assertEquals(ReaderPdfScrollAxis.VERTICAL, accessible.pdfScrollAxis)
+        assertEquals(ReaderPageDirection.RIGHT_TO_LEFT, accessible.pageDirection)
         assertTrue(accessible.keepScreenAwake)
         assertTrue(accessible.volumeKeysTurnPages)
         assertEquals(0.3f, accessible.screenDim, 0.001f)
@@ -116,6 +120,7 @@ class ReaderSettingsTest {
             textAlign = ReaderTextAlign.JUSTIFY,
             pdfFit = ReaderPdfFit.CONTAIN,
             pdfScrollAxis = ReaderPdfScrollAxis.VERTICAL,
+            pageDirection = ReaderPageDirection.LEFT_TO_RIGHT,
             idleTimeoutMillis = 30_000L
         )
         val appearance = BookReaderAppearance(
@@ -128,7 +133,8 @@ class ReaderSettingsTest {
             publisherStyles = false,
             textAlign = ReaderTextAlign.START,
             pdfFit = ReaderPdfFit.HEIGHT,
-            pdfScrollAxis = ReaderPdfScrollAxis.HORIZONTAL
+            pdfScrollAxis = ReaderPdfScrollAxis.HORIZONTAL,
+            pageDirection = ReaderPageDirection.RIGHT_TO_LEFT
         )
 
         val combined = global.withBookAppearance(appearance)
@@ -156,6 +162,7 @@ class ReaderSettingsTest {
         assertEquals(ReaderTextAlign.START, combined.textAlign)
         assertEquals(ReaderPdfFit.HEIGHT, combined.pdfFit)
         assertEquals(ReaderPdfScrollAxis.HORIZONTAL, combined.pdfScrollAxis)
+        assertEquals(ReaderPageDirection.RIGHT_TO_LEFT, combined.pageDirection)
     }
 
     @Test

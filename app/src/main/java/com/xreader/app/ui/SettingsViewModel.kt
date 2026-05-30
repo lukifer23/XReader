@@ -11,6 +11,7 @@ import com.xreader.app.settings.LibrarySettings
 import com.xreader.app.settings.LibrarySort
 import com.xreader.app.settings.ReadAloudSleepTimer
 import com.xreader.app.settings.ReaderFontFamily
+import com.xreader.app.settings.ReaderPageDirection
 import com.xreader.app.settings.ReaderPdfFit
 import com.xreader.app.settings.ReaderPdfScrollAxis
 import com.xreader.app.settings.ReaderSettings
@@ -145,6 +146,10 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     fun setPdfScrollAxis(value: ReaderPdfScrollAxis) {
         viewModelScope.launch { container.settingsRepository.setPdfScrollAxis(value) }
+    }
+
+    fun setPageDirection(value: ReaderPageDirection) {
+        viewModelScope.launch { container.settingsRepository.setPageDirection(value) }
     }
 
     fun setLibrarySort(value: LibrarySort) {

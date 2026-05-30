@@ -86,7 +86,7 @@ The Books home derives series continuation recommendations from the already load
 - bounded return history for manual TOC, bookmark, note, search-result, and find-next/find-previous jumps
 - selection actions for highlight, note, and dictionary lookup
 - scrollbar cleanup for nested Readium/WebView content
-- reader preferences for theme, typography, PDF fit/layout, fullscreen, keep-screen-awake behavior, app-local dimming, tap-zone sizing, page-turn animation behavior, and per-book appearance overrides
+- reader preferences for theme, typography, PDF fit/layout, page direction, fullscreen, keep-screen-awake behavior, app-local dimming, tap-zone sizing, page-turn animation behavior, and per-book appearance overrides
 
 Read aloud is handled by `ReadAloudEngine`, a small wrapper around Android `TextToSpeech`. `ReaderViewModel` builds speech chunks from the app's local search index, splits them into Readium-position-sized chunks by reading-order word progress, starts from the visible reader position or nearest earlier position, persists the spoken locator as playback advances, and keeps Compose limited to play/pause/resume/stop, previous/next passage, speed, sleep timer, installed offline voice selection, and error feedback. Playback owns Android audio focus while speaking, releases it on pause/stop/shutdown, pauses with a clear message on transient audio interruptions, and stops on permanent audio-focus loss.
 
@@ -114,12 +114,12 @@ Reader and library settings are persisted with DataStore. Settings include:
 - fullscreen
 - publisher styles
 - alignment
-- PDF fit and layout
+- PDF fit, layout, and page direction
 - idle timeout
 - library sort
 - library density
 
-Per-book reader appearance overrides are also stored in DataStore, keyed by book id. They only override typography, hyphenation, publisher styles, alignment, and PDF fit/layout. Theme, fullscreen, keep-screen-awake, reader dimming, tap zones, page animations, volume-button page turns, and idle timeout stay global so reading behavior remains predictable across books.
+Per-book reader appearance overrides are also stored in DataStore, keyed by book id. They only override typography, hyphenation, publisher styles, alignment, PDF fit/layout, and page direction. Theme, fullscreen, keep-screen-awake, reader dimming, tap zones, page animations, volume-button page turns, and idle timeout stay global so reading behavior remains predictable across books.
 
 Reader dimming is implemented as a reader-only Compose overlay capped by `MAX_READER_DIM_AMOUNT`; it never writes Android system brightness settings and is cleared naturally when leaving the reader surface.
 

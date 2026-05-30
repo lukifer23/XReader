@@ -90,6 +90,7 @@ import com.xreader.app.settings.MAX_READER_FONT_WEIGHT
 import com.xreader.app.settings.MIN_READER_FONT_WEIGHT
 import com.xreader.app.settings.ReaderFontFamily
 import com.xreader.app.settings.ReaderHighlightColor
+import com.xreader.app.settings.ReaderPageDirection
 import com.xreader.app.settings.ReaderPdfFit
 import com.xreader.app.settings.ReaderPdfScrollAxis
 import com.xreader.app.settings.ReaderSettings
@@ -181,6 +182,7 @@ internal fun ReaderRoute(
         onTextAlign = viewModel::setTextAlign,
         onPdfFit = viewModel::setPdfFit,
         onPdfScrollAxis = viewModel::setPdfScrollAxis,
+        onPageDirection = viewModel::setPageDirection,
         onBookAppearanceEnabled = viewModel::setBookAppearanceEnabled,
         onToggleReadAloud = { visibleUnit, visibleLocator ->
             viewModel.toggleReadAloud(visibleUnit, visibleLocator)
@@ -235,6 +237,7 @@ internal fun ReaderScreen(
     onTextAlign: (ReaderTextAlign) -> Unit,
     onPdfFit: (ReaderPdfFit) -> Unit,
     onPdfScrollAxis: (ReaderPdfScrollAxis) -> Unit,
+    onPageDirection: (ReaderPageDirection) -> Unit,
     onBookAppearanceEnabled: (Boolean) -> Unit,
     onToggleReadAloud: (Int, String?) -> Unit,
     onStopReadAloud: () -> Unit,
@@ -500,6 +503,7 @@ internal fun ReaderScreen(
             onTextAlign = onTextAlign,
             onPdfFit = onPdfFit,
             onPdfScrollAxis = onPdfScrollAxis,
+            onPageDirection = onPageDirection,
             onBookAppearanceEnabled = onBookAppearanceEnabled,
             showPdfControls = publication.format == BookFormat.PDF
         )
@@ -768,6 +772,7 @@ internal fun ReaderQuickSettingsDialog(
     onTextAlign: (ReaderTextAlign) -> Unit,
     onPdfFit: (ReaderPdfFit) -> Unit,
     onPdfScrollAxis: (ReaderPdfScrollAxis) -> Unit,
+    onPageDirection: (ReaderPageDirection) -> Unit,
     onBookAppearanceEnabled: (Boolean) -> Unit,
     showPdfControls: Boolean,
 ) {
@@ -889,6 +894,16 @@ internal fun ReaderQuickSettingsDialog(
                     expanded = controlsOpen,
                     onToggle = { controlsOpen = !controlsOpen }
                 ) {
+                    Text("Page direction", style = MaterialTheme.typography.titleMedium)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ReaderPageDirection.entries.forEach { direction ->
+                            FilterChip(
+                                selected = settings.pageDirection == direction,
+                                onClick = { onPageDirection(direction) },
+                                label = { Text(direction.label) }
+                            )
+                        }
+                    }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Tap zones", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
                         Switch(checked = settings.tapZonesEnabled, onCheckedChange = onTapZonesEnabled)

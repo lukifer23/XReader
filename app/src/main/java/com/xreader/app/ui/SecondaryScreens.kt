@@ -88,6 +88,7 @@ import com.xreader.app.settings.MIN_READER_FONT_WEIGHT
 import com.xreader.app.settings.ReadAloudSleepTimer
 import com.xreader.app.settings.ReaderFontFamily
 import com.xreader.app.settings.ReaderHighlightColor
+import com.xreader.app.settings.ReaderPageDirection
 import com.xreader.app.settings.ReaderPdfFit
 import com.xreader.app.settings.ReaderPdfScrollAxis
 import com.xreader.app.settings.ReaderSpacingPreset
@@ -755,6 +756,13 @@ internal fun SettingsRoute(viewModel: SettingsViewModel, onBack: () -> Unit) {
                         selected = settings.pdfScrollAxis,
                         label = { it.label },
                         onSelected = viewModel::setPdfScrollAxis
+                    )
+                    SettingsChipGroup(
+                        title = "Page direction",
+                        options = ReaderPageDirection.entries,
+                        selected = settings.pageDirection,
+                        label = { it.label },
+                        onSelected = viewModel::setPageDirection
                     )
                     SettingsToggleRow(
                         label = "Fullscreen reading",

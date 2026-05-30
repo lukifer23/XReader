@@ -45,6 +45,7 @@ import androidx.fragment.app.commitNow
 import com.xreader.app.data.BookFormat
 import com.xreader.app.data.ReaderTheme
 import com.xreader.app.reader.OpenPublication
+import com.xreader.app.settings.ReaderPageDirection
 import com.xreader.app.settings.ReaderPdfFit
 import com.xreader.app.settings.ReaderPdfScrollAxis
 import com.xreader.app.settings.ReaderSettings
@@ -66,10 +67,12 @@ import org.readium.r2.navigator.preferences.Axis
 import org.readium.r2.navigator.preferences.Color as ReadiumColor
 import org.readium.r2.navigator.preferences.Fit
 import org.readium.r2.navigator.preferences.FontFamily as ReadiumFontFamily
+import org.readium.r2.navigator.preferences.ReadingProgression as NavigatorReadingProgression
 import org.readium.r2.navigator.preferences.Spread
 import org.readium.r2.navigator.preferences.TextAlign as ReadiumTextAlign
 import org.readium.r2.navigator.preferences.Theme
 import org.readium.r2.shared.publication.Locator
+import org.readium.r2.shared.publication.ReadingProgression as PublicationReadingProgression
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -109,7 +112,8 @@ internal fun ReadiumPublicationView(
                     keyCode = keyCode,
                     action = event.action,
                     repeatCount = event.repeatCount,
-                    volumeKeysTurnPages = latestSettings.volumeKeysTurnPages
+                    volumeKeysTurnPages = latestSettings.volumeKeysTurnPages,
+                    pageDirection = latestSettings.effectivePageDirection(publication)
                 )
             ) {
                 ReaderHardwareKeyHandling.BACKWARD -> {
@@ -204,7 +208,15 @@ internal fun ReadiumPublicationView(
                 active.publicationView.disableScrollbarsRecursively()
                 val width = active.publicationView.width.toFloat().takeIf { it > 0f } ?: return false
                 val x = event.point.x
-                return when (resolveReaderTapAction(x, width, latestSettings, latestTapEdgeInsetPx)) {
+                return when (
+                    resolveReaderTapAction(
+                        x = x,
+                        width = width,
+                        settings = latestSettings,
+                        edgeGuardPx = latestTapEdgeInsetPx,
+                        pageDirection = latestSettings.effectivePageDirection(publication)
+                    )
+                ) {
                     ReaderTapAction.BACKWARD -> {
                         active.goBackward(animated = latestSettings.pageTurnAnimations)
                         active.publicationView.post { active.publicationView.disableScrollbarsRecursively() }
@@ -364,6 +376,7 @@ private fun ReaderSettings.toEpubPreferences(): EpubPreferences =
         lineHeight = lineHeight.toDouble(),
         pageMargins = marginScale.toDouble(),
         publisherStyles = publisherStyles,
+        readingProgression = pageDirection.toReadiumReadingProgression(),
         scroll = false,
         spread = Spread.NEVER,
         textAlign = when (textAlign) {
@@ -388,11 +401,27 @@ private fun ReaderSettings.toPdfiumPreferences(): PdfiumPreferences =
             ReaderPdfFit.HEIGHT -> Fit.HEIGHT
         },
         pageSpacing = (12.0 * marginScale.toDouble()).coerceIn(4.0, 32.0),
+        readingProgression = pageDirection.toReadiumReadingProgression(),
         scrollAxis = when (pdfScrollAxis) {
             ReaderPdfScrollAxis.HORIZONTAL -> Axis.HORIZONTAL
             ReaderPdfScrollAxis.VERTICAL -> Axis.VERTICAL
         }
     )
+
+private fun ReaderPageDirection.toReadiumReadingProgression(): NavigatorReadingProgression? =
+    when (this) {
+        ReaderPageDirection.AUTO -> null
+        ReaderPageDirection.LEFT_TO_RIGHT -> NavigatorReadingProgression.LTR
+        ReaderPageDirection.RIGHT_TO_LEFT -> NavigatorReadingProgression.RTL
+    }
+
+private fun ReaderSettings.effectivePageDirection(publication: OpenPublication.Readium): ReaderPageDirection =
+    when {
+        pageDirection != ReaderPageDirection.AUTO -> pageDirection
+        publication.publication.metadata.readingProgression == PublicationReadingProgression.RTL ->
+            ReaderPageDirection.RIGHT_TO_LEFT
+        else -> ReaderPageDirection.LEFT_TO_RIGHT
+    }
 
 private fun String?.toReadiumLocator(): Locator? {
     if (isNullOrBlank() || !trimStart().startsWith("{")) return null

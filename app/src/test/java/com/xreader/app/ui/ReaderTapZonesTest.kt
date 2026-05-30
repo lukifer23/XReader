@@ -1,6 +1,7 @@
 package com.xreader.app.ui
 
 import com.xreader.app.settings.ReaderSettings
+import com.xreader.app.settings.ReaderPageDirection
 import com.xreader.app.settings.ReaderTapZonePreset
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -34,6 +35,14 @@ class ReaderTapZonesTest {
         assertEquals(ReaderTapAction.BACKWARD, resolveReaderTapAction(320f, 1000f, wide, edgeGuardPx = 24f))
         assertEquals(ReaderTapAction.CHROME, resolveReaderTapAction(680f, 1000f, compact, edgeGuardPx = 64f))
         assertEquals(ReaderTapAction.FORWARD, resolveReaderTapAction(680f, 1000f, wide, edgeGuardPx = 24f))
+    }
+
+    @Test
+    fun explicitRightToLeftDirectionSwapsSideTapActions() {
+        val settings = ReaderSettings(pageDirection = ReaderPageDirection.RIGHT_TO_LEFT)
+
+        assertEquals(ReaderTapAction.FORWARD, resolveReaderTapAction(120f, 1000f, settings, edgeGuardPx = 44f))
+        assertEquals(ReaderTapAction.BACKWARD, resolveReaderTapAction(880f, 1000f, settings, edgeGuardPx = 44f))
     }
 
     @Test

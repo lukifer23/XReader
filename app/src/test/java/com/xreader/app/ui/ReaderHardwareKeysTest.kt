@@ -1,6 +1,7 @@
 package com.xreader.app.ui
 
 import android.view.KeyEvent
+import com.xreader.app.settings.ReaderPageDirection
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -17,6 +18,38 @@ class ReaderHardwareKeysTest {
         assertEquals(ReaderHardwareKeyAction.FORWARD, resolveReaderHardwareKeyAction(KeyEvent.KEYCODE_SPACE))
         assertEquals(ReaderHardwareKeyAction.CHROME, resolveReaderHardwareKeyAction(KeyEvent.KEYCODE_DPAD_CENTER))
         assertEquals(ReaderHardwareKeyAction.CHROME, resolveReaderHardwareKeyAction(KeyEvent.KEYCODE_ENTER))
+    }
+
+    @Test
+    fun explicitRightToLeftDirectionSwapsHorizontalKeysOnly() {
+        assertEquals(
+            ReaderHardwareKeyAction.FORWARD,
+            resolveReaderHardwareKeyAction(
+                KeyEvent.KEYCODE_DPAD_LEFT,
+                pageDirection = ReaderPageDirection.RIGHT_TO_LEFT
+            )
+        )
+        assertEquals(
+            ReaderHardwareKeyAction.BACKWARD,
+            resolveReaderHardwareKeyAction(
+                KeyEvent.KEYCODE_DPAD_RIGHT,
+                pageDirection = ReaderPageDirection.RIGHT_TO_LEFT
+            )
+        )
+        assertEquals(
+            ReaderHardwareKeyAction.BACKWARD,
+            resolveReaderHardwareKeyAction(
+                KeyEvent.KEYCODE_PAGE_UP,
+                pageDirection = ReaderPageDirection.RIGHT_TO_LEFT
+            )
+        )
+        assertEquals(
+            ReaderHardwareKeyAction.FORWARD,
+            resolveReaderHardwareKeyAction(
+                KeyEvent.KEYCODE_PAGE_DOWN,
+                pageDirection = ReaderPageDirection.RIGHT_TO_LEFT
+            )
+        )
     }
 
     @Test
