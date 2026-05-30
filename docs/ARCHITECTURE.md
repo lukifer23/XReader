@@ -12,7 +12,7 @@ XReader is a single-module native Android app built around a local-first library
 - Coroutines and Flow
 - Navigation Compose
 - Readium Kotlin Toolkit
-- PDFBox Android for PDF metadata/text extraction
+- PDFBox Android for PDF metadata/text extraction, sorted by position with wrapped-word cleanup before indexing
 - Princeton WordNet as an offline dictionary asset
 
 ## Runtime Shape
@@ -90,7 +90,7 @@ The Books home derives series continuation recommendations from the already load
 
 Read aloud is handled by `ReadAloudEngine`, a small wrapper around Android `TextToSpeech`. `ReaderViewModel` builds speech chunks from the app's local search index, splits them into Readium-position-sized chunks by reading-order word progress, starts from the visible reader position or nearest earlier position, persists the spoken locator as playback advances, and keeps Compose limited to play/pause/resume/stop, previous/next passage, speed, sleep timer, installed offline voice selection, and error feedback. Playback owns Android audio focus while speaking, releases it on pause/stop/shutdown, pauses with a clear message on transient audio interruptions, and stops on permanent audio-focus loss.
 
-Reader search first tries Readium's publication search and falls back to XReader's local search index when needed. Search results carry an approximate reading unit so the compact find bar can jump to the previous or next match from the visible page, then keep the search active until the user closes it. Library full-text search uses the same FTS index joined to book metadata so result rows can show the source title/author and a query-centered snippet before jumping into the matched reading unit.
+Reader search first tries Readium's publication search and falls back to XReader's local search index when needed. Search results carry an approximate reading unit so the compact find bar can jump to the previous or next match from the visible page, then keep the search active until the user closes it. Library full-text search uses the same FTS index joined to book metadata so result rows can show the source title/author and a query-centered snippet before jumping into the matched reading unit. PDF imports sort extracted text by page position and clean soft hyphens/wrapped line-break hyphens before indexing so search and read-aloud do not inherit common PDF extraction artifacts.
 
 ## Settings
 

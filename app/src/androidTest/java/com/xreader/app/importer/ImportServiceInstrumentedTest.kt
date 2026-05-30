@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.pdf.PdfDocument
 import android.net.Uri
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
@@ -90,6 +92,28 @@ class ImportServiceInstrumentedTest {
         assertEquals("Remote Book", book.title)
         assertTrue(File(context.filesDir, book.filePath).exists())
         assertTrue(db.search().searchBook(result.bookId, "normalizedBody:catalog*").isNotEmpty())
+    }
+
+    @Test
+    fun importsPdfAsPrivatePdfAndIndexesCleanText() = runBlocking {
+        val source = File(root, "source/Station Manual.pdf").apply {
+            parentFile?.mkdirs()
+            writeSearchablePdf(this)
+        }
+
+        val result = ImportService(context, db).import(Uri.fromFile(source))
+
+        assertFalse(result.duplicate)
+        val book = requireNotNull(db.books().getBook(result.bookId))
+        assertEquals(BookFormat.PDF, book.format)
+        assertEquals("pdf", book.sourceExtension)
+        assertEquals("Station Manual", book.title)
+        assertEquals(2, book.pageCount)
+        assertTrue(book.wordCount > 0)
+        assertTrue(File(context.filesDir, book.filePath).exists())
+
+        val results = db.search().searchBook(result.bookId, "normalizedBody:interstellar*")
+        assertTrue(results.any { it.body.contains("Interstellar archive", ignoreCase = true) })
     }
 
     @Test
@@ -549,6 +573,28 @@ class ImportServiceInstrumentedTest {
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
             bitmap.recycle()
             output.toByteArray()
+        }
+    }
+
+    private fun writeSearchablePdf(target: File) {
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.BLACK
+            textSize = 16f
+        }
+        val document = PdfDocument()
+        try {
+            val firstPage = document.startPage(PdfDocument.PageInfo.Builder(320, 440, 1).create())
+            firstPage.canvas.drawText("Inter-", 40f, 80f, paint)
+            firstPage.canvas.drawText("stellar archive keeps the docking checklist.", 40f, 104f, paint)
+            document.finishPage(firstPage)
+
+            val secondPage = document.startPage(PdfDocument.PageInfo.Builder(320, 440, 2).create())
+            secondPage.canvas.drawText("Second page keeps searchable PDF text.", 40f, 80f, paint)
+            document.finishPage(secondPage)
+
+            target.outputStream().use { document.writeTo(it) }
+        } finally {
+            document.close()
         }
     }
 

@@ -34,11 +34,14 @@ class PdfTools(private val context: Context) {
             val subject = info.subject?.takeIf { it.isNotBlank() }
             val genre = PublicationMetadataTools.cleanGenre(listOfNotNull(subject))
             val year = info.creationDate?.get(java.util.Calendar.YEAR)
-            val stripper = PDFTextStripper()
+            val stripper = PDFTextStripper().apply {
+                setSortByPosition(true)
+                setSuppressDuplicateOverlappingText(true)
+            }
             val pages = (1..document.numberOfPages).map { page ->
                 stripper.startPage = page
                 stripper.endPage = page
-                val text = stripper.getText(document).replace(Regex("\\s+"), " ").trim()
+                val text = cleanPdfExtractedText(stripper.getText(document))
                 ReadingUnit(
                     index = page - 1,
                     locator = "pdf:${page - 1}",
@@ -78,3 +81,13 @@ class PdfTools(private val context: Context) {
             }
         }.getOrNull()
 }
+
+internal fun cleanPdfExtractedText(raw: String): String {
+    val withoutSoftHyphens = raw.replace(SOFT_HYPHEN.toString(), "")
+    val dehyphenatedLineWraps = withoutSoftHyphens.replace(HYPHENATED_LINE_WRAP_REGEX, "")
+    return dehyphenatedLineWraps.replace(PDF_WHITESPACE_REGEX, " ").trim()
+}
+
+private const val SOFT_HYPHEN = '\u00AD'
+private val HYPHENATED_LINE_WRAP_REGEX = Regex("""(?<=\p{L})-\s*(?:\r\n|\r|\n)\s*(?=\p{L})""")
+private val PDF_WHITESPACE_REGEX = Regex("""\s+""")

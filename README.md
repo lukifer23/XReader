@@ -37,7 +37,7 @@ Implemented:
 - Grouped Settings screen for reader appearance, typography, reading behavior, library display, and maintenance.
 - Bookmarks, highlights, tagged notes, global notes with tag filtering, in-book annotation lists, human-readable Markdown notes export, local notes/bookmark JSON export/import, and library metadata/progress/per-book appearance backup.
 - Offline English dictionary backed by bundled Princeton WordNet data, with phrase, hyphenated-word, plural, possessive, and inflected-form lookup.
-- Local full-text search index for imported book text where extraction is supported, with source-book labels, query-centered snippets, and expandable library search results.
+- Local full-text search index for imported book text where extraction is supported, including cleaned PDF text extraction for wrapped words, with source-book labels, query-centered snippets, and expandable library search results.
 - Reading analytics for sessions, active reading time, progress, estimated WPM, reader/home ETA, 7-day/30-day/13-week/all-time activity, streaks, book/author/genre summaries, and local CSV/JSON export.
 - Public-domain book fixture coverage for TXT/EPUB import paths.
 
