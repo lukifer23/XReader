@@ -83,6 +83,8 @@ enum class ReaderSpacingPreset(
             settings.marginScale.closeTo(marginScale)
 }
 
+const val MAX_READER_DIM_AMOUNT = 0.45f
+
 data class ReaderSettings(
     val theme: ReaderTheme = ReaderTheme.LIGHT,
     val fontScale: Float = 1.18f,
@@ -93,6 +95,7 @@ data class ReaderSettings(
     val tapZonePreset: ReaderTapZonePreset = ReaderTapZonePreset.BALANCED,
     val pageTurnAnimations: Boolean = true,
     val keepScreenAwake: Boolean = false,
+    val screenDim: Float = 0f,
     val readAloudRate: Float = 1.0f,
     val readAloudVoiceName: String? = null,
     val readAloudSleepTimer: ReadAloudSleepTimer = ReadAloudSleepTimer.OFF,
@@ -152,3 +155,6 @@ fun ReaderSettings.withBookAppearance(appearance: BookReaderAppearance?): Reader
 
 private fun Float.closeTo(other: Float): Boolean =
     kotlin.math.abs(this - other) < 0.001f
+
+fun normalizedReaderDimAmount(value: Float): Float =
+    value.coerceIn(0f, MAX_READER_DIM_AMOUNT)

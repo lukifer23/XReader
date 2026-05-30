@@ -62,6 +62,7 @@ The research points to several areas that matter more than raw feature count:
 - Local reading stats export. The stats screen can export all analytics ranges to CSV or JSON through Android's document picker, keeping the workflow local and user-controlled.
 - Per-book reader appearance. Books can keep their own font, spacing, alignment, publisher-style, and PDF fit choices without changing global reading behavior.
 - Keep screen awake. Reader sessions can opt into Android's screen-awake flag while the reader is visible, avoiding sleep interruptions without changing global phone settings.
+- Reader dimming. Night reading can use a reader-only dim overlay without requesting system brightness permissions or changing the rest of the phone.
 - Reader spacing presets. Compact, comfort, and accessible presets provide fast setup while still using the same manual font, line-height, and margin controls.
 - Read aloud. The reader can speak forward from the visible position through Android TextToSpeech using XReader's private full-text index split into Readium-position-sized speech chunks, persists its spoken locator as it advances, and supports installed offline device voice selection plus sleep timer controls without permanent reader chrome.
 - Calibrated tap zones. Reader taps now use compact, balanced, or wide presets with edge guards for gesture-navigation devices, keeping page-turn control predictable without adding permanent reader chrome.

@@ -95,6 +95,10 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch { container.settingsRepository.setKeepScreenAwake(value) }
     }
 
+    fun setScreenDim(value: Float) {
+        viewModelScope.launch { container.settingsRepository.setScreenDim(value) }
+    }
+
     fun setReadAloudRate(value: Float) {
         viewModelScope.launch { container.settingsRepository.setReadAloudRate(value) }
         container.readAloudEngine.setSpeechRate(value)

@@ -16,6 +16,7 @@ class ReaderSettingsTest {
         assertEquals(ReadAloudSleepTimer.OFF, ReaderSettings().readAloudSleepTimer)
         assertEquals(ReaderHighlightColor.YELLOW.hex, ReaderSettings().highlightColor)
         assertFalse(ReaderSettings().keepScreenAwake)
+        assertEquals(0f, ReaderSettings().screenDim, 0.001f)
     }
 
     @Test
@@ -49,7 +50,8 @@ class ReaderSettingsTest {
             readAloudSleepTimer = ReadAloudSleepTimer.THIRTY_MINUTES,
             highlightColor = ReaderHighlightColor.BLUE.hex,
             textAlign = ReaderTextAlign.JUSTIFY,
-            keepScreenAwake = true
+            keepScreenAwake = true,
+            screenDim = 0.3f
         )
 
         val accessible = settings.withSpacingPreset(ReaderSpacingPreset.ACCESSIBLE)
@@ -62,6 +64,7 @@ class ReaderSettingsTest {
         assertEquals(ReaderHighlightColor.BLUE.hex, accessible.highlightColor)
         assertEquals(ReaderTextAlign.JUSTIFY, accessible.textAlign)
         assertTrue(accessible.keepScreenAwake)
+        assertEquals(0.3f, accessible.screenDim, 0.001f)
         assertEquals(ReaderSpacingPreset.ACCESSIBLE.fontScale, accessible.fontScale, 0.001f)
         assertEquals(ReaderSpacingPreset.ACCESSIBLE.lineHeight, accessible.lineHeight, 0.001f)
         assertEquals(ReaderSpacingPreset.ACCESSIBLE.marginScale, accessible.marginScale, 0.001f)
@@ -81,6 +84,7 @@ class ReaderSettingsTest {
             tapZonePreset = ReaderTapZonePreset.COMPACT,
             pageTurnAnimations = false,
             keepScreenAwake = true,
+            screenDim = 0.35f,
             readAloudRate = 1.3f,
             readAloudVoiceName = "local-voice",
             readAloudSleepTimer = ReadAloudSleepTimer.FORTY_FIVE_MINUTES,
@@ -108,6 +112,7 @@ class ReaderSettingsTest {
         assertEquals(ReaderTapZonePreset.COMPACT, combined.tapZonePreset)
         assertFalse(combined.pageTurnAnimations)
         assertTrue(combined.keepScreenAwake)
+        assertEquals(0.35f, combined.screenDim, 0.001f)
         assertEquals(1.3f, combined.readAloudRate, 0.001f)
         assertEquals("local-voice", combined.readAloudVoiceName)
         assertEquals(ReadAloudSleepTimer.FORTY_FIVE_MINUTES, combined.readAloudSleepTimer)
@@ -137,5 +142,12 @@ class ReaderSettingsTest {
         assertEquals(ReaderHighlightColor.GREEN.hex, ReaderHighlightColor.normalized("#6fcf97"))
         assertEquals(ReaderHighlightColor.YELLOW.hex, ReaderHighlightColor.normalized("#123456"))
         assertEquals(ReaderHighlightColor.YELLOW, ReaderHighlightColor.optionFor(null))
+    }
+
+    @Test
+    fun readerDimAmountIsBoundedForOverlaySafety() {
+        assertEquals(0f, normalizedReaderDimAmount(-0.5f), 0.001f)
+        assertEquals(0.25f, normalizedReaderDimAmount(0.25f), 0.001f)
+        assertEquals(MAX_READER_DIM_AMOUNT, normalizedReaderDimAmount(2.0f), 0.001f)
     }
 }

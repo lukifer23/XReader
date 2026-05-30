@@ -82,6 +82,7 @@ import com.xreader.app.analytics.BookAnalytics
 import com.xreader.app.analytics.GroupAnalytics
 import com.xreader.app.settings.LibraryDensity
 import com.xreader.app.settings.LibrarySort
+import com.xreader.app.settings.MAX_READER_DIM_AMOUNT
 import com.xreader.app.settings.ReadAloudSleepTimer
 import com.xreader.app.settings.ReaderFontFamily
 import com.xreader.app.settings.ReaderHighlightColor
@@ -763,6 +764,7 @@ internal fun SettingsRoute(viewModel: SettingsViewModel, onBack: () -> Unit) {
                         checked = settings.keepScreenAwake,
                         onCheckedChange = viewModel::setKeepScreenAwake
                     )
+                    SettingSlider("Reader dim", settings.screenDim, 0f..MAX_READER_DIM_AMOUNT, viewModel::setScreenDim)
                     SettingSlider("Read aloud speed", settings.readAloudRate, 0.7f..1.4f, viewModel::setReadAloudRate)
                     SettingsChipGroup(
                         title = "Sleep timer",

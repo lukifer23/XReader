@@ -310,6 +310,10 @@ class ReaderViewModel(
         viewModelScope.launch { container.settingsRepository.setKeepScreenAwake(value) }
     }
 
+    fun setScreenDim(value: Float) {
+        viewModelScope.launch { container.settingsRepository.setScreenDim(value) }
+    }
+
     fun setTapZonesEnabled(value: Boolean) {
         viewModelScope.launch { container.settingsRepository.setTapZonesEnabled(value) }
     }

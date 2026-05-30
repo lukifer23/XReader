@@ -65,6 +65,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -79,6 +80,7 @@ import com.xreader.app.AppContainer
 import com.xreader.app.data.AnnotationEntity
 import com.xreader.app.data.ReaderTheme
 import com.xreader.app.reader.OpenPublication
+import com.xreader.app.settings.MAX_READER_DIM_AMOUNT
 import com.xreader.app.settings.ReaderFontFamily
 import com.xreader.app.settings.ReaderHighlightColor
 import com.xreader.app.settings.ReaderPdfFit
@@ -87,6 +89,7 @@ import com.xreader.app.settings.ReaderSpacingPreset
 import com.xreader.app.settings.ReaderTapZonePreset
 import com.xreader.app.settings.ReaderTextAlign
 import com.xreader.app.settings.ReadAloudSleepTimer
+import com.xreader.app.settings.normalizedReaderDimAmount
 import com.xreader.app.settings.spacingPresetOrNull
 import com.xreader.app.tts.ReadAloudState
 import kotlin.math.roundToInt
@@ -160,6 +163,7 @@ internal fun ReaderRoute(
         onTapZonePreset = viewModel::setTapZonePreset,
         onPageTurnAnimations = viewModel::setPageTurnAnimations,
         onKeepScreenAwake = viewModel::setKeepScreenAwake,
+        onScreenDim = viewModel::setScreenDim,
         onReadAloudRate = viewModel::setReadAloudRate,
         onReadAloudSleepTimer = viewModel::setReadAloudSleepTimer,
         onHighlightColor = viewModel::setHighlightColor,
@@ -208,6 +212,7 @@ internal fun ReaderScreen(
     onTapZonePreset: (ReaderTapZonePreset) -> Unit,
     onPageTurnAnimations: (Boolean) -> Unit,
     onKeepScreenAwake: (Boolean) -> Unit,
+    onScreenDim: (Float) -> Unit,
     onReadAloudRate: (Float) -> Unit,
     onReadAloudSleepTimer: (ReadAloudSleepTimer) -> Unit,
     onHighlightColor: (String) -> Unit,
@@ -387,6 +392,12 @@ internal fun ReaderScreen(
                     .zIndex(3f)
             )
         }
+        ReaderDimOverlay(
+            dimAmount = state.settings.screenDim,
+            modifier = Modifier
+                .fillMaxSize()
+                .zIndex(4f)
+        )
     }
 
     if (searchOpen) {
@@ -459,6 +470,7 @@ internal fun ReaderScreen(
             onTapZonePreset = onTapZonePreset,
             onPageTurnAnimations = onPageTurnAnimations,
             onKeepScreenAwake = onKeepScreenAwake,
+            onScreenDim = onScreenDim,
             onReadAloudRate = onReadAloudRate,
             onReadAloudSleepTimer = onReadAloudSleepTimer,
             onHighlightColor = onHighlightColor,
@@ -467,6 +479,16 @@ internal fun ReaderScreen(
             onBookAppearanceEnabled = onBookAppearanceEnabled
         )
     }
+}
+
+@Composable
+internal fun ReaderDimOverlay(
+    dimAmount: Float,
+    modifier: Modifier = Modifier,
+) {
+    val alpha = normalizedReaderDimAmount(dimAmount)
+    if (alpha <= 0f) return
+    Box(modifier.background(Color.Black.copy(alpha = alpha)))
 }
 
 internal class ReaderPagingController(
@@ -683,6 +705,7 @@ internal fun ReaderQuickSettingsDialog(
     onTapZonePreset: (ReaderTapZonePreset) -> Unit,
     onPageTurnAnimations: (Boolean) -> Unit,
     onKeepScreenAwake: (Boolean) -> Unit,
+    onScreenDim: (Float) -> Unit,
     onReadAloudRate: (Float) -> Unit,
     onReadAloudSleepTimer: (ReadAloudSleepTimer) -> Unit,
     onHighlightColor: (String) -> Unit,
@@ -788,6 +811,7 @@ internal fun ReaderQuickSettingsDialog(
                     Text("Keep screen awake", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
                     Switch(checked = settings.keepScreenAwake, onCheckedChange = onKeepScreenAwake)
                 }
+                SettingSlider("Reader dim", settings.screenDim, 0f..MAX_READER_DIM_AMOUNT, onScreenDim)
                 SettingSlider("Read aloud speed", settings.readAloudRate, 0.7f..1.4f, onReadAloudRate)
                 Text("Sleep timer", style = MaterialTheme.typography.titleMedium)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
