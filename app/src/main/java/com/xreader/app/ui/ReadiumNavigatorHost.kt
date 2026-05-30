@@ -103,24 +103,31 @@ internal fun ReadiumPublicationView(
     val keyListener = remember(publication.book.id) {
         View.OnKeyListener { view, keyCode, event ->
             val active = navigator ?: return@OnKeyListener false
-            if (!shouldHandleReaderHardwareKey(event.action, event.repeatCount)) return@OnKeyListener false
-            return@OnKeyListener when (resolveReaderHardwareKeyAction(keyCode)) {
-                ReaderHardwareKeyAction.BACKWARD -> {
+            return@OnKeyListener when (
+                readerHardwareKeyHandling(
+                    keyCode = keyCode,
+                    action = event.action,
+                    repeatCount = event.repeatCount,
+                    volumeKeysTurnPages = latestSettings.volumeKeysTurnPages
+                )
+            ) {
+                ReaderHardwareKeyHandling.BACKWARD -> {
                     active.goBackward(animated = latestSettings.pageTurnAnimations)
                     view.post { active.publicationView.prepareReaderInputRecursively(keyListener = null) }
                     true
                 }
-                ReaderHardwareKeyAction.FORWARD -> {
+                ReaderHardwareKeyHandling.FORWARD -> {
                     active.goForward(animated = latestSettings.pageTurnAnimations)
                     view.post { active.publicationView.prepareReaderInputRecursively(keyListener = null) }
                     true
                 }
-                ReaderHardwareKeyAction.CHROME -> {
+                ReaderHardwareKeyHandling.CHROME -> {
                     view.post { active.publicationView.prepareReaderInputRecursively(keyListener = null) }
                     latestToggleChrome()
                     true
                 }
-                null -> false
+                ReaderHardwareKeyHandling.CONSUME -> true
+                ReaderHardwareKeyHandling.IGNORE -> false
             }
         }
     }

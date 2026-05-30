@@ -764,6 +764,11 @@ internal fun SettingsRoute(viewModel: SettingsViewModel, onBack: () -> Unit) {
                         checked = settings.keepScreenAwake,
                         onCheckedChange = viewModel::setKeepScreenAwake
                     )
+                    SettingsToggleRow(
+                        label = "Volume buttons turn pages",
+                        checked = settings.volumeKeysTurnPages,
+                        onCheckedChange = viewModel::setVolumeKeysTurnPages
+                    )
                     SettingSlider("Reader dim", settings.screenDim, 0f..MAX_READER_DIM_AMOUNT, viewModel::setScreenDim)
                     SettingSlider("Read aloud speed", settings.readAloudRate, 0.7f..1.4f, viewModel::setReadAloudRate)
                     SettingsChipGroup(

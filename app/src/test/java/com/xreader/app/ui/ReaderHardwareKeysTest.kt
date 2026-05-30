@@ -28,6 +28,62 @@ class ReaderHardwareKeysTest {
     }
 
     @Test
+    fun volumeKeysCanBeOptedIntoForPageTurns() {
+        assertEquals(
+            ReaderHardwareKeyAction.BACKWARD,
+            resolveReaderHardwareKeyAction(KeyEvent.KEYCODE_VOLUME_UP, volumeKeysTurnPages = true)
+        )
+        assertEquals(
+            ReaderHardwareKeyAction.FORWARD,
+            resolveReaderHardwareKeyAction(KeyEvent.KEYCODE_VOLUME_DOWN, volumeKeysTurnPages = true)
+        )
+    }
+
+    @Test
+    fun volumeKeyPageTurnsConsumePressBeforeTurningOnRelease() {
+        assertEquals(
+            ReaderHardwareKeyHandling.CONSUME,
+            readerHardwareKeyHandling(
+                keyCode = KeyEvent.KEYCODE_VOLUME_DOWN,
+                action = KeyEvent.ACTION_DOWN,
+                repeatCount = 0,
+                volumeKeysTurnPages = true
+            )
+        )
+        assertEquals(
+            ReaderHardwareKeyHandling.FORWARD,
+            readerHardwareKeyHandling(
+                keyCode = KeyEvent.KEYCODE_VOLUME_DOWN,
+                action = KeyEvent.ACTION_UP,
+                repeatCount = 0,
+                volumeKeysTurnPages = true
+            )
+        )
+        assertEquals(
+            ReaderHardwareKeyHandling.IGNORE,
+            readerHardwareKeyHandling(
+                keyCode = KeyEvent.KEYCODE_VOLUME_DOWN,
+                action = KeyEvent.ACTION_DOWN,
+                repeatCount = 0,
+                volumeKeysTurnPages = false
+            )
+        )
+    }
+
+    @Test
+    fun repeatedVolumeKeyReleaseDoesNotTurnMultiplePages() {
+        assertEquals(
+            ReaderHardwareKeyHandling.IGNORE,
+            readerHardwareKeyHandling(
+                keyCode = KeyEvent.KEYCODE_VOLUME_UP,
+                action = KeyEvent.ACTION_UP,
+                repeatCount = 2,
+                volumeKeysTurnPages = true
+            )
+        )
+    }
+
+    @Test
     fun handlesOnlyCompletedNonRepeatedKeyPresses() {
         assertTrue(shouldHandleReaderHardwareKey(KeyEvent.ACTION_UP, repeatCount = 0))
         assertFalse(shouldHandleReaderHardwareKey(KeyEvent.ACTION_DOWN, repeatCount = 0))

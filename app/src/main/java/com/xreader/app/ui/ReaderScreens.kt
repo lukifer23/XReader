@@ -163,6 +163,7 @@ internal fun ReaderRoute(
         onTapZonePreset = viewModel::setTapZonePreset,
         onPageTurnAnimations = viewModel::setPageTurnAnimations,
         onKeepScreenAwake = viewModel::setKeepScreenAwake,
+        onVolumeKeysTurnPages = viewModel::setVolumeKeysTurnPages,
         onScreenDim = viewModel::setScreenDim,
         onReadAloudRate = viewModel::setReadAloudRate,
         onReadAloudSleepTimer = viewModel::setReadAloudSleepTimer,
@@ -212,6 +213,7 @@ internal fun ReaderScreen(
     onTapZonePreset: (ReaderTapZonePreset) -> Unit,
     onPageTurnAnimations: (Boolean) -> Unit,
     onKeepScreenAwake: (Boolean) -> Unit,
+    onVolumeKeysTurnPages: (Boolean) -> Unit,
     onScreenDim: (Float) -> Unit,
     onReadAloudRate: (Float) -> Unit,
     onReadAloudSleepTimer: (ReadAloudSleepTimer) -> Unit,
@@ -470,6 +472,7 @@ internal fun ReaderScreen(
             onTapZonePreset = onTapZonePreset,
             onPageTurnAnimations = onPageTurnAnimations,
             onKeepScreenAwake = onKeepScreenAwake,
+            onVolumeKeysTurnPages = onVolumeKeysTurnPages,
             onScreenDim = onScreenDim,
             onReadAloudRate = onReadAloudRate,
             onReadAloudSleepTimer = onReadAloudSleepTimer,
@@ -705,6 +708,7 @@ internal fun ReaderQuickSettingsDialog(
     onTapZonePreset: (ReaderTapZonePreset) -> Unit,
     onPageTurnAnimations: (Boolean) -> Unit,
     onKeepScreenAwake: (Boolean) -> Unit,
+    onVolumeKeysTurnPages: (Boolean) -> Unit,
     onScreenDim: (Float) -> Unit,
     onReadAloudRate: (Float) -> Unit,
     onReadAloudSleepTimer: (ReadAloudSleepTimer) -> Unit,
@@ -810,6 +814,10 @@ internal fun ReaderQuickSettingsDialog(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Keep screen awake", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
                     Switch(checked = settings.keepScreenAwake, onCheckedChange = onKeepScreenAwake)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Volume buttons turn pages", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                    Switch(checked = settings.volumeKeysTurnPages, onCheckedChange = onVolumeKeysTurnPages)
                 }
                 SettingSlider("Reader dim", settings.screenDim, 0f..MAX_READER_DIM_AMOUNT, onScreenDim)
                 SettingSlider("Read aloud speed", settings.readAloudRate, 0.7f..1.4f, onReadAloudRate)

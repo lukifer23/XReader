@@ -8,7 +8,18 @@ internal enum class ReaderHardwareKeyAction {
     CHROME,
 }
 
-internal fun resolveReaderHardwareKeyAction(keyCode: Int): ReaderHardwareKeyAction? =
+internal enum class ReaderHardwareKeyHandling {
+    IGNORE,
+    CONSUME,
+    BACKWARD,
+    FORWARD,
+    CHROME,
+}
+
+internal fun resolveReaderHardwareKeyAction(
+    keyCode: Int,
+    volumeKeysTurnPages: Boolean = false,
+): ReaderHardwareKeyAction? =
     when (keyCode) {
         KeyEvent.KEYCODE_DPAD_LEFT,
         KeyEvent.KEYCODE_PAGE_UP,
@@ -26,8 +37,37 @@ internal fun resolveReaderHardwareKeyAction(keyCode: Int): ReaderHardwareKeyActi
         KeyEvent.KEYCODE_NUMPAD_ENTER,
         -> ReaderHardwareKeyAction.CHROME
 
+        KeyEvent.KEYCODE_VOLUME_UP,
+        -> if (volumeKeysTurnPages) ReaderHardwareKeyAction.BACKWARD else null
+
+        KeyEvent.KEYCODE_VOLUME_DOWN,
+        -> if (volumeKeysTurnPages) ReaderHardwareKeyAction.FORWARD else null
+
         else -> null
     }
 
 internal fun shouldHandleReaderHardwareKey(action: Int, repeatCount: Int): Boolean =
     action == KeyEvent.ACTION_UP && repeatCount == 0
+
+internal fun readerHardwareKeyHandling(
+    keyCode: Int,
+    action: Int,
+    repeatCount: Int,
+    volumeKeysTurnPages: Boolean,
+): ReaderHardwareKeyHandling {
+    val keyAction = resolveReaderHardwareKeyAction(keyCode, volumeKeysTurnPages)
+        ?: return ReaderHardwareKeyHandling.IGNORE
+    val volumeKey = keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN
+    return when {
+        shouldHandleReaderHardwareKey(action, repeatCount) -> keyAction.toHandling()
+        volumeKeysTurnPages && volumeKey && action == KeyEvent.ACTION_DOWN -> ReaderHardwareKeyHandling.CONSUME
+        else -> ReaderHardwareKeyHandling.IGNORE
+    }
+}
+
+private fun ReaderHardwareKeyAction.toHandling(): ReaderHardwareKeyHandling =
+    when (this) {
+        ReaderHardwareKeyAction.BACKWARD -> ReaderHardwareKeyHandling.BACKWARD
+        ReaderHardwareKeyAction.FORWARD -> ReaderHardwareKeyHandling.FORWARD
+        ReaderHardwareKeyAction.CHROME -> ReaderHardwareKeyHandling.CHROME
+    }

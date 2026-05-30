@@ -30,6 +30,7 @@ class SettingsRepository(
         val tapZonePreset = stringPreferencesKey("tap_zone_preset")
         val pageTurnAnimations = booleanPreferencesKey("page_turn_animations")
         val keepScreenAwake = booleanPreferencesKey("keep_screen_awake")
+        val volumeKeysTurnPages = booleanPreferencesKey("volume_keys_turn_pages")
         val screenDim = floatPreferencesKey("screen_dim")
         val readAloudRate = floatPreferencesKey("read_aloud_rate")
         val readAloudVoiceName = stringPreferencesKey("read_aloud_voice_name")
@@ -69,6 +70,7 @@ class SettingsRepository(
                     ?: ReaderTapZonePreset.BALANCED,
                 pageTurnAnimations = prefs[Keys.pageTurnAnimations] ?: true,
                 keepScreenAwake = prefs[Keys.keepScreenAwake] ?: false,
+                volumeKeysTurnPages = prefs[Keys.volumeKeysTurnPages] ?: false,
                 screenDim = normalizedReaderDimAmount(prefs[Keys.screenDim] ?: 0f),
                 readAloudRate = (prefs[Keys.readAloudRate] ?: 1.0f).coerceIn(0.7f, 1.4f),
                 readAloudVoiceName = prefs[Keys.readAloudVoiceName]?.takeIf { it.isNotBlank() },
@@ -159,6 +161,10 @@ class SettingsRepository(
 
     suspend fun setKeepScreenAwake(value: Boolean) {
         dataStore.edit { it[Keys.keepScreenAwake] = value }
+    }
+
+    suspend fun setVolumeKeysTurnPages(value: Boolean) {
+        dataStore.edit { it[Keys.volumeKeysTurnPages] = value }
     }
 
     suspend fun setScreenDim(value: Float) {

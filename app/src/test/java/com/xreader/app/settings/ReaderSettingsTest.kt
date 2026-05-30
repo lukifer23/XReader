@@ -16,6 +16,7 @@ class ReaderSettingsTest {
         assertEquals(ReadAloudSleepTimer.OFF, ReaderSettings().readAloudSleepTimer)
         assertEquals(ReaderHighlightColor.YELLOW.hex, ReaderSettings().highlightColor)
         assertFalse(ReaderSettings().keepScreenAwake)
+        assertFalse(ReaderSettings().volumeKeysTurnPages)
         assertEquals(0f, ReaderSettings().screenDim, 0.001f)
     }
 
@@ -51,6 +52,7 @@ class ReaderSettingsTest {
             highlightColor = ReaderHighlightColor.BLUE.hex,
             textAlign = ReaderTextAlign.JUSTIFY,
             keepScreenAwake = true,
+            volumeKeysTurnPages = true,
             screenDim = 0.3f
         )
 
@@ -64,6 +66,7 @@ class ReaderSettingsTest {
         assertEquals(ReaderHighlightColor.BLUE.hex, accessible.highlightColor)
         assertEquals(ReaderTextAlign.JUSTIFY, accessible.textAlign)
         assertTrue(accessible.keepScreenAwake)
+        assertTrue(accessible.volumeKeysTurnPages)
         assertEquals(0.3f, accessible.screenDim, 0.001f)
         assertEquals(ReaderSpacingPreset.ACCESSIBLE.fontScale, accessible.fontScale, 0.001f)
         assertEquals(ReaderSpacingPreset.ACCESSIBLE.lineHeight, accessible.lineHeight, 0.001f)
@@ -84,6 +87,7 @@ class ReaderSettingsTest {
             tapZonePreset = ReaderTapZonePreset.COMPACT,
             pageTurnAnimations = false,
             keepScreenAwake = true,
+            volumeKeysTurnPages = true,
             screenDim = 0.35f,
             readAloudRate = 1.3f,
             readAloudVoiceName = "local-voice",
@@ -112,6 +116,7 @@ class ReaderSettingsTest {
         assertEquals(ReaderTapZonePreset.COMPACT, combined.tapZonePreset)
         assertFalse(combined.pageTurnAnimations)
         assertTrue(combined.keepScreenAwake)
+        assertTrue(combined.volumeKeysTurnPages)
         assertEquals(0.35f, combined.screenDim, 0.001f)
         assertEquals(1.3f, combined.readAloudRate, 0.001f)
         assertEquals("local-voice", combined.readAloudVoiceName)

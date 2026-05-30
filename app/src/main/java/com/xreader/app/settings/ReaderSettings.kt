@@ -95,6 +95,7 @@ data class ReaderSettings(
     val tapZonePreset: ReaderTapZonePreset = ReaderTapZonePreset.BALANCED,
     val pageTurnAnimations: Boolean = true,
     val keepScreenAwake: Boolean = false,
+    val volumeKeysTurnPages: Boolean = false,
     val screenDim: Float = 0f,
     val readAloudRate: Float = 1.0f,
     val readAloudVoiceName: String? = null,

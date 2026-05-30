@@ -310,6 +310,10 @@ class ReaderViewModel(
         viewModelScope.launch { container.settingsRepository.setKeepScreenAwake(value) }
     }
 
+    fun setVolumeKeysTurnPages(value: Boolean) {
+        viewModelScope.launch { container.settingsRepository.setVolumeKeysTurnPages(value) }
+    }
+
     fun setScreenDim(value: Float) {
         viewModelScope.launch { container.settingsRepository.setScreenDim(value) }
     }

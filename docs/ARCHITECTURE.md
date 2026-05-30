@@ -75,7 +75,7 @@ The Books home derives series continuation recommendations from the already load
 
 - persisted initial locator resume
 - calibrated tap-zone page navigation
-- hardware keyboard and DPAD page navigation without hijacking volume keys
+- hardware keyboard and DPAD page navigation, plus opt-in volume-button page turns
 - chrome toggle
 - bounded return history for manual TOC, bookmark, note, search-result, and find-next/find-previous jumps
 - selection actions for highlight, note, and dictionary lookup
@@ -99,6 +99,7 @@ Reader and library settings are persisted with DataStore. Settings include:
 - tap zones and tap-zone size preset
 - page animations
 - keep screen awake
+- volume-button page turns
 - reader dim amount
 - read-aloud speed
 - read-aloud sleep timer
@@ -110,7 +111,7 @@ Reader and library settings are persisted with DataStore. Settings include:
 - library sort
 - library density
 
-Per-book reader appearance overrides are also stored in DataStore, keyed by book id. They only override typography, publisher styles, alignment, and PDF fit. Theme, fullscreen, keep-screen-awake, reader dimming, tap zones, page animations, and idle timeout stay global so reading behavior remains predictable across books.
+Per-book reader appearance overrides are also stored in DataStore, keyed by book id. They only override typography, publisher styles, alignment, and PDF fit. Theme, fullscreen, keep-screen-awake, reader dimming, tap zones, page animations, volume-button page turns, and idle timeout stay global so reading behavior remains predictable across books.
 
 Reader dimming is implemented as a reader-only Compose overlay capped by `MAX_READER_DIM_AMOUNT`; it never writes Android system brightness settings and is cleared naturally when leaving the reader surface.
 
@@ -145,7 +146,7 @@ Device checks should cover:
 
 - importing EPUB/PDF/TXT/CBZ/FB2
 - opening a real EPUB and PDF
-- page navigation by swipe, tap, hardware keyboard/DPAD keys, TOC, bookmark, search result, find-next/find-previous, scrubber, and Back-based return after manual jumps
+- page navigation by swipe, tap, hardware keyboard/DPAD keys, optional volume buttons, TOC, bookmark, search result, find-next/find-previous, scrubber, and Back-based return after manual jumps
 - resume after process/app restart
 - adding/removing notes, highlights, and bookmarks
 - dictionary lookup from selected text
