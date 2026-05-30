@@ -62,4 +62,14 @@ class DictionaryRepositoryInstrumentedTest {
         assertTrue(entries.isNotEmpty())
         assertTrue(entries.any { it.lemma == "wolf" })
     }
+
+    @Test
+    fun lookupHandlesMultiWordSelection() = runBlocking {
+        val repository = DictionaryRepository(context, db.dictionary())
+
+        val entries = repository.lookup("science fiction")
+
+        assertTrue(entries.isNotEmpty())
+        assertTrue(entries.any { it.lemma == "science fiction" })
+    }
 }

@@ -16,6 +16,29 @@ class DictionaryLemmatizerTest {
     }
 
     @Test
+    fun keepsSelectedPhraseCandidateBeforeSingleWordFallbacks() {
+        val candidates = DictionaryLemmatizer.candidates("“science fiction”")
+
+        assertEquals("science fiction", candidates.first())
+        assertTrue("phrase selection should still fall back to the first word", "science" in candidates)
+    }
+
+    @Test
+    fun handlesHyphenatedSelections() {
+        val candidates = DictionaryLemmatizer.candidates("well-being")
+
+        assertEquals("well-being", candidates.first())
+        assertTrue("hyphenated words should also try a space form", "well being" in candidates)
+    }
+
+    @Test
+    fun fallsBackAcrossPhraseTokens() {
+        val candidates = DictionaryLemmatizer.candidates("the children")
+
+        assertTrue("later phrase tokens should still be usable", "child" in candidates)
+    }
+
+    @Test
     fun includesRegularPluralAndProgressiveCandidates() {
         assertTrue("books should include book", "book" in DictionaryLemmatizer.candidates("books"))
         assertTrue("running should include run", "run" in DictionaryLemmatizer.candidates("running"))

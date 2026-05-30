@@ -4,14 +4,29 @@ import java.util.Locale
 
 object DictionaryLemmatizer {
     fun candidates(rawWord: String): List<String> {
-        val word = wordToken(rawWord)
-            .lowercase(Locale.US)
-            .removeSuffix("'s")
-            .removeSuffix("’s")
-        if (word.isBlank()) return emptyList()
+        val tokens = wordTokens(rawWord)
+        if (tokens.isEmpty()) return emptyList()
 
         return buildList {
+            if (tokens.size > 1) {
+                add(tokens.joinToString(" "))
+                if (tokens.any { '-' in it }) {
+                    add(tokens.joinToString(" ") { it.replace('-', ' ') }.replace(Regex("\\s+"), " "))
+                }
+            }
+            tokens.firstOrNull()?.let { first ->
+                addAll(singleWordCandidates(first))
+            }
+            tokens.drop(1).forEach { token ->
+                addAll(singleWordCandidates(token).take(2))
+            }
+        }.distinct()
+    }
+
+    private fun singleWordCandidates(word: String): List<String> =
+        buildList {
             add(word)
+            if ('-' in word) add(word.replace('-', ' '))
             irregular[word]?.let(::add)
             if (word.endsWith("ies") && word.length > 3) add(word.dropLast(3) + "y")
             if (word.endsWith("ves") && word.length > 3) {
@@ -35,14 +50,21 @@ object DictionaryLemmatizer {
                 if (stem.endsWith("i") && stem.length > 1) add(stem.dropLast(1) + "y")
                 stem.withoutDoubledTerminal()?.let(::add)
             }
-        }.distinct()
-    }
+        }
 
-    private fun wordToken(rawWord: String): String =
-        Regex("""[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)?""")
-            .find(rawWord.trim())
-            ?.value
-            .orEmpty()
+    private fun wordTokens(rawWord: String): List<String> =
+        wordRegex
+            .findAll(rawWord.trim())
+            .map { match ->
+                match.value
+                    .lowercase(Locale.US)
+                    .removeSuffix("'s")
+                    .removeSuffix("’s")
+                    .trim('-', '\'', '’')
+            }
+            .filter { it.isNotBlank() }
+            .take(MAX_SELECTION_TOKENS)
+            .toList()
 
     private fun String.withoutDoubledTerminal(): String? {
         if (length < 2) return null
@@ -95,4 +117,7 @@ object DictionaryLemmatizer {
         "wrote" to "write",
         "written" to "write"
     )
+
+    private val wordRegex = Regex("""[\p{L}\p{N}]+(?:[-'’][\p{L}\p{N}]+)*""")
+    private const val MAX_SELECTION_TOKENS = 6
 }
