@@ -38,7 +38,7 @@ This is the working competitive map for XReader. It should drive implementation 
 | OPDS/catalogs | Not implemented. | Moon+, Librera, FBReader, PocketBook support OPDS. | Good optional later feature. |
 | PDF reflow/crop | PDF fit and paged/vertical layout are implemented; reflow/crop are not implemented. | PocketBook/ReadEra have PDF comfort features. | Continue adding only real Readium-backed comfort controls. |
 | Typography depth | Built-in family choices including OpenDyslexic, spacing presets, font weight, hyphenation, and per-book appearance overrides implemented; user font import not implemented. | FBReader/Moon+ support user fonts, background customization, and hyphenation. | Keep adding only reader-backed controls; user font import remains later until custom files can be served reliably. |
-| Bulk metadata cleanup | Automatic author/genre/series canonicalization plus matching-series cleanup implemented in the metadata editor. | Metadata quality is a recurring library pain. | Continue with broader bulk tools later. |
+| Bulk metadata cleanup | Automatic author/genre/series canonicalization, matching-series cleanup in the metadata editor, and Settings repair for same-series genre drift. | Metadata quality is a recurring library pain. | Continue with broader bulk tools later. |
 
 ## High-Impact Gaps
 
@@ -54,6 +54,7 @@ The research points to several areas that matter more than raw feature count:
 
 - Opt-in matching-series metadata cleanup. From the metadata editor, changing shared author, genre, or series values can apply them to other books that match the old or new author and series pair. The operation is atomic and keeps per-book fields such as title, year, and series index untouched.
 - Metadata canonicalization. Import and metadata edits collapse author casing/spacing variants against existing library values and normalize known genre aliases such as `sci-fi` into stable groups without adding another management screen.
+- Same-series genre cleanup. The existing Settings repair action can fix obvious genre drift inside one author/series group, promoting weak labels such as Adventure or War to the single strong series genre without adding another library management screen.
 - Reader find bar. After an in-book search, XReader keeps a compact temporary find bar with match count plus previous/next controls, using Readium search positions or the local search index fallback instead of a placeholder overlay.
 - Library search result clarity. Global text matches now show the source book, author, and a query-centered snippet from the local FTS index before jumping into the matched reading unit.
 - Read-aloud passage controls. Active read-aloud now exposes compact previous/next passage controls in the reader bar and uses the same page-aligned chunks that drive spoken locator persistence.

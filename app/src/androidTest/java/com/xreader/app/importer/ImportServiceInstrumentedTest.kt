@@ -474,6 +474,40 @@ class ImportServiceInstrumentedTest {
         assertEquals(repair.searchRows, service.bookHealth(result.bookId).searchRows)
     }
 
+    @Test
+    fun repairLibraryHarmonizesSameSeriesGenreDrift() = runBlocking {
+        val service = ImportService(context, db)
+        val imported = listOf(
+            "Red Rising" to "Dystopian",
+            "Golden Son" to "Adventure",
+            "Morning Star" to "War",
+        ).mapIndexed { index, (title, genre) ->
+            val source = File(root, "source/$title.txt").apply {
+                parentFile?.mkdirs()
+                writeText("$title\n\nA series cleanup fixture paragraph $index.")
+            }
+            val bookId = service.import(Uri.fromFile(source)).bookId
+            val book = requireNotNull(db.books().getBook(bookId))
+            db.books().update(
+                book.copy(
+                    author = "Pierce Brown",
+                    series = "Red Rising",
+                    seriesIndex = (index + 1).toDouble(),
+                    genre = genre
+                )
+            )
+            bookId
+        }
+
+        val result = service.repairLibrary()
+
+        assertEquals(3, result.scanned)
+        assertEquals(3, result.metadataUpdated)
+        imported.forEach { bookId ->
+            assertEquals("Science Fiction", db.books().getBook(bookId)?.genre)
+        }
+    }
+
     private fun ZipOutputStream.writeEntry(name: String, bytes: ByteArray) {
         putNextEntry(ZipEntry(name))
         write(bytes)

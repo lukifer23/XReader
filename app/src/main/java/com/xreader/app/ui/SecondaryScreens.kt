@@ -839,7 +839,7 @@ internal fun SettingsRoute(viewModel: SettingsViewModel, onBack: () -> Unit) {
                             Icon(Icons.Filled.Search, contentDescription = null)
                         }
                         Spacer(Modifier.width(8.dp))
-                        Text(if (maintenance.repairingLibrary) "Repairing library" else "Repair covers and search")
+                        Text(if (maintenance.repairingLibrary) "Repairing library" else "Repair library")
                     }
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(

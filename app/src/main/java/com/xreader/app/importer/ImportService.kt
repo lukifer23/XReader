@@ -332,6 +332,7 @@ class ImportService(
     suspend fun backfillLibraryDetails(limit: Int = 50) = withContext(Dispatchers.IO) {
         backfillMissingCoversInternal(limit)
         backfillMetadataInternal(limit)
+        cleanupLibraryMetadataInternal()
         inferMissingSeriesFromTitlesInternal()
         normalizeSeriesOrderInternal()
     }
@@ -353,6 +354,7 @@ class ImportService(
             if (outcome.metadataUpdated) metadataUpdated += 1
             searchRows += outcome.searchRows
         }
+        metadataUpdated += cleanupLibraryMetadataInternal()
         inferMissingSeriesFromTitlesInternal()
         normalizeSeriesOrderInternal()
         LibraryRepairResult(
@@ -449,6 +451,50 @@ class ImportService(
         }
     }
 
+    private suspend fun cleanupLibraryMetadataInternal(): Int {
+        val books = bookDao.booksForBackup()
+        if (books.isEmpty()) return 0
+
+        val options = metadataOptions()
+        val canonicalBooks = books.associate { book ->
+            val author = PublicationMetadataTools.canonicalAuthor(book.author, options.authors) ?: book.author.trim()
+            val genre = PublicationMetadataTools.canonicalGenre(book.genre, options.genres)
+            val series = PublicationMetadataTools.canonicalSeriesName(book.series, options.series)
+            book.id to book.copy(author = author, genre = genre, series = series)
+        }
+        val seriesGenreByGroup = canonicalBooks.values
+            .mapNotNull { book -> book.seriesMetadataGroupKey()?.let { it to book } }
+            .groupBy({ it.first }, { it.second })
+            .filterValues { it.size > 1 }
+            .mapNotNull { (key, group) ->
+                PublicationMetadataTools.seriesGenreConsensus(group.map { it.genre })?.let { key to it }
+            }
+            .toMap()
+
+        val now = clock.millis()
+        val updates = books.mapNotNull { original ->
+            val canonical = canonicalBooks.getValue(original.id)
+            val seriesGenre = canonical.seriesMetadataGroupKey()?.let(seriesGenreByGroup::get)
+            val updated = canonical.copy(genre = seriesGenre ?: canonical.genre)
+            if (original.author == updated.author && original.genre == updated.genre && original.series == updated.series) {
+                null
+            } else {
+                updated.copy(updatedAt = now)
+            }
+        }
+        if (updates.isEmpty()) return 0
+
+        database.withTransaction {
+            updates.forEach { updated ->
+                bookDao.update(updated)
+                bookDao.insertAuthor(com.xreader.app.data.AuthorEntity(name = updated.author))
+                updated.genre?.let { bookDao.insertGenre(com.xreader.app.data.GenreEntity(name = it)) }
+                updated.series?.let { bookDao.insertSeries(com.xreader.app.data.SeriesEntity(name = it)) }
+            }
+        }
+        return updates.size
+    }
+
     private suspend fun normalizeSeriesOrderInternal() {
         bookDao.booksWithSeriesForNormalization()
             .groupBy { book ->
@@ -503,6 +549,11 @@ class ImportService(
                 bookDao.update(book.copy(series = series, updatedAt = clock.millis()))
                 bookDao.insertSeries(com.xreader.app.data.SeriesEntity(name = series))
             }
+    }
+
+    private fun BookEntity.seriesMetadataGroupKey(): String? {
+        val seriesKey = series?.trim()?.takeIf { it.isNotBlank() } ?: return null
+        return "${author.trim().lowercase(Locale.US)}\u0000${seriesKey.lowercase(Locale.US)}"
     }
 
     private fun parseStoredBook(

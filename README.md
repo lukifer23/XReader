@@ -27,7 +27,7 @@ Implemented:
 - Persisted library sort and comfortable/compact density controls that apply in grouped and ungrouped views.
 - Compact book actions for custom collections, favorites, manual finished/not-finished state, metadata edits, and removal.
 - Per-book "save copy" export through Android's document picker, writing the actual private reader file without broad storage access.
-- Metadata editing for title, author, year, genre, series, series order, compact existing-value suggestions, automatic author/genre/series canonicalization, and opt-in bulk cleanup.
+- Metadata editing for title, author, year, genre, series, series order, compact existing-value suggestions, automatic author/genre/series canonicalization, opt-in bulk cleanup, and Settings repair for obvious same-series genre drift.
 - Covers, including EPUB guide/title-page cover references, metadata extraction, manual cover replacement, per-book health checks, and repair/reindex actions.
 - Resume from persisted Readium locators with percent read and progress state.
 - Swipe, calibrated tap-zone, hardware-key, optional volume-button, searchable TOC/bookmark/note navigation, search-result, find-next/find-previous, and scrubber navigation.

@@ -41,4 +41,26 @@ class PublicationMetadataToolsTest {
         assertNull(PublicationMetadataTools.canonicalGenre(null, listOf("Science Fiction")))
         assertNull(PublicationMetadataTools.canonicalSeriesName("", listOf("Series")))
     }
+
+    @Test
+    fun seriesGenreConsensusPrefersOneStrongGenreOverWeakSeriesLabels() {
+        assertEquals(
+            "Science Fiction",
+            PublicationMetadataTools.seriesGenreConsensus(listOf("Dystopian", "Adventure", "War"))
+        )
+        assertEquals(
+            "Fantasy",
+            PublicationMetadataTools.seriesGenreConsensus(listOf("Fantasy", "Young Adult", null))
+        )
+    }
+
+    @Test
+    fun seriesGenreConsensusRejectsConflictingStrongGenres() {
+        assertNull(
+            PublicationMetadataTools.seriesGenreConsensus(listOf("Science Fiction", "Fantasy", "Adventure"))
+        )
+        assertNull(
+            PublicationMetadataTools.seriesGenreConsensus(listOf("Adventure", "War"))
+        )
+    }
 }

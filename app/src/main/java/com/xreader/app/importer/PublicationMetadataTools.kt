@@ -39,6 +39,28 @@ object PublicationMetadataTools {
         "books",
     )
 
+    private val weakSeriesGenres = setOf(
+        "action",
+        "action & adventure",
+        "action and adventure",
+        "adventure",
+        "book",
+        "books",
+        "children",
+        "ebooks",
+        "fiction",
+        "general",
+        "juvenile",
+        "juvenile fiction",
+        "literature",
+        "literature & fiction",
+        "literature and fiction",
+        "military",
+        "war",
+        "young adult",
+        "ya",
+    )
+
     fun cleanGenre(subjects: List<String>): String? {
         val candidates = subjects
             .flatMap(::subjectCandidates)
@@ -76,6 +98,15 @@ object PublicationMetadataTools {
     fun canonicalGenre(value: String?, existing: List<String>): String? {
         val cleaned = cleanMetadataValue(value) ?: return null
         return cleanGenre(listOf(cleaned)) ?: canonicalExistingValue(cleaned, existing)
+    }
+
+    fun seriesGenreConsensus(values: List<String?>): String? {
+        if (values.size < 2) return null
+        val strongGenres = values
+            .mapNotNull { canonicalGenre(it, emptyList()) }
+            .filterNot { normalize(it) in weakSeriesGenres }
+            .distinctBy(::normalize)
+        return strongGenres.singleOrNull()
     }
 
     fun canonicalSeriesName(value: String?, existing: List<String>): String? =
