@@ -73,6 +73,7 @@ class ImportService(
     private val fb2Converter = Fb2ToEpubConverter()
     private val rtfConverter = RtfToEpubConverter()
     private val odtConverter = OdtToEpubConverter()
+    private val docxConverter = DocxToEpubConverter()
     private val pdfTools = PdfTools(context)
 
     suspend fun importMany(uris: List<Uri>): ImportBatchResult = withContext(Dispatchers.IO) {
@@ -142,6 +143,10 @@ class ImportService(
                 }
                 "odt" -> {
                     odtConverter.convert(tmp, stagedFile, sourceTitle(displayName, sourceExtension))
+                    null
+                }
+                "docx" -> {
+                    docxConverter.convert(tmp, stagedFile, sourceTitle(displayName, sourceExtension))
                     null
                 }
                 else -> {
@@ -718,6 +723,7 @@ class ImportService(
             "text/plain" -> "txt"
             "application/rtf", "text/rtf", "application/x-rtf" -> "rtf"
             "application/vnd.oasis.opendocument.text" -> "odt"
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document" -> "docx"
             "application/x-fictionbook+xml", "application/fb2+xml", "text/fb2+xml" -> "fb2"
             else -> ""
         }
@@ -742,7 +748,7 @@ class ImportService(
     }
 
     private companion object {
-        val SUPPORTED_BOOK_EXTENSIONS = setOf("epub", "pdf", "txt", "cbz", "fb2", "fb2.zip", "rtf", "odt")
+        val SUPPORTED_BOOK_EXTENSIONS = setOf("epub", "pdf", "txt", "cbz", "fb2", "fb2.zip", "rtf", "odt", "docx")
         val SUPPORTED_BOOK_MIME_TYPES = setOf(
             "application/epub+zip",
             "application/pdf",
@@ -751,6 +757,7 @@ class ImportService(
             "text/rtf",
             "application/x-rtf",
             "application/vnd.oasis.opendocument.text",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             "application/zip",
             "application/x-cbz",
             "application/vnd.comicbook+zip",

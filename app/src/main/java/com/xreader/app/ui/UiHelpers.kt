@@ -415,6 +415,7 @@ internal fun bookFormatLabel(book: BookEntity): String =
         "fb2", "fb2.zip" -> "FB2"
         "rtf" -> "RTF"
         "odt" -> "ODT"
+        "docx" -> "DOCX"
         else -> book.format.name
     }
 

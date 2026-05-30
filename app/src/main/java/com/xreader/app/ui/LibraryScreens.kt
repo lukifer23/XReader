@@ -114,6 +114,7 @@ internal fun LibraryRoute(
             "text/rtf",
             "application/x-rtf",
             "application/vnd.oasis.opendocument.text",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             "application/zip",
             "application/x-cbz",
             "application/vnd.comicbook+zip",

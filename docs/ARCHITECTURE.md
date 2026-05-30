@@ -43,7 +43,7 @@ Search uses a normal table plus an FTS table. Book deletion removes search rows 
 1. Android Storage Access Framework returns one or more document URIs, or a folder tree URI.
 2. `ImportService` copies the selected file to a temporary app cache file.
 3. The file checksum is calculated to prevent duplicate imports.
-4. TXT files are converted into a minimal EPUB package, CBZ files are converted into fixed-layout EPUB packages, FB2 / `.fb2.zip` files are converted into EPUB packages, RTF files are converted into EPUB packages with extracted text and basic metadata, and ODT files are converted into EPUB packages with OpenDocument metadata and reading-order text.
+4. TXT files are converted into a minimal EPUB package, CBZ files are converted into fixed-layout EPUB packages, FB2 / `.fb2.zip` files are converted into EPUB packages, RTF files are converted into EPUB packages with extracted text and basic metadata, and ODT/DOCX files are converted into EPUB packages with document metadata and reading-order text.
 5. EPUB/PDF files and converted EPUB outputs are copied into app-owned private library storage.
 6. Metadata, cover art, reading units, word counts, and searchable text are extracted.
 7. Book metadata and search rows are persisted in Room.
@@ -52,7 +52,7 @@ EPUB cover extraction checks explicit OPF cover metadata, EPUB 3 `cover-image` p
 
 The manual Settings repair action and the per-book metadata repair action reuse this parsing/indexing path against stored private-library files. They refresh covers, metadata fields that are empty or safe to improve, word/page counts, and search rows. They preserve user-edited title and author values. Covers manually replaced from local image files are stored as app-private downsampled JPEGs and are not overwritten by repair.
 
-Folder imports walk SAF document trees recursively, filter to EPUB, PDF, TXT, CBZ, FB2, `.fb2.zip`, RTF, and ODT documents, and summarize imported, duplicate, unsupported, and failed files. They do not require broad all-files access.
+Folder imports walk SAF document trees recursively, filter to EPUB, PDF, TXT, CBZ, FB2, `.fb2.zip`, RTF, ODT, and DOCX documents, and summarize imported, duplicate, unsupported, and failed files. They do not require broad all-files access.
 
 Book rows expose a save-copy action that launches Android's `CreateDocument` picker and streams the app-private stored reader file to the selected URI. Converted imports such as TXT, CBZ, FB2, RTF, and ODT export as the actual EPUB file XReader stores for reading.
 

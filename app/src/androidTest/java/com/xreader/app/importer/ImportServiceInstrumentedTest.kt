@@ -179,6 +179,33 @@ class ImportServiceInstrumentedTest {
     }
 
     @Test
+    fun importsDocxAsPrivateEpubAndIndexesText() = runBlocking {
+        val source = File(root, "source/Station Briefing.docx").apply {
+            parentFile?.mkdirs()
+        }
+        ZipOutputStream(source.outputStream().buffered()).use { zip ->
+            zip.writeEntry("[Content_Types].xml", docxContentTypesXml().toByteArray(Charsets.UTF_8))
+            zip.writeEntry("_rels/.rels", docxRelsXml().toByteArray(Charsets.UTF_8))
+            zip.writeEntry("docProps/core.xml", docxCoreXml().toByteArray(Charsets.UTF_8))
+            zip.writeEntry("word/document.xml", docxDocumentXml().toByteArray(Charsets.UTF_8))
+        }
+
+        val result = ImportService(context, db).import(Uri.fromFile(source))
+
+        assertFalse(result.duplicate)
+        val book = requireNotNull(db.books().getBook(result.bookId))
+        assertEquals(BookFormat.EPUB, book.format)
+        assertEquals("docx", book.sourceExtension)
+        assertEquals("Station Briefing", book.title)
+        assertEquals("Mina Patel", book.author)
+        assertEquals(2026, book.year)
+        assertTrue(File(context.filesDir, book.filePath).exists())
+
+        val searchResults = db.search().searchBook(result.bookId, "normalizedBody:airlock*")
+        assertTrue(searchResults.any { it.body.contains("airlock", ignoreCase = true) })
+    }
+
+    @Test
     fun importsManyBooksAndReportsDuplicatesAndUnsupportedFiles() = runBlocking {
         val first = File(root, "source/batch_one.txt").apply {
             parentFile?.mkdirs()
@@ -323,5 +350,60 @@ class ImportServiceInstrumentedTest {
             <dc:date>2025-05-29</dc:date>
           </office:meta>
         </office:document-meta>
+        """.trimIndent().trimStart()
+
+    private fun docxDocumentXml(): String =
+        """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+          <w:body>
+            <w:p>
+              <w:pPr><w:pStyle w:val="Heading1"/></w:pPr>
+              <w:r><w:t>Station Briefing</w:t></w:r>
+            </w:p>
+            <w:p>
+              <w:r><w:t>The airlock crew rehearsed every docking step.</w:t></w:r>
+            </w:p>
+            <w:p>
+              <w:pPr><w:numPr><w:numId w:val="1"/></w:numPr></w:pPr>
+              <w:r><w:t>Oxygen reserves checked.</w:t></w:r>
+            </w:p>
+          </w:body>
+        </w:document>
+        """.trimIndent().trimStart()
+
+    private fun docxCoreXml(): String =
+        """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <cp:coreProperties
+            xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"
+            xmlns:dc="http://purl.org/dc/elements/1.1/"
+            xmlns:dcterms="http://purl.org/dc/terms/"
+            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+          <dc:title>Station Briefing</dc:title>
+          <dc:creator>Mina Patel</dc:creator>
+          <dc:language>en</dc:language>
+          <dc:subject>Science Fiction</dc:subject>
+          <dcterms:created xsi:type="dcterms:W3CDTF">2026-05-29T10:00:00Z</dcterms:created>
+        </cp:coreProperties>
+        """.trimIndent().trimStart()
+
+    private fun docxContentTypesXml(): String =
+        """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+          <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+          <Default Extension="xml" ContentType="application/xml"/>
+          <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+          <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
+        </Types>
+        """.trimIndent().trimStart()
+
+    private fun docxRelsXml(): String =
+        """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+          <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+        </Relationships>
         """.trimIndent().trimStart()
 }
