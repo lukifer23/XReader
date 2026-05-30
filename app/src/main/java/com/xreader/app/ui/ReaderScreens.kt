@@ -190,8 +190,8 @@ internal fun ReaderScreen(
     onCloseDictionary: () -> Unit,
     onOpenNote: (Int, String?) -> Unit,
     onCloseNote: () -> Unit,
-    onAddNote: (String) -> Unit,
-    onUpdateAnnotationNote: (AnnotationEntity, String, String) -> Unit,
+    onAddNote: (String, String) -> Unit,
+    onUpdateAnnotationNote: (AnnotationEntity, String, String, String) -> Unit,
     onBookmark: (Int, String?) -> Unit,
     onDeleteBookmark: (Long) -> Unit,
     onDeleteAnnotation: (Long) -> Unit,
@@ -435,8 +435,8 @@ internal fun ReaderScreen(
         EditAnnotationDialog(
             annotation = annotation,
             onDismiss = { editingAnnotation = null },
-            onSave = { note, color ->
-                onUpdateAnnotationNote(annotation, note, color)
+            onSave = { note, color, tags ->
+                onUpdateAnnotationNote(annotation, note, color, tags)
                 editingAnnotation = null
             }
         )
@@ -844,22 +844,32 @@ internal fun DictionaryDialog(
 }
 
 @Composable
-internal fun NoteDialog(onDismiss: () -> Unit, onSave: (String) -> Unit) {
+internal fun NoteDialog(onDismiss: () -> Unit, onSave: (String, String) -> Unit) {
     var note by remember { mutableStateOf("") }
+    var tags by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Add note") },
         text = {
-            OutlinedTextField(
-                value = note,
-                onValueChange = { note = it },
-                label = { Text("Note") },
-                minLines = 4,
-                modifier = Modifier.fillMaxWidth()
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = note,
+                    onValueChange = { note = it },
+                    label = { Text("Note") },
+                    minLines = 4,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = tags,
+                    onValueChange = { tags = it },
+                    label = { Text("Tags") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
         },
         confirmButton = {
-            Button(onClick = { onSave(note) }, enabled = note.isNotBlank()) {
+            Button(onClick = { onSave(note, tags) }, enabled = note.isNotBlank()) {
                 Icon(Icons.Filled.Done, contentDescription = null)
                 Spacer(Modifier.width(6.dp))
                 Text("Save")

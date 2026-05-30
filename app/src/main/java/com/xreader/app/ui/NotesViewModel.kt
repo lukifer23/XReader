@@ -85,7 +85,7 @@ class NotesViewModel(container: AppContainer) : ViewModel() {
         kind.value = value
     }
 
-    fun updateNote(annotation: AnnotationEntity, note: String, color: String) {
+    fun updateNote(annotation: AnnotationEntity, note: String, color: String, tags: String) {
         viewModelScope.launch {
             annotationRepository.updateNote(
                 annotation = annotation,
@@ -94,7 +94,8 @@ class NotesViewModel(container: AppContainer) : ViewModel() {
                     ReaderHighlightColor.normalized(color)
                 } else {
                     annotation.color
-                }
+                },
+                tags = tags
             )
         }
     }

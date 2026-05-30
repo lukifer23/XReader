@@ -71,6 +71,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.xreader.app.AppContainer
+import com.xreader.app.annotations.annotationTagsLabel
 import com.xreader.app.data.AnnotationEntity
 import com.xreader.app.data.AnnotationKind
 import com.xreader.app.data.ReaderTheme
@@ -467,8 +468,8 @@ internal fun NotesRoute(
         EditAnnotationDialog(
             annotation = annotation,
             onDismiss = { editing = null },
-            onSave = { note, color ->
-                viewModel.updateNote(annotation, note, color)
+            onSave = { note, color, tags ->
+                viewModel.updateNote(annotation, note, color, tags)
                 editing = null
             }
         )
@@ -532,6 +533,9 @@ internal fun AnnotationRow(
             if (note.note.isNotBlank()) {
                 Text(note.note, fontWeight = FontWeight.SemiBold)
             }
+            annotationTagsLabel(note.tags).takeIf { it.isNotBlank() }?.let { tags ->
+                Text(tags, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             Text(DateFormat.getDateTimeInstance().format(Date(note.updatedAt)), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
@@ -541,15 +545,19 @@ internal fun AnnotationRow(
 internal fun EditAnnotationDialog(
     annotation: AnnotationEntity,
     onDismiss: () -> Unit,
-    onSave: (String, String) -> Unit,
+    onSave: (String, String, String) -> Unit,
 ) {
     var note by remember(annotation.id) { mutableStateOf(annotation.note) }
     var color by remember(annotation.id) { mutableStateOf(ReaderHighlightColor.normalized(annotation.color)) }
+    var tags by remember(annotation.id) { mutableStateOf(annotation.tags) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (annotation.kind == AnnotationKind.NOTE) "Edit note" else "Edit highlight note") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 Text(annotation.quote, maxLines = 4, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (annotation.kind == AnnotationKind.HIGHLIGHT) {
                     Text("Highlight color", style = MaterialTheme.typography.titleSmall)
@@ -571,10 +579,17 @@ internal fun EditAnnotationDialog(
                     minLines = 4,
                     modifier = Modifier.fillMaxWidth()
                 )
+                OutlinedTextField(
+                    value = tags,
+                    onValueChange = { tags = it },
+                    label = { Text("Tags") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         },
         confirmButton = {
-            Button(onClick = { onSave(note, color) }) {
+            Button(onClick = { onSave(note, color, tags) }) {
                 Icon(Icons.Filled.Done, contentDescription = null)
                 Spacer(Modifier.width(6.dp))
                 Text("Save")

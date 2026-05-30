@@ -38,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.xreader.app.annotations.annotationTagsLabel
 import com.xreader.app.data.AnnotationEntity
 import com.xreader.app.data.BookmarkEntity
 import com.xreader.app.reader.ReaderNavigationItem
@@ -220,6 +221,9 @@ private fun ReaderAnnotationsPane(
                 Text(annotation.quote, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 if (annotation.note.isNotBlank()) {
                     Text(annotation.note, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                annotationTagsLabel(annotation.tags).takeIf { it.isNotBlank() }?.let { tags ->
+                    Text(tags, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             IconButton(onClick = { onEditAnnotation(annotation) }, modifier = Modifier.size(40.dp)) {

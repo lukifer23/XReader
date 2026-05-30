@@ -630,7 +630,7 @@ class ReaderViewModel(
         _uiState.update { it.copy(noteDraftOpen = false, pendingNoteLocator = null, pendingNoteQuote = null) }
     }
 
-    fun addNote(note: String) {
+    fun addNote(note: String, tags: String) {
         if (note.isBlank()) return
         val snapshot = _uiState.value
         val unit = if (snapshot.pendingNoteLocator == null) currentReadingUnit() else null
@@ -641,13 +641,14 @@ class ReaderViewModel(
                 bookId = bookId,
                 locator = locator,
                 quote = quote,
-                note = note.trim()
+                note = note.trim(),
+                tags = tags
             )
             closeNoteDraft()
         }
     }
 
-    fun updateAnnotationNote(annotation: AnnotationEntity, note: String, color: String) {
+    fun updateAnnotationNote(annotation: AnnotationEntity, note: String, color: String, tags: String) {
         viewModelScope.launch {
             container.annotationRepository.updateNote(
                 annotation = annotation,
@@ -656,7 +657,8 @@ class ReaderViewModel(
                     ReaderHighlightColor.normalized(color)
                 } else {
                     annotation.color
-                }
+                },
+                tags = tags
             )
         }
     }

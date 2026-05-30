@@ -134,6 +134,27 @@ class AnnotationRepositoryInstrumentedTest {
         assertEquals("#56CCF2", updated.color)
     }
 
+    @Test
+    fun updateNoteNormalizesTags() = runBlocking {
+        val bookId = sourceDb.books().insert(testBook(id = 0, title = "Source title"))
+        val repository = AnnotationRepository(sourceDb.annotations(), sourceDb.books(), clock)
+        val noteId = repository.addNote(
+            bookId = bookId,
+            locator = "loc-2",
+            quote = "A useful passage",
+            note = "Remember",
+            tags = "  #Craft, mars , Craft\nWorld building "
+        )
+        val annotation = sourceDb.annotations().allAnnotations().single { it.id == noteId }
+
+        assertEquals("Craft, mars, World building", annotation.tags)
+
+        repository.updateNote(annotation, "Remember this", tags = " theme, #Mars, theme ")
+
+        val updated = sourceDb.annotations().allAnnotations().single { it.id == noteId }
+        assertEquals("theme, Mars", updated.tags)
+    }
+
     private fun testBook(id: Long, title: String): BookEntity =
         BookEntity(
             id = id,

@@ -1,5 +1,6 @@
 package com.xreader.app.repository
 
+import com.xreader.app.annotations.normalizeAnnotationTags
 import com.xreader.app.data.AnnotationDao
 import com.xreader.app.data.AnnotationEntity
 import com.xreader.app.data.AnnotationKind
@@ -58,7 +59,7 @@ class AnnotationRepository(
                 quote = quote,
                 note = note,
                 color = "#2F6F6B",
-                tags = tags,
+                tags = normalizeAnnotationTags(tags),
                 createdAt = now,
                 updatedAt = now
             )
@@ -71,6 +72,7 @@ class AnnotationRepository(
         quote: String,
         color: String,
         note: String = "",
+        tags: String = "",
     ): Long {
         val now = clock.millis()
         return dao.insertAnnotation(
@@ -81,7 +83,7 @@ class AnnotationRepository(
                 quote = quote,
                 note = note,
                 color = color,
-                tags = "",
+                tags = normalizeAnnotationTags(tags),
                 createdAt = now,
                 updatedAt = now
             )
@@ -94,11 +96,13 @@ class AnnotationRepository(
         annotation: AnnotationEntity,
         note: String,
         color: String = annotation.color,
+        tags: String = annotation.tags,
     ) {
         dao.updateAnnotation(
             annotation.copy(
                 note = note.trim(),
                 color = color,
+                tags = normalizeAnnotationTags(tags),
                 updatedAt = clock.millis()
             )
         )
@@ -241,7 +245,7 @@ class AnnotationRepository(
                 quote = quote,
                 note = item.optString("note"),
                 color = item.optString("color", "#2F6F6B"),
-                tags = item.optString("tags"),
+                tags = normalizeAnnotationTags(item.optString("tags")),
                 createdAt = item.optLong("createdAt", clock.millis()),
                 updatedAt = item.optLong("updatedAt", clock.millis())
             )
