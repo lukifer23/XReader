@@ -39,6 +39,7 @@ class SettingsRepository(
         val publisherStyles = booleanPreferencesKey("publisher_styles")
         val textAlign = stringPreferencesKey("text_align")
         val pdfFit = stringPreferencesKey("pdf_fit")
+        val pdfScrollAxis = stringPreferencesKey("pdf_scroll_axis")
         val highlightColor = stringPreferencesKey("highlight_color")
         val idleTimeoutMillis = longPreferencesKey("idle_timeout_millis")
         val librarySort = stringPreferencesKey("library_sort")
@@ -54,6 +55,7 @@ class SettingsRepository(
         val publisherStyles: Key<Boolean>,
         val textAlign: Key<String>,
         val pdfFit: Key<String>,
+        val pdfScrollAxis: Key<String>,
     )
 
     val settings: Flow<ReaderSettings> =
@@ -83,6 +85,8 @@ class SettingsRepository(
                     ?: ReaderTextAlign.START,
                 pdfFit = prefs[Keys.pdfFit]?.let { runCatching { ReaderPdfFit.valueOf(it) }.getOrNull() }
                     ?: ReaderPdfFit.WIDTH,
+                pdfScrollAxis = prefs[Keys.pdfScrollAxis]?.let { runCatching { ReaderPdfScrollAxis.valueOf(it) }.getOrNull() }
+                    ?: ReaderPdfScrollAxis.HORIZONTAL,
                 highlightColor = ReaderHighlightColor.normalized(prefs[Keys.highlightColor]),
                 idleTimeoutMillis = prefs[Keys.idleTimeoutMillis] ?: 90_000L
             )
@@ -103,7 +107,9 @@ class SettingsRepository(
                     textAlign = prefs[keys.textAlign]?.let { runCatching { ReaderTextAlign.valueOf(it) }.getOrNull() }
                         ?: ReaderTextAlign.START,
                     pdfFit = prefs[keys.pdfFit]?.let { runCatching { ReaderPdfFit.valueOf(it) }.getOrNull() }
-                        ?: ReaderPdfFit.WIDTH
+                        ?: ReaderPdfFit.WIDTH,
+                    pdfScrollAxis = prefs[keys.pdfScrollAxis]?.let { runCatching { ReaderPdfScrollAxis.valueOf(it) }.getOrNull() }
+                        ?: ReaderPdfScrollAxis.HORIZONTAL
                 )
             }
         }
@@ -205,6 +211,10 @@ class SettingsRepository(
         dataStore.edit { it[Keys.pdfFit] = value.name }
     }
 
+    suspend fun setPdfScrollAxis(value: ReaderPdfScrollAxis) {
+        dataStore.edit { it[Keys.pdfScrollAxis] = value.name }
+    }
+
     suspend fun setHighlightColor(value: String) {
         dataStore.edit { it[Keys.highlightColor] = ReaderHighlightColor.normalized(value) }
     }
@@ -221,6 +231,7 @@ class SettingsRepository(
                 prefs[keys.publisherStyles] = seed.publisherStyles
                 prefs[keys.textAlign] = seed.textAlign.name
                 prefs[keys.pdfFit] = seed.pdfFit.name
+                prefs[keys.pdfScrollAxis] = seed.pdfScrollAxis.name
             } else {
                 prefs.remove(keys.enabled)
                 prefs.remove(keys.fontScale)
@@ -230,6 +241,7 @@ class SettingsRepository(
                 prefs.remove(keys.publisherStyles)
                 prefs.remove(keys.textAlign)
                 prefs.remove(keys.pdfFit)
+                prefs.remove(keys.pdfScrollAxis)
             }
         }
     }
@@ -271,6 +283,10 @@ class SettingsRepository(
         dataStore.edit { it[bookAppearanceKeys(bookId).pdfFit] = value.name }
     }
 
+    suspend fun setBookPdfScrollAxis(bookId: Long, value: ReaderPdfScrollAxis) {
+        dataStore.edit { it[bookAppearanceKeys(bookId).pdfScrollAxis] = value.name }
+    }
+
     suspend fun setLibrarySort(value: LibrarySort) {
         dataStore.edit { it[Keys.librarySort] = value.name }
     }
@@ -296,7 +312,8 @@ class SettingsRepository(
             fontFamily = stringPreferencesKey("${prefix}_font_family"),
             publisherStyles = booleanPreferencesKey("${prefix}_publisher_styles"),
             textAlign = stringPreferencesKey("${prefix}_text_align"),
-            pdfFit = stringPreferencesKey("${prefix}_pdf_fit")
+            pdfFit = stringPreferencesKey("${prefix}_pdf_fit"),
+            pdfScrollAxis = stringPreferencesKey("${prefix}_pdf_scroll_axis")
         )
     }
 }

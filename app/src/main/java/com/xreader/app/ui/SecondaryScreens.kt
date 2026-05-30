@@ -87,6 +87,7 @@ import com.xreader.app.settings.ReadAloudSleepTimer
 import com.xreader.app.settings.ReaderFontFamily
 import com.xreader.app.settings.ReaderHighlightColor
 import com.xreader.app.settings.ReaderPdfFit
+import com.xreader.app.settings.ReaderPdfScrollAxis
 import com.xreader.app.settings.ReaderSpacingPreset
 import com.xreader.app.settings.ReaderTapZonePreset
 import com.xreader.app.settings.ReaderTextAlign
@@ -732,8 +733,15 @@ internal fun SettingsRoute(viewModel: SettingsViewModel, onBack: () -> Unit) {
                         title = "PDF fit",
                         options = ReaderPdfFit.entries,
                         selected = settings.pdfFit,
-                        label = { it.name.lowercase().replaceFirstChar(Char::titlecase) },
+                        label = { it.label },
                         onSelected = viewModel::setPdfFit
+                    )
+                    SettingsChipGroup(
+                        title = "PDF layout",
+                        options = ReaderPdfScrollAxis.entries,
+                        selected = settings.pdfScrollAxis,
+                        label = { it.label },
+                        onSelected = viewModel::setPdfScrollAxis
                     )
                     SettingsToggleRow(
                         label = "Fullscreen reading",

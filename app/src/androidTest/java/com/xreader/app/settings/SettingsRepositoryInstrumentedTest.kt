@@ -70,6 +70,7 @@ class SettingsRepositoryInstrumentedTest {
         repository.setPublisherStyles(true)
         repository.setTextAlign(ReaderTextAlign.JUSTIFY)
         repository.setPdfFit(ReaderPdfFit.CONTAIN)
+        repository.setPdfScrollAxis(ReaderPdfScrollAxis.VERTICAL)
         repository.setLibrarySort(LibrarySort.SERIES)
         repository.setLibraryDensity(LibraryDensity.COMPACT)
 
@@ -95,6 +96,7 @@ class SettingsRepositoryInstrumentedTest {
         assertTrue(readerSettings.publisherStyles)
         assertEquals(ReaderTextAlign.JUSTIFY, readerSettings.textAlign)
         assertEquals(ReaderPdfFit.CONTAIN, readerSettings.pdfFit)
+        assertEquals(ReaderPdfScrollAxis.VERTICAL, readerSettings.pdfScrollAxis)
         assertEquals(LibrarySort.SERIES, librarySettings.sort)
         assertEquals(LibraryDensity.COMPACT, librarySettings.density)
 
@@ -121,7 +123,8 @@ class SettingsRepositoryInstrumentedTest {
             fontFamily = ReaderFontFamily.HUMANIST,
             publisherStyles = true,
             textAlign = ReaderTextAlign.JUSTIFY,
-            pdfFit = ReaderPdfFit.CONTAIN
+            pdfFit = ReaderPdfFit.CONTAIN,
+            pdfScrollAxis = ReaderPdfScrollAxis.VERTICAL
         )
 
         repository.setBookAppearanceEnabled(bookId = 42L, enabled = true, seed = seed)
@@ -132,7 +135,8 @@ class SettingsRepositoryInstrumentedTest {
         repository.setBookFontFamily(bookId = 42L, value = ReaderFontFamily.ACCESSIBLE)
         repository.setBookPublisherStyles(bookId = 42L, value = false)
         repository.setBookTextAlign(bookId = 42L, value = ReaderTextAlign.START)
-        repository.setBookPdfFit(bookId = 42L, value = ReaderPdfFit.WIDTH)
+        repository.setBookPdfFit(bookId = 42L, value = ReaderPdfFit.HEIGHT)
+        repository.setBookPdfScrollAxis(bookId = 42L, value = ReaderPdfScrollAxis.HORIZONTAL)
 
         val appearance = requireNotNull(repository.bookAppearance(42L).first())
         assertEquals(ReaderSpacingPreset.COMPACT.fontScale, appearance.fontScale, 0.001f)
@@ -141,7 +145,8 @@ class SettingsRepositoryInstrumentedTest {
         assertEquals(ReaderFontFamily.ACCESSIBLE, appearance.fontFamily)
         assertFalse(appearance.publisherStyles)
         assertEquals(ReaderTextAlign.START, appearance.textAlign)
-        assertEquals(ReaderPdfFit.WIDTH, appearance.pdfFit)
+        assertEquals(ReaderPdfFit.HEIGHT, appearance.pdfFit)
+        assertEquals(ReaderPdfScrollAxis.HORIZONTAL, appearance.pdfScrollAxis)
         assertNull(repository.bookAppearance(7L).first())
 
         repository.setBookAppearanceEnabled(bookId = 42L, enabled = false, seed = seed)

@@ -20,6 +20,7 @@ import com.xreader.app.settings.ReadAloudSleepTimer
 import com.xreader.app.settings.ReaderFontFamily
 import com.xreader.app.settings.ReaderHighlightColor
 import com.xreader.app.settings.ReaderPdfFit
+import com.xreader.app.settings.ReaderPdfScrollAxis
 import com.xreader.app.settings.ReaderSettings
 import com.xreader.app.settings.ReaderSpacingPreset
 import com.xreader.app.settings.ReaderTapZonePreset
@@ -352,6 +353,16 @@ class ReaderViewModel(
                 container.settingsRepository.setBookPdfFit(bookId, value)
             } else {
                 container.settingsRepository.setPdfFit(value)
+            }
+        }
+    }
+
+    fun setPdfScrollAxis(value: ReaderPdfScrollAxis) {
+        viewModelScope.launch {
+            if (_uiState.value.bookAppearanceEnabled) {
+                container.settingsRepository.setBookPdfScrollAxis(bookId, value)
+            } else {
+                container.settingsRepository.setPdfScrollAxis(value)
             }
         }
     }

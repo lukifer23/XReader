@@ -12,6 +12,7 @@ import com.xreader.app.settings.LibrarySort
 import com.xreader.app.settings.ReadAloudSleepTimer
 import com.xreader.app.settings.ReaderFontFamily
 import com.xreader.app.settings.ReaderPdfFit
+import com.xreader.app.settings.ReaderPdfScrollAxis
 import com.xreader.app.settings.ReaderSettings
 import com.xreader.app.settings.ReaderSpacingPreset
 import com.xreader.app.settings.ReaderTapZonePreset
@@ -132,6 +133,10 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     fun setPdfFit(value: ReaderPdfFit) {
         viewModelScope.launch { container.settingsRepository.setPdfFit(value) }
+    }
+
+    fun setPdfScrollAxis(value: ReaderPdfScrollAxis) {
+        viewModelScope.launch { container.settingsRepository.setPdfScrollAxis(value) }
     }
 
     fun setLibrarySort(value: LibrarySort) {

@@ -78,12 +78,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.xreader.app.AppContainer
 import com.xreader.app.data.AnnotationEntity
+import com.xreader.app.data.BookFormat
 import com.xreader.app.data.ReaderTheme
 import com.xreader.app.reader.OpenPublication
 import com.xreader.app.settings.MAX_READER_DIM_AMOUNT
 import com.xreader.app.settings.ReaderFontFamily
 import com.xreader.app.settings.ReaderHighlightColor
 import com.xreader.app.settings.ReaderPdfFit
+import com.xreader.app.settings.ReaderPdfScrollAxis
 import com.xreader.app.settings.ReaderSettings
 import com.xreader.app.settings.ReaderSpacingPreset
 import com.xreader.app.settings.ReaderTapZonePreset
@@ -170,6 +172,7 @@ internal fun ReaderRoute(
         onHighlightColor = viewModel::setHighlightColor,
         onTextAlign = viewModel::setTextAlign,
         onPdfFit = viewModel::setPdfFit,
+        onPdfScrollAxis = viewModel::setPdfScrollAxis,
         onBookAppearanceEnabled = viewModel::setBookAppearanceEnabled,
         onToggleReadAloud = { visibleUnit, visibleLocator ->
             viewModel.toggleReadAloud(visibleUnit, visibleLocator)
@@ -220,6 +223,7 @@ internal fun ReaderScreen(
     onHighlightColor: (String) -> Unit,
     onTextAlign: (ReaderTextAlign) -> Unit,
     onPdfFit: (ReaderPdfFit) -> Unit,
+    onPdfScrollAxis: (ReaderPdfScrollAxis) -> Unit,
     onBookAppearanceEnabled: (Boolean) -> Unit,
     onToggleReadAloud: (Int, String?) -> Unit,
     onReadAloudPrevious: () -> Unit,
@@ -479,7 +483,9 @@ internal fun ReaderScreen(
             onHighlightColor = onHighlightColor,
             onTextAlign = onTextAlign,
             onPdfFit = onPdfFit,
-            onBookAppearanceEnabled = onBookAppearanceEnabled
+            onPdfScrollAxis = onPdfScrollAxis,
+            onBookAppearanceEnabled = onBookAppearanceEnabled,
+            showPdfControls = publication.format == BookFormat.PDF
         )
     }
 }
@@ -715,7 +721,9 @@ internal fun ReaderQuickSettingsDialog(
     onHighlightColor: (String) -> Unit,
     onTextAlign: (ReaderTextAlign) -> Unit,
     onPdfFit: (ReaderPdfFit) -> Unit,
+    onPdfScrollAxis: (ReaderPdfScrollAxis) -> Unit,
     onBookAppearanceEnabled: (Boolean) -> Unit,
+    showPdfControls: Boolean,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -777,14 +785,26 @@ internal fun ReaderQuickSettingsDialog(
                         )
                     }
                 }
-                Text("PDF fit", style = MaterialTheme.typography.titleMedium)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ReaderPdfFit.entries.forEach { fit ->
-                        FilterChip(
-                            selected = settings.pdfFit == fit,
-                            onClick = { onPdfFit(fit) },
-                            label = { Text(fit.name.lowercase().replaceFirstChar(Char::titlecase)) }
-                        )
+                if (showPdfControls) {
+                    Text("PDF fit", style = MaterialTheme.typography.titleMedium)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ReaderPdfFit.entries.forEach { fit ->
+                            FilterChip(
+                                selected = settings.pdfFit == fit,
+                                onClick = { onPdfFit(fit) },
+                                label = { Text(fit.label) }
+                            )
+                        }
+                    }
+                    Text("PDF layout", style = MaterialTheme.typography.titleMedium)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ReaderPdfScrollAxis.entries.forEach { axis ->
+                            FilterChip(
+                                selected = settings.pdfScrollAxis == axis,
+                                onClick = { onPdfScrollAxis(axis) },
+                                label = { Text(axis.label) }
+                            )
+                        }
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {

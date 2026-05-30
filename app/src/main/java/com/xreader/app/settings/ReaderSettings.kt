@@ -7,9 +7,15 @@ enum class ReaderTextAlign {
     JUSTIFY,
 }
 
-enum class ReaderPdfFit {
-    CONTAIN,
-    WIDTH,
+enum class ReaderPdfFit(val label: String) {
+    CONTAIN("Page"),
+    WIDTH("Width"),
+    HEIGHT("Height"),
+}
+
+enum class ReaderPdfScrollAxis(val label: String) {
+    HORIZONTAL("Paged"),
+    VERTICAL("Scroll"),
 }
 
 enum class ReaderTapZonePreset(
@@ -104,6 +110,7 @@ data class ReaderSettings(
     val publisherStyles: Boolean = false,
     val textAlign: ReaderTextAlign = ReaderTextAlign.START,
     val pdfFit: ReaderPdfFit = ReaderPdfFit.WIDTH,
+    val pdfScrollAxis: ReaderPdfScrollAxis = ReaderPdfScrollAxis.HORIZONTAL,
     val highlightColor: String = ReaderHighlightColor.defaultHex,
     val idleTimeoutMillis: Long = 90_000L,
 )
@@ -126,6 +133,7 @@ data class BookReaderAppearance(
     val publisherStyles: Boolean,
     val textAlign: ReaderTextAlign,
     val pdfFit: ReaderPdfFit,
+    val pdfScrollAxis: ReaderPdfScrollAxis,
 )
 
 fun ReaderSettings.bookAppearance(): BookReaderAppearance =
@@ -136,7 +144,8 @@ fun ReaderSettings.bookAppearance(): BookReaderAppearance =
         fontFamily = fontFamily,
         publisherStyles = publisherStyles,
         textAlign = textAlign,
-        pdfFit = pdfFit
+        pdfFit = pdfFit,
+        pdfScrollAxis = pdfScrollAxis
     )
 
 fun ReaderSettings.withBookAppearance(appearance: BookReaderAppearance?): ReaderSettings =
@@ -150,7 +159,8 @@ fun ReaderSettings.withBookAppearance(appearance: BookReaderAppearance?): Reader
             fontFamily = appearance.fontFamily,
             publisherStyles = appearance.publisherStyles,
             textAlign = appearance.textAlign,
-            pdfFit = appearance.pdfFit
+            pdfFit = appearance.pdfFit,
+            pdfScrollAxis = appearance.pdfScrollAxis
         )
     }
 

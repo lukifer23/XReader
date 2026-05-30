@@ -36,7 +36,7 @@ This is the working competitive map for XReader. It should drive implementation 
 | Analytics | Active reading, WPM, streaks, range-aware activity, book/author/genre summaries, and local CSV/JSON export. | Moon+ and some ecosystems have stats. | Continue improving trend evidence and long-library performance. |
 | TTS | Implemented as in-reader Android TextToSpeech read-aloud from page-aligned local indexed book text, starting from the visible reader position, persisting spoken position as playback advances, and supporting previous/next passage, installed offline device voice selection, speed control, and a sleep timer. | Moon+, Librera, PocketBook, BookFusion, and others offer it. | Keep hardening lock-screen/background/headset lifecycle behavior; evaluate optional on-device neural TTS only if quality, latency, battery, position sync, and APK size justify it. |
 | OPDS/catalogs | Not implemented. | Moon+, Librera, FBReader, PocketBook support OPDS. | Good optional later feature. |
-| PDF reflow/crop | PDF fit implemented; reflow/crop not implemented. | PocketBook/ReadEra have PDF comfort features. | Evaluate after reader polish. |
+| PDF reflow/crop | PDF fit and paged/vertical layout are implemented; reflow/crop are not implemented. | PocketBook/ReadEra have PDF comfort features. | Continue adding only real Readium-backed comfort controls. |
 | Custom user fonts | Built-in family choices, spacing presets, and per-book appearance overrides implemented; user font import not implemented. | FBReader/Moon+ support user fonts. | User font import is a later reader-polish candidate. |
 | Bulk metadata cleanup | Matching-series author/genre/series cleanup implemented in the metadata editor. | Metadata quality is a recurring library pain. | Continue with broader bulk tools later. |
 
@@ -62,6 +62,7 @@ The research points to several areas that matter more than raw feature count:
 - Range-aware reading stats. The stats screen now supports 7-day, 30-day, 13-week, and all-time ranges, with grouped analytics and activity buckets recalculated for the selected period.
 - Local reading stats export. The stats screen can export all analytics ranges to CSV or JSON through Android's document picker, keeping the workflow local and user-controlled.
 - Per-book reader appearance. Books can keep their own font, spacing, alignment, publisher-style, and PDF fit choices without changing global reading behavior.
+- PDF layout comfort. PDFs can use page, width, or height fit and paged or vertical layout, with per-book overrides for manuals, scans, and landscape documents.
 - Keep screen awake. Reader sessions can opt into Android's screen-awake flag while the reader is visible, avoiding sleep interruptions without changing global phone settings.
 - Reader dimming. Night reading can use a reader-only dim overlay without requesting system brightness permissions or changing the rest of the phone.
 - Optional volume-button page turns. Phone volume buttons remain system volume controls by default, but readers can opt into physical page turns from global or in-reader settings without adding permanent chrome.

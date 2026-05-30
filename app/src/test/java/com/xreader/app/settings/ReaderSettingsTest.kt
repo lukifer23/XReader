@@ -17,6 +17,8 @@ class ReaderSettingsTest {
         assertEquals(ReaderHighlightColor.YELLOW.hex, ReaderSettings().highlightColor)
         assertFalse(ReaderSettings().keepScreenAwake)
         assertFalse(ReaderSettings().volumeKeysTurnPages)
+        assertEquals(ReaderPdfFit.WIDTH, ReaderSettings().pdfFit)
+        assertEquals(ReaderPdfScrollAxis.HORIZONTAL, ReaderSettings().pdfScrollAxis)
         assertEquals(0f, ReaderSettings().screenDim, 0.001f)
     }
 
@@ -39,6 +41,12 @@ class ReaderSettingsTest {
     }
 
     @Test
+    fun pdfControlsUseReaderFriendlyLabels() {
+        assertEquals(listOf("Page", "Width", "Height"), ReaderPdfFit.entries.map { it.label })
+        assertEquals(listOf("Paged", "Scroll"), ReaderPdfScrollAxis.entries.map { it.label })
+    }
+
+    @Test
     fun spacingPresetsApplyOnlyTypographyDensity() {
         val settings = ReaderSettings(
             theme = com.xreader.app.data.ReaderTheme.OLED,
@@ -51,6 +59,8 @@ class ReaderSettingsTest {
             readAloudSleepTimer = ReadAloudSleepTimer.THIRTY_MINUTES,
             highlightColor = ReaderHighlightColor.BLUE.hex,
             textAlign = ReaderTextAlign.JUSTIFY,
+            pdfFit = ReaderPdfFit.HEIGHT,
+            pdfScrollAxis = ReaderPdfScrollAxis.VERTICAL,
             keepScreenAwake = true,
             volumeKeysTurnPages = true,
             screenDim = 0.3f
@@ -65,6 +75,8 @@ class ReaderSettingsTest {
         assertEquals(ReadAloudSleepTimer.THIRTY_MINUTES, accessible.readAloudSleepTimer)
         assertEquals(ReaderHighlightColor.BLUE.hex, accessible.highlightColor)
         assertEquals(ReaderTextAlign.JUSTIFY, accessible.textAlign)
+        assertEquals(ReaderPdfFit.HEIGHT, accessible.pdfFit)
+        assertEquals(ReaderPdfScrollAxis.VERTICAL, accessible.pdfScrollAxis)
         assertTrue(accessible.keepScreenAwake)
         assertTrue(accessible.volumeKeysTurnPages)
         assertEquals(0.3f, accessible.screenDim, 0.001f)
@@ -97,6 +109,7 @@ class ReaderSettingsTest {
             publisherStyles = true,
             textAlign = ReaderTextAlign.JUSTIFY,
             pdfFit = ReaderPdfFit.CONTAIN,
+            pdfScrollAxis = ReaderPdfScrollAxis.VERTICAL,
             idleTimeoutMillis = 30_000L
         )
         val appearance = BookReaderAppearance(
@@ -106,7 +119,8 @@ class ReaderSettingsTest {
             fontFamily = ReaderFontFamily.ACCESSIBLE,
             publisherStyles = false,
             textAlign = ReaderTextAlign.START,
-            pdfFit = ReaderPdfFit.WIDTH
+            pdfFit = ReaderPdfFit.HEIGHT,
+            pdfScrollAxis = ReaderPdfScrollAxis.HORIZONTAL
         )
 
         val combined = global.withBookAppearance(appearance)
@@ -130,7 +144,8 @@ class ReaderSettingsTest {
         assertEquals(ReaderFontFamily.ACCESSIBLE, combined.fontFamily)
         assertFalse(combined.publisherStyles)
         assertEquals(ReaderTextAlign.START, combined.textAlign)
-        assertEquals(ReaderPdfFit.WIDTH, combined.pdfFit)
+        assertEquals(ReaderPdfFit.HEIGHT, combined.pdfFit)
+        assertEquals(ReaderPdfScrollAxis.HORIZONTAL, combined.pdfScrollAxis)
     }
 
     @Test

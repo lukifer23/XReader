@@ -46,6 +46,7 @@ import com.xreader.app.data.BookFormat
 import com.xreader.app.data.ReaderTheme
 import com.xreader.app.reader.OpenPublication
 import com.xreader.app.settings.ReaderPdfFit
+import com.xreader.app.settings.ReaderPdfScrollAxis
 import com.xreader.app.settings.ReaderSettings
 import com.xreader.app.settings.ReaderTextAlign
 import org.json.JSONObject
@@ -391,9 +392,13 @@ private fun ReaderSettings.toPdfiumPreferences(): PdfiumPreferences =
         fit = when (pdfFit) {
             ReaderPdfFit.CONTAIN -> Fit.CONTAIN
             ReaderPdfFit.WIDTH -> Fit.WIDTH
+            ReaderPdfFit.HEIGHT -> Fit.HEIGHT
         },
         pageSpacing = (12.0 * marginScale.toDouble()).coerceIn(4.0, 32.0),
-        scrollAxis = Axis.HORIZONTAL
+        scrollAxis = when (pdfScrollAxis) {
+            ReaderPdfScrollAxis.HORIZONTAL -> Axis.HORIZONTAL
+            ReaderPdfScrollAxis.VERTICAL -> Axis.VERTICAL
+        }
     )
 
 private fun String?.toReadiumLocator(): Locator? {
