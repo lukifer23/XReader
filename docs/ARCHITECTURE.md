@@ -77,6 +77,7 @@ The Books home derives series continuation recommendations from the already load
 - calibrated tap-zone page navigation
 - hardware keyboard and DPAD page navigation, plus opt-in volume-button page turns
 - chrome toggle
+- lazy, filterable in-book navigation across table of contents, bookmarks, notes, highlights, and annotation tags
 - bounded return history for manual TOC, bookmark, note, search-result, and find-next/find-previous jumps
 - selection actions for highlight, note, and dictionary lookup
 - scrollbar cleanup for nested Readium/WebView content
@@ -146,7 +147,7 @@ Device checks should cover:
 
 - importing EPUB/PDF/TXT/CBZ/FB2
 - opening a real EPUB and PDF
-- page navigation by swipe, tap, hardware keyboard/DPAD keys, optional volume buttons, TOC, bookmark, search result, find-next/find-previous, scrubber, and Back-based return after manual jumps
+- page navigation by swipe, tap, hardware keyboard/DPAD keys, optional volume buttons, filterable TOC/bookmark/note lists, search result, find-next/find-previous, scrubber, and Back-based return after manual jumps
 - resume after process/app restart
 - adding/removing notes, highlights, and bookmarks
 - dictionary lookup from selected text

@@ -56,6 +56,7 @@ The research points to several areas that matter more than raw feature count:
 - Reader find bar. After an in-book search, XReader keeps a compact temporary find bar with match count plus previous/next controls, using Readium search positions or the local search index fallback instead of a placeholder overlay.
 - Read-aloud passage controls. Active read-aloud now exposes compact previous/next passage controls in the reader bar and uses the same page-aligned chunks that drive spoken locator persistence.
 - Annotation tags. Notes and highlights can carry normalized comma-separated tags, visible in reader/global note lists, filterable from the global notes screen, and preserved in JSON/Markdown exports.
+- Filterable in-book navigation. The reader Navigate sheet now filters long tables of contents, bookmarks, notes, highlights, and annotation tags without adding permanent chrome, and uses lazy lists for large books.
 - Series continuation. The Books home now shows a single compact "Up next" recommendation when the library has the next unfinished title after the most recently finished book in a series, using series index with year/title fallback.
 - Save book copy. Each book action menu can export the stored private reader file through SAF, so local-first storage does not trap the user's files or require broad storage permissions.
 - Range-aware reading stats. The stats screen now supports 7-day, 30-day, 13-week, and all-time ranges, with grouped analytics and activity buckets recalculated for the selected period.
