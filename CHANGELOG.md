@@ -8,7 +8,7 @@ Initial public repository snapshot.
 
 - Native Android app scaffold for XReader.
 - EPUB and PDF reading through Readium Kotlin.
-- TXT import converted into minimal EPUB packages.
+- TXT import converted into EPUB packages, including chaptered output for headed text files and legacy text decoding for older plain-text sources.
 - CBZ import converted into fixed-layout EPUB packages.
 - FB2 and zipped `.fb2.zip` import converted into EPUB packages with FictionBook metadata and embedded cover support.
 - RTF import converted into EPUB packages with title/author metadata and searchable text extraction.

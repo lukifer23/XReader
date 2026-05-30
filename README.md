@@ -11,7 +11,7 @@ This repository is an early personal APK build. The core reader path is real and
 Implemented:
 
 - EPUB and PDF reading through Readium Kotlin.
-- TXT import converted into a minimal EPUB package so text books use the same reader path.
+- TXT import converted into chaptered EPUB when headings are present, with legacy text decoding and the same private-library and reader path.
 - CBZ import converted into fixed-layout EPUB so comic/image archives use the same private-library and reader path.
 - FB2 and zipped `.fb2.zip` import converted into EPUB with FictionBook metadata, chapters, series, and embedded cover support.
 - RTF import converted into EPUB with title/author metadata and searchable text extraction.
