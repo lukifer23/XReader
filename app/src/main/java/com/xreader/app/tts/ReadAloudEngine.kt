@@ -43,6 +43,7 @@ data class ReadAloudState(
     val currentHeading: String? = null,
     val currentLocator: String? = null,
     val sleepTimerEndsAtMillis: Long? = null,
+    val sleepTimerRemainingMillis: Long? = null,
     val message: String? = null,
 )
 
@@ -261,6 +262,7 @@ class ReadAloudEngine(
             activeBookId = bookId,
             bookTitle = activeSpeech?.bookTitle,
             sleepTimerEndsAtMillis = sleepTimerEndsAtMillis,
+            sleepTimerRemainingMillis = currentSleepTimerRemainingMillis(),
             message = message
         )
     }
@@ -367,16 +369,33 @@ class ReadAloudEngine(
         sleepTimerEndsAtMillis = null
         val bookId = activeSpeech?.bookId ?: _state.value.activeBookId
         if (bookId == null || durationMillis == null || durationMillis <= 0L) {
-            _state.value = _state.value.copy(sleepTimerEndsAtMillis = null)
+            _state.value = _state.value.copy(
+                sleepTimerEndsAtMillis = null,
+                sleepTimerRemainingMillis = null
+            )
             return
         }
         val endsAt = System.currentTimeMillis() + durationMillis
         sleepTimerEndsAtMillis = endsAt
-        _state.value = _state.value.copy(sleepTimerEndsAtMillis = endsAt)
+        _state.value = _state.value.copy(
+            sleepTimerEndsAtMillis = endsAt,
+            sleepTimerRemainingMillis = durationMillis
+        )
         sleepTimerJob = scope.launch(Dispatchers.Main.immediate) {
-            delay(durationMillis)
-            val activeBookId = activeSpeech?.bookId ?: _state.value.activeBookId
-            if (activeBookId != bookId) return@launch
+            while (true) {
+                val remaining = endsAt - System.currentTimeMillis()
+                if (remaining <= 0L) break
+                delay(remaining.coerceAtMost(SLEEP_TIMER_STATUS_TICK_MILLIS))
+                val activeBookId = activeSpeech?.bookId ?: _state.value.activeBookId
+                if (activeBookId != bookId) return@launch
+                val updatedRemaining = endsAt - System.currentTimeMillis()
+                if (updatedRemaining > 0L) {
+                    _state.value = _state.value.copy(
+                        sleepTimerEndsAtMillis = endsAt,
+                        sleepTimerRemainingMillis = updatedRemaining
+                    )
+                }
+            }
             sleepTimerJob = null
             sleepTimerEndsAtMillis = null
             stopInternal(bookId = bookId, cancelSleepTimer = false)
@@ -525,6 +544,7 @@ class ReadAloudEngine(
             currentHeading = chunk?.heading,
             currentLocator = chunk?.locator,
             sleepTimerEndsAtMillis = sleepTimerEndsAtMillis,
+            sleepTimerRemainingMillis = currentSleepTimerRemainingMillis(),
             message = message
         )
         if (playing || paused) startForegroundServiceIfNeeded()
@@ -556,6 +576,9 @@ class ReadAloudEngine(
         _state.value = ReadAloudState()
         mediaSession.stop()
     }
+
+    private fun currentSleepTimerRemainingMillis(): Long? =
+        sleepTimerEndsAtMillis?.let { (it - System.currentTimeMillis()).coerceAtLeast(0L) }
 
     private fun startForegroundServiceIfNeeded() {
         if (foregroundServiceRequested) return
@@ -655,6 +678,7 @@ class ReadAloudEngine(
         private const val DEFAULT_SPEECH_RATE = 1.0f
         private const val MIN_SPEECH_RATE = 0.7f
         private const val MAX_SPEECH_RATE = 1.4f
+        private const val SLEEP_TIMER_STATUS_TICK_MILLIS = 30_000L
     }
 }
 

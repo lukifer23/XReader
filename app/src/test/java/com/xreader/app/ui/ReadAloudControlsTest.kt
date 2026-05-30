@@ -20,6 +20,19 @@ class ReadAloudControlsTest {
     }
 
     @Test
+    fun statusTextIncludesActiveSleepTimerCompactly() {
+        val state = ReadAloudState(
+            playing = true,
+            currentChunk = 2,
+            totalChunks = 8,
+            currentHeading = " Chapter   Three ",
+            sleepTimerRemainingMillis = 14 * 60_000L + 1L
+        )
+
+        assertEquals("Read aloud - 3/8 - Sleep in 15m - Chapter Three", readAloudStatusText(state))
+    }
+
+    @Test
     fun statusTextShowsPausedStateWithoutLosingPosition() {
         val state = ReadAloudState(
             paused = true,
@@ -42,6 +55,32 @@ class ReadAloudControlsTest {
                     currentChunk = 12,
                     totalChunks = 4
                 )
+            )
+        )
+    }
+
+    @Test
+    fun sleepTimerTextFallsBackToEndTimeAndFormatsHours() {
+        assertEquals(null, readAloudSleepTimerText(ReadAloudState(), nowMillis = 1_000L))
+        assertEquals(
+            "Sleep in 1m",
+            readAloudSleepTimerText(
+                ReadAloudState(sleepTimerEndsAtMillis = 61_000L),
+                nowMillis = 1_000L
+            )
+        )
+        assertEquals(
+            "Sleep in 1h 15m",
+            readAloudSleepTimerText(
+                ReadAloudState(sleepTimerRemainingMillis = 75 * 60_000L),
+                nowMillis = 1_000L
+            )
+        )
+        assertEquals(
+            "Sleep in <1m",
+            readAloudSleepTimerText(
+                ReadAloudState(sleepTimerRemainingMillis = 0L),
+                nowMillis = 1_000L
             )
         )
     }
