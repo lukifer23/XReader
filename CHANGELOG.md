@@ -24,6 +24,7 @@ Initial public repository snapshot.
 - Predictable grouped-library ordering: years newest-first and missing series/genre/year buckets last.
 - Manual mark-finished and mark-not-finished actions from the compact book action menu, with finished-state-aware progress classification.
 - Compact author, genre, and series suggestions in the metadata editor to prevent accidental duplicate categories.
+- Automatic author, genre, and series canonicalization during import and metadata edits, so variants like `sci-fi` and `Science fiction` collapse into the same library groups.
 - Opt-in bulk genre and series cleanup from the metadata editor for matching series books.
 - Persisted library sort and comfortable/compact density controls.
 - Quiet first-run import state plus distinct no-results states for search misses and empty library filters.

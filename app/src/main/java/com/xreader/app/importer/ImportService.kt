@@ -172,6 +172,7 @@ class ImportService(
                 fallbackTitle = sourceTitle(displayName, sourceExtension),
                 fallbackAuthor = "Unknown Author"
             )
+            val metadataOptions = metadataOptions()
 
             stagedFile.copyTo(storedFile, overwrite = true)
             stagedFile.delete()
@@ -180,13 +181,17 @@ class ImportService(
             }
 
             val wordCount = parsed.units.sumOf { it.wordCount }
+            val canonicalAuthor = PublicationMetadataTools.canonicalAuthor(
+                parsed.author.ifBlank { "Unknown Author" },
+                metadataOptions.authors
+            ) ?: "Unknown Author"
             val book = BookEntity(
                 title = TextTools.cleanTitle(parsed.title),
-                author = parsed.author.ifBlank { "Unknown Author" },
+                author = canonicalAuthor,
                 sortTitle = TextTools.sortTitle(parsed.title),
-                genre = parsed.genre?.takeIf { it.isNotBlank() },
+                genre = PublicationMetadataTools.canonicalGenre(parsed.genre, metadataOptions.genres),
                 year = parsed.year,
-                series = parsed.series,
+                series = PublicationMetadataTools.canonicalSeriesName(parsed.series, metadataOptions.series),
                 seriesIndex = parsed.seriesIndex,
                 description = parsed.description,
                 language = parsed.language,
@@ -362,6 +367,7 @@ class ImportService(
     }
 
     private suspend fun backfillMetadataInternal(limit: Int) {
+        val metadataOptions = metadataOptions()
         bookDao.epubBooksForMetadataAudit(limit).forEach { book ->
             val file = File(context.filesDir, book.filePath)
             if (!file.exists()) return@forEach
@@ -372,14 +378,16 @@ class ImportService(
                 book.genre
             }
             val series = book.series ?: metadata.series
+            val canonicalGenre = PublicationMetadataTools.canonicalGenre(genre, metadataOptions.genres)
+            val canonicalSeries = PublicationMetadataTools.canonicalSeriesName(series, metadataOptions.series)
             val seriesIndex = book.seriesIndex ?: metadata.seriesIndex
             val year = book.year ?: metadata.year
-            if (genre == book.genre && series == book.series && seriesIndex == book.seriesIndex && year == book.year) {
+            if (canonicalGenre == book.genre && canonicalSeries == book.series && seriesIndex == book.seriesIndex && year == book.year) {
                 return@forEach
             }
             val updated = book.copy(
-                genre = genre,
-                series = series,
+                genre = canonicalGenre,
+                series = canonicalSeries,
                 seriesIndex = seriesIndex,
                 year = year,
                 updatedAt = clock.millis()
@@ -493,11 +501,14 @@ class ImportService(
         parsed: ParsedImport,
         refreshedCoverPath: String?,
         fileSizeBytes: Long,
+        metadataOptions: MetadataOptions,
     ): BookEntity {
+        val repairedGenre = if (PublicationMetadataTools.shouldReplaceGenre(genre, parsed.genre)) parsed.genre else genre
+        val repairedSeries = series ?: parsed.series
         val repaired = copy(
-            genre = if (PublicationMetadataTools.shouldReplaceGenre(genre, parsed.genre)) parsed.genre else genre,
+            genre = PublicationMetadataTools.canonicalGenre(repairedGenre, metadataOptions.genres),
             year = year ?: parsed.year,
-            series = series ?: parsed.series,
+            series = PublicationMetadataTools.canonicalSeriesName(repairedSeries, metadataOptions.series),
             seriesIndex = seriesIndex ?: parsed.seriesIndex,
             description = description ?: parsed.description,
             language = language ?: parsed.language,
@@ -532,8 +543,9 @@ class ImportService(
             } else {
                 parsed.coverImage?.let { writeCover(book.checksum, it) }
             }
+            val metadataOptions = metadataOptions()
             val rows = parsed.units.toSearchRows(book.id)
-            val updated = book.repairedCopy(parsed, refreshedCoverPath, file.length())
+            val updated = book.repairedCopy(parsed, refreshedCoverPath, file.length(), metadataOptions)
             val changedMetadata = updated != book
             database.withTransaction {
                 if (changedMetadata) bookDao.update(updated)
@@ -559,6 +571,13 @@ class ImportService(
         }
     }
 
+    private suspend fun metadataOptions(): MetadataOptions =
+        MetadataOptions(
+            authors = bookDao.authorNames(),
+            genres = bookDao.genreNames(),
+            series = bookDao.seriesNames()
+        )
+
     private data class ParsedImport(
         val title: String,
         val author: String,
@@ -571,6 +590,12 @@ class ImportService(
         val units: List<com.xreader.app.reader.ReadingUnit>,
         val pageCount: Int?,
         val coverImage: EpubParser.CoverImage?,
+    )
+
+    private data class MetadataOptions(
+        val authors: List<String>,
+        val genres: List<String>,
+        val series: List<String>,
     )
 
     private fun List<com.xreader.app.reader.ReadingUnit>.toSearchRows(bookId: Long): List<SearchIndexEntity> =

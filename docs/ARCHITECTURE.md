@@ -46,7 +46,8 @@ Search uses a normal table plus an FTS table. Book deletion removes search rows 
 4. TXT files are converted into a minimal EPUB package, CBZ files are converted into fixed-layout EPUB packages, FB2 / `.fb2.zip` files are converted into EPUB packages, RTF files are converted into EPUB packages with extracted text and basic metadata, ODT/DOCX files are converted into EPUB packages with document metadata and reading-order text, standalone HTML/HTM/XHTML files are converted into EPUB packages with page metadata and readable block structure, and Markdown files are converted into EPUB packages with front matter metadata and readable block structure.
 5. EPUB/PDF files and converted EPUB outputs are copied into app-owned private library storage.
 6. Metadata, cover art, reading units, word counts, and searchable text are extracted.
-7. Book metadata and search rows are persisted in Room.
+7. Author, genre, and series values are canonicalized against known genre aliases and existing library display values.
+8. Book metadata and search rows are persisted in Room.
 
 EPUB cover extraction checks explicit OPF cover metadata, EPUB 3 `cover-image` properties, EPUB 2 guide cover references, guide XHTML/HTML title pages that point at image assets, and conservative manifest-image fallbacks.
 
@@ -56,7 +57,7 @@ Folder imports walk SAF document trees recursively, filter to EPUB, PDF, TXT, CB
 
 Book rows expose a save-copy action that launches Android's `CreateDocument` picker and streams the app-private stored reader file to the selected URI. Converted imports such as TXT, CBZ, FB2, RTF, ODT, DOCX, HTML, and Markdown export as the actual EPUB file XReader stores for reading.
 
-Manual metadata edits can optionally apply shared author, genre, and series metadata to other books that match the same old or new author and series pair. The bulk cleanup runs in a Room transaction and keeps per-book fields such as title, year, and series index isolated to each book.
+Manual metadata edits canonicalize author, genre, and series values before persistence, then can optionally apply shared author, genre, and series metadata to other books that match the same old or new author and series pair. The bulk cleanup runs in a Room transaction and keeps per-book fields such as title, year, and series index isolated to each book.
 
 The Books home derives series continuation recommendations from the already loaded Room library state. It groups books by normalized series name, orders each series by series index with year/title fallback, and surfaces the next unfinished title after the most recently finished series book as a single compact action card.
 

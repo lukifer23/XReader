@@ -16,6 +16,7 @@ import com.xreader.app.data.SearchIndexEntity
 import com.xreader.app.data.SeriesEntity
 import com.xreader.app.data.XReaderDatabase
 import com.xreader.app.importer.ImportService
+import com.xreader.app.importer.PublicationMetadataTools
 import kotlinx.coroutines.flow.Flow
 import java.time.Clock
 import java.util.concurrent.atomic.AtomicBoolean
@@ -128,9 +129,9 @@ class LibraryRepository(
         applyToSeries: Boolean,
     ): MetadataUpdateResult = database.withTransaction {
         val resolvedTitle = title.trim().ifBlank { book.title }
-        val resolvedAuthor = author.cleanMetadataValue() ?: "Unknown Author"
-        val resolvedGenre = genre.cleanMetadataValue()
-        val resolvedSeries = series.cleanMetadataValue()
+        val resolvedAuthor = PublicationMetadataTools.canonicalAuthor(author, bookDao.authorNames()) ?: "Unknown Author"
+        val resolvedGenre = PublicationMetadataTools.canonicalGenre(genre, bookDao.genreNames())
+        val resolvedSeries = PublicationMetadataTools.canonicalSeriesName(series, bookDao.seriesNames())
         val now = clock.millis()
         val updated = book.copy(
             title = resolvedTitle,
@@ -201,7 +202,7 @@ class LibraryRepository(
     }
 
     private fun String?.cleanMetadataValue(): String? =
-        this?.trim()?.ifBlank { null }
+        this?.replace(Regex("\\s+"), " ")?.trim()?.ifBlank { null }
 
     private fun String.cleanCollectionName(): String {
         val cleaned = trim().replace(Regex("\\s+"), " ")

@@ -38,7 +38,7 @@ This is the working competitive map for XReader. It should drive implementation 
 | OPDS/catalogs | Not implemented. | Moon+, Librera, FBReader, PocketBook support OPDS. | Good optional later feature. |
 | PDF reflow/crop | PDF fit and paged/vertical layout are implemented; reflow/crop are not implemented. | PocketBook/ReadEra have PDF comfort features. | Continue adding only real Readium-backed comfort controls. |
 | Typography depth | Built-in family choices including OpenDyslexic, spacing presets, font weight, hyphenation, and per-book appearance overrides implemented; user font import not implemented. | FBReader/Moon+ support user fonts, background customization, and hyphenation. | Keep adding only reader-backed controls; user font import remains later until custom files can be served reliably. |
-| Bulk metadata cleanup | Matching-series author/genre/series cleanup implemented in the metadata editor. | Metadata quality is a recurring library pain. | Continue with broader bulk tools later. |
+| Bulk metadata cleanup | Automatic author/genre/series canonicalization plus matching-series cleanup implemented in the metadata editor. | Metadata quality is a recurring library pain. | Continue with broader bulk tools later. |
 
 ## High-Impact Gaps
 
@@ -53,6 +53,7 @@ The research points to several areas that matter more than raw feature count:
 ## Patches From This Research
 
 - Opt-in matching-series metadata cleanup. From the metadata editor, changing shared author, genre, or series values can apply them to other books that match the old or new author and series pair. The operation is atomic and keeps per-book fields such as title, year, and series index untouched.
+- Metadata canonicalization. Import and metadata edits collapse author casing/spacing variants against existing library values and normalize known genre aliases such as `sci-fi` into stable groups without adding another management screen.
 - Reader find bar. After an in-book search, XReader keeps a compact temporary find bar with match count plus previous/next controls, using Readium search positions or the local search index fallback instead of a placeholder overlay.
 - Read-aloud passage controls. Active read-aloud now exposes compact previous/next passage controls in the reader bar and uses the same page-aligned chunks that drive spoken locator persistence.
 - Annotation tags. Notes and highlights can carry normalized comma-separated tags, visible in reader/global note lists, filterable from the global notes screen, and preserved in JSON/Markdown exports.

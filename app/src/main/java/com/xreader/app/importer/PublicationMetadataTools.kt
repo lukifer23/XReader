@@ -70,8 +70,19 @@ object PublicationMetadataTools {
             candidatePriority < currentPriority
     }
 
+    fun canonicalAuthor(value: String?, existing: List<String>): String? =
+        canonicalExistingValue(cleanMetadataValue(value), existing)
+
+    fun canonicalGenre(value: String?, existing: List<String>): String? {
+        val cleaned = cleanMetadataValue(value) ?: return null
+        return cleanGenre(listOf(cleaned)) ?: canonicalExistingValue(cleaned, existing)
+    }
+
+    fun canonicalSeriesName(value: String?, existing: List<String>): String? =
+        canonicalExistingValue(cleanSeriesName(value), existing)
+
     fun cleanSeriesName(value: String?): String? =
-        value?.trim()?.takeIf { it.isNotBlank() && it.length <= 160 }
+        cleanMetadataValue(value)?.takeIf { it.length <= 160 }
 
     fun seriesFromDescription(value: String?): String? {
         val text = value
@@ -123,6 +134,45 @@ object PublicationMetadataTools {
             .split(Regex("""\s*/\s*|\s*;\s*|\s*\|\s*"""))
             .map { it.trim() }
             .filter { it.length in 2..80 }
+    }
+
+    private fun cleanMetadataValue(value: String?): String? =
+        value
+            ?.replace(Regex("""\s+"""), " ")
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+
+    private fun canonicalExistingValue(value: String?, existing: List<String>): String? {
+        val cleaned = value ?: return null
+        val key = normalize(cleaned)
+        return existing
+            .mapNotNull(::cleanMetadataValue)
+            .filter { normalize(it) == key }
+            .maxWithOrNull(
+                compareBy<String> { metadataDisplayScore(it) }
+                    .thenBy { -it.length }
+            )
+            ?: cleaned
+    }
+
+    private fun metadataDisplayScore(value: String): Int {
+        val letters = value.filter(Char::isLetter)
+        val initialCaps = value
+            .split(Regex("""[\s\-_/]+"""))
+            .count { word ->
+                word.firstOrNull()?.isUpperCase() == true &&
+                    word.drop(1).any(Char::isLowerCase)
+            }
+        val uppercase = value.count(Char::isUpperCase)
+        val lowercase = value.count(Char::isLowerCase)
+        val hasMixedCase = uppercase > 0 && lowercase > 0
+        val caseScore = when {
+            letters.isNotEmpty() && letters.all(Char::isUpperCase) -> -40
+            letters.isNotEmpty() && letters.all(Char::isLowerCase) -> -20
+            hasMixedCase -> 20
+            else -> 0
+        }
+        return initialCaps * 30 + caseScore + lowercase.coerceAtMost(12)
     }
 
     private fun normalize(value: String): String =

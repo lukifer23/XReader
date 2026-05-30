@@ -176,6 +176,77 @@ class LibraryRepositoryInstrumentedTest {
     }
 
     @Test
+    fun updateMetadataCanonicalizesAuthorGenreAndSeriesVariants() = runBlocking {
+        db.books().insert(
+            book(
+                title = "Red Rising",
+                author = "Pierce Brown",
+                series = "Red Rising",
+                seriesIndex = 1.0,
+                genre = "Science Fiction"
+            )
+        )
+        val id = db.books().insert(
+            book(
+                title = "Golden Son",
+                author = "P Brown",
+                series = "Red Rising Saga",
+                seriesIndex = 2.0,
+                genre = "Adventure"
+            )
+        )
+        val target = requireNotNull(db.books().getBook(id))
+
+        val result = repository.updateMetadata(
+            book = target,
+            title = target.title,
+            author = "pierce   brown",
+            year = target.year,
+            genre = "sci-fi",
+            series = "red   rising",
+            seriesIndex = target.seriesIndex,
+            applyToSeries = false
+        )
+
+        val updated = requireNotNull(db.books().getBook(id))
+        assertEquals(1, result.updatedBooks)
+        assertEquals("Pierce Brown", updated.author)
+        assertEquals("Science Fiction", updated.genre)
+        assertEquals("Red Rising", updated.series)
+        assertEquals(listOf("Pierce Brown"), db.books().observeAuthors().first())
+        assertEquals(listOf("Science Fiction"), db.books().observeGenres().first())
+        assertEquals(listOf("Red Rising"), db.books().observeSeries().first())
+    }
+
+    @Test
+    fun updateMetadataTreatsCanonicalVariantsAsNoOp() = runBlocking {
+        val id = db.books().insert(
+            book(
+                title = "Red Rising",
+                author = "Pierce Brown",
+                series = "Red Rising",
+                seriesIndex = 1.0,
+                genre = "Science Fiction"
+            )
+        )
+        val original = requireNotNull(db.books().getBook(id))
+
+        val result = repository.updateMetadata(
+            book = original,
+            title = original.title,
+            author = "pierce brown",
+            year = original.year,
+            genre = "sci-fi",
+            series = "red rising",
+            seriesIndex = original.seriesIndex,
+            applyToSeries = false
+        )
+
+        assertEquals(0, result.updatedBooks)
+        assertEquals(original, db.books().getBook(id))
+    }
+
+    @Test
     fun collectionsAreCaseInsensitiveAndRemovedWhenEmpty() = runBlocking {
         val id = db.books().insert(
             book(

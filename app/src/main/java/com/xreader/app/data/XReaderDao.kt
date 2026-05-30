@@ -115,6 +115,15 @@ interface BookDao {
     @Query("SELECT DISTINCT genre FROM books WHERE genre IS NOT NULL AND genre != '' ORDER BY genre")
     fun observeGenres(): Flow<List<String>>
 
+    @Query("SELECT DISTINCT author FROM books WHERE author != '' ORDER BY author COLLATE NOCASE")
+    suspend fun authorNames(): List<String>
+
+    @Query("SELECT DISTINCT series FROM books WHERE series IS NOT NULL AND series != '' ORDER BY series COLLATE NOCASE")
+    suspend fun seriesNames(): List<String>
+
+    @Query("SELECT DISTINCT genre FROM books WHERE genre IS NOT NULL AND genre != '' ORDER BY genre COLLATE NOCASE")
+    suspend fun genreNames(): List<String>
+
     @Query("SELECT DISTINCT year FROM books WHERE year IS NOT NULL ORDER BY year DESC")
     fun observeYears(): Flow<List<Int>>
 

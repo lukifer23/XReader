@@ -9,6 +9,7 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.xreader.app.data.BookEntity
 import com.xreader.app.data.BookFormat
 import com.xreader.app.data.XReaderDatabase
 import kotlinx.coroutines.flow.first
@@ -252,6 +253,35 @@ class ImportServiceInstrumentedTest {
     }
 
     @Test
+    fun importCanonicalizesMetadataAgainstExistingLibrary() = runBlocking {
+        db.books().insert(existingBook(author = "Mina Patel", genre = "Science Fiction"))
+        val source = File(root, "source/Variant Notes.md").apply {
+            parentFile?.mkdirs()
+            writeText(
+                """
+                ---
+                title: Variant Notes
+                author: mina   patel
+                genre: sci-fi
+                ---
+
+                # Arrival
+
+                The greenhouse crew cataloged every new leaf.
+                """.trimIndent()
+            )
+        }
+
+        val result = ImportService(context, db).import(Uri.fromFile(source))
+
+        val book = requireNotNull(db.books().getBook(result.bookId))
+        assertEquals("Mina Patel", book.author)
+        assertEquals("Science Fiction", book.genre)
+        assertEquals(listOf("Mina Patel"), db.books().observeAuthors().first())
+        assertEquals(listOf("Science Fiction"), db.books().observeGenres().first())
+    }
+
+    @Test
     fun importsManyBooksAndReportsDuplicatesAndUnsupportedFiles() = runBlocking {
         val first = File(root, "source/batch_one.txt").apply {
             parentFile?.mkdirs()
@@ -490,4 +520,34 @@ class ImportServiceInstrumentedTest {
           <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
         </Relationships>
         """.trimIndent().trimStart()
+
+    private fun existingBook(
+        author: String,
+        genre: String,
+    ): BookEntity =
+        BookEntity(
+            title = "Existing Notes",
+            author = author,
+            sortTitle = "existing notes",
+            series = null,
+            seriesIndex = null,
+            genre = genre,
+            year = 2026,
+            description = null,
+            language = "en",
+            format = BookFormat.EPUB,
+            sourceExtension = "epub",
+            fileName = "existing-notes.epub",
+            filePath = "library/books/existing-notes.epub",
+            coverImagePath = null,
+            checksum = "existing-notes-checksum",
+            fileSizeBytes = 1024,
+            wordCount = 100,
+            pageCount = null,
+            importedAt = 1,
+            updatedAt = 1,
+            lastOpenedAt = null,
+            favorite = false,
+            finished = false
+        )
 }
