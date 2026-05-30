@@ -758,6 +758,11 @@ internal fun SettingsRoute(viewModel: SettingsViewModel, onBack: () -> Unit) {
                         checked = settings.pageTurnAnimations,
                         onCheckedChange = viewModel::setPageTurnAnimations
                     )
+                    SettingsToggleRow(
+                        label = "Keep screen awake",
+                        checked = settings.keepScreenAwake,
+                        onCheckedChange = viewModel::setKeepScreenAwake
+                    )
                     SettingSlider("Read aloud speed", settings.readAloudRate, 0.7f..1.4f, viewModel::setReadAloudRate)
                     SettingsChipGroup(
                         title = "Sleep timer",

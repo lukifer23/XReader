@@ -15,6 +15,7 @@ class ReaderSettingsTest {
         assertNull(ReaderSettings().readAloudVoiceName)
         assertEquals(ReadAloudSleepTimer.OFF, ReaderSettings().readAloudSleepTimer)
         assertEquals(ReaderHighlightColor.YELLOW.hex, ReaderSettings().highlightColor)
+        assertFalse(ReaderSettings().keepScreenAwake)
     }
 
     @Test
@@ -47,7 +48,8 @@ class ReaderSettingsTest {
             readAloudVoiceName = "local-voice",
             readAloudSleepTimer = ReadAloudSleepTimer.THIRTY_MINUTES,
             highlightColor = ReaderHighlightColor.BLUE.hex,
-            textAlign = ReaderTextAlign.JUSTIFY
+            textAlign = ReaderTextAlign.JUSTIFY,
+            keepScreenAwake = true
         )
 
         val accessible = settings.withSpacingPreset(ReaderSpacingPreset.ACCESSIBLE)
@@ -59,6 +61,7 @@ class ReaderSettingsTest {
         assertEquals(ReadAloudSleepTimer.THIRTY_MINUTES, accessible.readAloudSleepTimer)
         assertEquals(ReaderHighlightColor.BLUE.hex, accessible.highlightColor)
         assertEquals(ReaderTextAlign.JUSTIFY, accessible.textAlign)
+        assertTrue(accessible.keepScreenAwake)
         assertEquals(ReaderSpacingPreset.ACCESSIBLE.fontScale, accessible.fontScale, 0.001f)
         assertEquals(ReaderSpacingPreset.ACCESSIBLE.lineHeight, accessible.lineHeight, 0.001f)
         assertEquals(ReaderSpacingPreset.ACCESSIBLE.marginScale, accessible.marginScale, 0.001f)
@@ -77,6 +80,7 @@ class ReaderSettingsTest {
             tapZonesEnabled = false,
             tapZonePreset = ReaderTapZonePreset.COMPACT,
             pageTurnAnimations = false,
+            keepScreenAwake = true,
             readAloudRate = 1.3f,
             readAloudVoiceName = "local-voice",
             readAloudSleepTimer = ReadAloudSleepTimer.FORTY_FIVE_MINUTES,
@@ -103,6 +107,7 @@ class ReaderSettingsTest {
         assertFalse(combined.tapZonesEnabled)
         assertEquals(ReaderTapZonePreset.COMPACT, combined.tapZonePreset)
         assertFalse(combined.pageTurnAnimations)
+        assertTrue(combined.keepScreenAwake)
         assertEquals(1.3f, combined.readAloudRate, 0.001f)
         assertEquals("local-voice", combined.readAloudVoiceName)
         assertEquals(ReadAloudSleepTimer.FORTY_FIVE_MINUTES, combined.readAloudSleepTimer)

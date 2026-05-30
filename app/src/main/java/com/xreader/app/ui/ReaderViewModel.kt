@@ -306,6 +306,10 @@ class ReaderViewModel(
         viewModelScope.launch { container.settingsRepository.setPageTurnAnimations(value) }
     }
 
+    fun setKeepScreenAwake(value: Boolean) {
+        viewModelScope.launch { container.settingsRepository.setKeepScreenAwake(value) }
+    }
+
     fun setTapZonesEnabled(value: Boolean) {
         viewModelScope.launch { container.settingsRepository.setTapZonesEnabled(value) }
     }

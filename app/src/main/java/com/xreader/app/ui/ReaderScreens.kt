@@ -159,6 +159,7 @@ internal fun ReaderRoute(
         onTapZonesEnabled = viewModel::setTapZonesEnabled,
         onTapZonePreset = viewModel::setTapZonePreset,
         onPageTurnAnimations = viewModel::setPageTurnAnimations,
+        onKeepScreenAwake = viewModel::setKeepScreenAwake,
         onReadAloudRate = viewModel::setReadAloudRate,
         onReadAloudSleepTimer = viewModel::setReadAloudSleepTimer,
         onHighlightColor = viewModel::setHighlightColor,
@@ -206,6 +207,7 @@ internal fun ReaderScreen(
     onTapZonesEnabled: (Boolean) -> Unit,
     onTapZonePreset: (ReaderTapZonePreset) -> Unit,
     onPageTurnAnimations: (Boolean) -> Unit,
+    onKeepScreenAwake: (Boolean) -> Unit,
     onReadAloudRate: (Float) -> Unit,
     onReadAloudSleepTimer: (ReadAloudSleepTimer) -> Unit,
     onHighlightColor: (String) -> Unit,
@@ -269,6 +271,7 @@ internal fun ReaderScreen(
         theme = state.settings.theme,
         immersive = state.settings.fullScreen && !state.chromeVisible
     )
+    KeepScreenAwakeEffect(activity = activity, enabled = state.settings.keepScreenAwake)
 
     BackHandler {
         when {
@@ -455,6 +458,7 @@ internal fun ReaderScreen(
             onTapZonesEnabled = onTapZonesEnabled,
             onTapZonePreset = onTapZonePreset,
             onPageTurnAnimations = onPageTurnAnimations,
+            onKeepScreenAwake = onKeepScreenAwake,
             onReadAloudRate = onReadAloudRate,
             onReadAloudSleepTimer = onReadAloudSleepTimer,
             onHighlightColor = onHighlightColor,
@@ -678,6 +682,7 @@ internal fun ReaderQuickSettingsDialog(
     onTapZonesEnabled: (Boolean) -> Unit,
     onTapZonePreset: (ReaderTapZonePreset) -> Unit,
     onPageTurnAnimations: (Boolean) -> Unit,
+    onKeepScreenAwake: (Boolean) -> Unit,
     onReadAloudRate: (Float) -> Unit,
     onReadAloudSleepTimer: (ReadAloudSleepTimer) -> Unit,
     onHighlightColor: (String) -> Unit,
@@ -778,6 +783,10 @@ internal fun ReaderQuickSettingsDialog(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Page animations", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
                     Switch(checked = settings.pageTurnAnimations, onCheckedChange = onPageTurnAnimations)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Keep screen awake", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                    Switch(checked = settings.keepScreenAwake, onCheckedChange = onKeepScreenAwake)
                 }
                 SettingSlider("Read aloud speed", settings.readAloudRate, 0.7f..1.4f, onReadAloudRate)
                 Text("Sleep timer", style = MaterialTheme.typography.titleMedium)

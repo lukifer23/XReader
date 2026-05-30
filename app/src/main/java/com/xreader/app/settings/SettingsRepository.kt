@@ -29,6 +29,7 @@ class SettingsRepository(
         val tapZonesEnabled = booleanPreferencesKey("tap_zones_enabled")
         val tapZonePreset = stringPreferencesKey("tap_zone_preset")
         val pageTurnAnimations = booleanPreferencesKey("page_turn_animations")
+        val keepScreenAwake = booleanPreferencesKey("keep_screen_awake")
         val readAloudRate = floatPreferencesKey("read_aloud_rate")
         val readAloudVoiceName = stringPreferencesKey("read_aloud_voice_name")
         val readAloudSleepTimer = stringPreferencesKey("read_aloud_sleep_timer")
@@ -66,6 +67,7 @@ class SettingsRepository(
                 tapZonePreset = prefs[Keys.tapZonePreset]?.let { runCatching { ReaderTapZonePreset.valueOf(it) }.getOrNull() }
                     ?: ReaderTapZonePreset.BALANCED,
                 pageTurnAnimations = prefs[Keys.pageTurnAnimations] ?: true,
+                keepScreenAwake = prefs[Keys.keepScreenAwake] ?: false,
                 readAloudRate = (prefs[Keys.readAloudRate] ?: 1.0f).coerceIn(0.7f, 1.4f),
                 readAloudVoiceName = prefs[Keys.readAloudVoiceName]?.takeIf { it.isNotBlank() },
                 readAloudSleepTimer = prefs[Keys.readAloudSleepTimer]?.let {
@@ -151,6 +153,10 @@ class SettingsRepository(
 
     suspend fun setPageTurnAnimations(value: Boolean) {
         dataStore.edit { it[Keys.pageTurnAnimations] = value }
+    }
+
+    suspend fun setKeepScreenAwake(value: Boolean) {
+        dataStore.edit { it[Keys.keepScreenAwake] = value }
     }
 
     suspend fun setReadAloudRate(value: Float) {

@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
 import android.net.Uri
+import android.view.WindowManager
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -473,6 +474,23 @@ internal fun ReaderSystemBars(
             WindowCompat.setDecorFitsSystemWindows(activeWindow, false)
             WindowCompat.getInsetsController(activeWindow, activeWindow.decorView)
                 .show(WindowInsetsCompat.Type.systemBars())
+        }
+    }
+}
+
+@Composable
+internal fun KeepScreenAwakeEffect(activity: Activity?, enabled: Boolean) {
+    val window = activity?.window
+    SideEffect {
+        if (enabled) {
+            window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+    DisposableEffect(window) {
+        onDispose {
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
     }
 }

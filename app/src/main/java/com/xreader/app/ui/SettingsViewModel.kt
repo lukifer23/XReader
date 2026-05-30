@@ -91,6 +91,10 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch { container.settingsRepository.setPageTurnAnimations(value) }
     }
 
+    fun setKeepScreenAwake(value: Boolean) {
+        viewModelScope.launch { container.settingsRepository.setKeepScreenAwake(value) }
+    }
+
     fun setReadAloudRate(value: Float) {
         viewModelScope.launch { container.settingsRepository.setReadAloudRate(value) }
         container.readAloudEngine.setSpeechRate(value)
