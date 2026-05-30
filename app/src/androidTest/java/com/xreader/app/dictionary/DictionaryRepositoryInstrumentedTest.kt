@@ -64,6 +64,26 @@ class DictionaryRepositoryInstrumentedTest {
     }
 
     @Test
+    fun lookupHandlesComparativeSelection() = runBlocking {
+        val repository = DictionaryRepository(context, db.dictionary())
+
+        val entries = repository.lookup("happier")
+
+        assertTrue(entries.isNotEmpty())
+        assertTrue(entries.any { it.lemma == "happy" })
+    }
+
+    @Test
+    fun lookupHandlesAdverbSelection() = runBlocking {
+        val repository = DictionaryRepository(context, db.dictionary())
+
+        val entries = repository.lookup("quickly")
+
+        assertTrue(entries.isNotEmpty())
+        assertTrue(entries.any { it.lemma == "quick" })
+    }
+
+    @Test
     fun lookupHandlesMultiWordSelection() = runBlocking {
         val repository = DictionaryRepository(context, db.dictionary())
 

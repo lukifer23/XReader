@@ -36,7 +36,7 @@ Implemented:
 - Read aloud from the visible reading position through Android TextToSpeech using page-aligned local indexed book text, with persisted spoken position, pause/resume, previous/next passage controls, speech speed, visible sleep timer countdown, installed offline voice selection, audio-focus handling, Android media-session transport controls, and a media-playback foreground notification for headset/Bluetooth/play-pause/next/previous/stop actions while outside the reader.
 - Grouped Settings screen for reader appearance, typography, reading behavior, library display, and maintenance.
 - Bookmarks, highlights, tagged notes, global notes with tag filtering, in-book annotation lists, human-readable Markdown notes export, local notes/bookmark JSON export/import, and library metadata/progress/app settings/per-book appearance backup.
-- Offline English dictionary backed by bundled Princeton WordNet data, with phrase, hyphenated-word, plural, possessive, and inflected-form lookup.
+- Offline English dictionary backed by bundled Princeton WordNet data, with phrase, hyphenated-word, plural, possessive, comparative, superlative, adverb, and common irregular lookup.
 - Local full-text search index for imported book text where extraction is supported, including cleaned PDF text extraction for wrapped words, with source-book labels, query-centered snippets, and expandable library search results.
 - Reading analytics for sessions, active reading time, progress, estimated WPM, reader/home ETA, 7-day/30-day/13-week/all-time activity, streaks, book/author/genre summaries, and local CSV/JSON export.
 - Public-domain book fixture coverage for TXT/EPUB import paths.

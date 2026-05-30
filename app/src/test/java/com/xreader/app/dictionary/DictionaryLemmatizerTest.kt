@@ -36,12 +36,34 @@ class DictionaryLemmatizerTest {
         val candidates = DictionaryLemmatizer.candidates("the children")
 
         assertTrue("later phrase tokens should still be usable", "child" in candidates)
+        assertTrue("later progressive tokens should still be usable", "run" in DictionaryLemmatizer.candidates("the running"))
+        assertTrue("later comparative tokens should still be usable", "big" in DictionaryLemmatizer.candidates("the bigger"))
     }
 
     @Test
     fun includesRegularPluralAndProgressiveCandidates() {
         assertTrue("books should include book", "book" in DictionaryLemmatizer.candidates("books"))
         assertTrue("running should include run", "run" in DictionaryLemmatizer.candidates("running"))
+    }
+
+    @Test
+    fun includesComparativeAndSuperlativeCandidates() {
+        assertTrue("happier should include happy", "happy" in DictionaryLemmatizer.candidates("happier"))
+        assertTrue("happiest should include happy", "happy" in DictionaryLemmatizer.candidates("happiest"))
+        assertTrue("larger should include large", "large" in DictionaryLemmatizer.candidates("larger"))
+        assertTrue("fastest should include fast", "fast" in DictionaryLemmatizer.candidates("fastest"))
+        assertTrue("bigger should include big", "big" in DictionaryLemmatizer.candidates("bigger"))
+        assertTrue("thinnest should include thin", "thin" in DictionaryLemmatizer.candidates("thinnest"))
+    }
+
+    @Test
+    fun includesAdverbCandidates() {
+        assertTrue("quickly should include quick", "quick" in DictionaryLemmatizer.candidates("quickly"))
+        assertTrue("happily should include happy", "happy" in DictionaryLemmatizer.candidates("happily"))
+        assertTrue("dramatically should include dramatic", "dramatic" in DictionaryLemmatizer.candidates("dramatically"))
+        assertTrue("simply should include simple", "simple" in DictionaryLemmatizer.candidates("simply"))
+        assertTrue("fully should include full", "full" in DictionaryLemmatizer.candidates("fully"))
+        assertTrue("truly should include true", "true" in DictionaryLemmatizer.candidates("truly"))
     }
 
     @Test
@@ -56,5 +78,7 @@ class DictionaryLemmatizerTest {
         assertTrue("children should include child", "child" in DictionaryLemmatizer.candidates("children"))
         assertTrue("went should include go", "go" in DictionaryLemmatizer.candidates("went"))
         assertTrue("feet should include foot", "foot" in DictionaryLemmatizer.candidates("feet"))
+        assertTrue("better should include good", "good" in DictionaryLemmatizer.candidates("better"))
+        assertTrue("worst should include bad", "bad" in DictionaryLemmatizer.candidates("worst"))
     }
 }

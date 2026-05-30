@@ -18,7 +18,7 @@ object DictionaryLemmatizer {
                 addAll(singleWordCandidates(first))
             }
             tokens.drop(1).forEach { token ->
-                addAll(singleWordCandidates(token).take(2))
+                addAll(singleWordCandidates(token).take(MAX_FALLBACK_CANDIDATES_PER_TOKEN))
             }
         }.distinct()
     }
@@ -50,6 +50,29 @@ object DictionaryLemmatizer {
                 if (stem.endsWith("i") && stem.length > 1) add(stem.dropLast(1) + "y")
                 stem.withoutDoubledTerminal()?.let(::add)
             }
+            if (word.endsWith("ier") && word.length > 4) add(word.dropLast(3) + "y")
+            if (word.endsWith("iest") && word.length > 5) add(word.dropLast(4) + "y")
+            if (word.endsWith("er") && word.length > 4) {
+                val stem = word.dropLast(2)
+                add(stem)
+                add(stem + "e")
+                stem.withoutDoubledTerminal()?.let(::add)
+            }
+            if (word.endsWith("est") && word.length > 5) {
+                val stem = word.dropLast(3)
+                add(stem)
+                add(stem + "e")
+                stem.withoutDoubledTerminal()?.let(::add)
+            }
+            if (word.endsWith("ally") && word.length > 6) add(word.dropLast(4))
+            if (word.endsWith("ly") && word.length > 4) {
+                val stem = word.dropLast(2)
+                add(stem)
+                add(word.dropLast(1) + "e")
+                if (stem.endsWith("i") && stem.length > 1) add(stem.dropLast(1) + "y")
+                if (stem.endsWith("l") && stem.length > 2) add(stem + "l")
+                add(stem + "e")
+            }
         }
 
     private fun wordTokens(rawWord: String): List<String> =
@@ -75,6 +98,8 @@ object DictionaryLemmatizer {
         "ate" to "eat",
         "began" to "begin",
         "begun" to "begin",
+        "best" to "good",
+        "better" to "good",
         "bought" to "buy",
         "brought" to "bring",
         "came" to "come",
@@ -84,6 +109,10 @@ object DictionaryLemmatizer {
         "feet" to "foot",
         "felt" to "feel",
         "found" to "find",
+        "farther" to "far",
+        "farthest" to "far",
+        "further" to "far",
+        "furthest" to "far",
         "gave" to "give",
         "given" to "give",
         "geese" to "goose",
@@ -94,9 +123,13 @@ object DictionaryLemmatizer {
         "knew" to "know",
         "known" to "know",
         "left" to "leave",
+        "least" to "little",
+        "less" to "little",
         "made" to "make",
         "men" to "man",
         "mice" to "mouse",
+        "more" to "much",
+        "most" to "much",
         "paid" to "pay",
         "people" to "person",
         "ran" to "run",
@@ -114,10 +147,13 @@ object DictionaryLemmatizer {
         "took" to "take",
         "went" to "go",
         "women" to "woman",
+        "worse" to "bad",
+        "worst" to "bad",
         "wrote" to "write",
         "written" to "write"
     )
 
     private val wordRegex = Regex("""[\p{L}\p{N}]+(?:[-'’][\p{L}\p{N}]+)*""")
     private const val MAX_SELECTION_TOKENS = 6
+    private const val MAX_FALLBACK_CANDIDATES_PER_TOKEN = 5
 }

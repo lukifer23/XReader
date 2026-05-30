@@ -132,7 +132,7 @@ Settings also exposes local JSON backup and restore through Android's Storage Ac
 
 ## Dictionary
 
-`tools/build_wordnet_asset.py` converts WordNet 3.0 data files into a compact SQLite asset. On first use, `DictionaryRepository` imports entries into Room and serves normalized local lookup for selected words.
+`tools/build_wordnet_asset.py` converts WordNet 3.0 data files into a compact SQLite asset. On first use, `DictionaryRepository` opens the bundled database and serves normalized local lookup for selected words, including phrase, hyphenated-word, possessive, plural, comparative, superlative, adverb, and common irregular candidates before falling back to web/share actions for local misses.
 
 ## Analytics
 
