@@ -16,6 +16,7 @@ Initial public repository snapshot.
 - ODT import converted into EPUB packages with OpenDocument metadata, headings, paragraphs, lists, tables, and searchable text extraction.
 - DOCX import converted into EPUB packages with document metadata, headings, paragraphs, lists, tables, and searchable text extraction.
 - HTML, HTM, and XHTML import converted into EPUB packages with page metadata, headings, lists, tables, blockquotes, and searchable text extraction.
+- MHTML and MHT web archives converted into EPUB packages with decoded HTML roots, embedded image assets, page metadata, and searchable text extraction.
 - Markdown import converted into EPUB packages with front matter metadata, headings, lists, blockquotes, code blocks, and searchable text extraction.
 - SAF-based private library imports.
 - Batch file and folder import through Android's Storage Access Framework.

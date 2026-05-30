@@ -23,6 +23,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.util.Base64
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
@@ -261,6 +262,29 @@ class ImportServiceInstrumentedTest {
 
         val searchResults = db.search().searchBook(result.bookId, "normalizedBody:survey*")
         assertTrue(searchResults.any { it.body.contains("survey ship", ignoreCase = true) })
+    }
+
+    @Test
+    fun importsMhtmlAsPrivateEpubAndIndexesText() = runBlocking {
+        val source = File(root, "source/Archived Report.mhtml").apply {
+            parentFile?.mkdirs()
+            writeText(mhtmlDocument(), Charsets.ISO_8859_1)
+        }
+
+        val result = ImportService(context, db).import(Uri.fromFile(source))
+
+        assertFalse(result.duplicate)
+        val book = requireNotNull(db.books().getBook(result.bookId))
+        assertEquals(BookFormat.EPUB, book.format)
+        assertEquals("mhtml", book.sourceExtension)
+        assertEquals("Archived Field Report", book.title)
+        assertEquals("Mina Patel", book.author)
+        assertEquals("Science Fiction", book.genre)
+        assertEquals(2026, book.year)
+        assertTrue(File(context.filesDir, book.filePath).exists())
+
+        val searchResults = db.search().searchBook(result.bookId, "normalizedBody:archive*")
+        assertTrue(searchResults.any { it.body.contains("archived page", ignoreCase = true) })
     }
 
     @Test
@@ -549,6 +573,39 @@ class ImportServiceInstrumentedTest {
             <blockquote>Keep the lights low during first contact.</blockquote>
           </body>
         </html>
+        """.trimIndent()
+
+    private fun mhtmlDocument(): String =
+        """
+        MIME-Version: 1.0
+        Content-Type: multipart/related; boundary="xreader-boundary"; type="text/html"
+
+        --xreader-boundary
+        Content-Type: text/html; charset="utf-8"
+        Content-Location: https://example.test/reports/archived.html
+
+        <!doctype html>
+        <html lang="en-US">
+          <head>
+            <meta name="dc.title" content="Archived Field Report">
+            <meta name="author" content="Mina Patel">
+            <meta name="keywords" content="Science Fiction">
+            <meta name="date" content="2026-05-30">
+          </head>
+          <body>
+            <h1>Arrival</h1>
+            <p>The survey ship docked inside the archived page.</p>
+            <img src="images/observation.png" alt="Observation sketch">
+          </body>
+        </html>
+        --xreader-boundary
+        Content-Type: image/png
+        Content-Location: https://example.test/reports/images/observation.png
+        Content-ID: <observation-image>
+        Content-Transfer-Encoding: base64
+
+        ${Base64.getEncoder().encodeToString(pngBytes(Color.MAGENTA))}
+        --xreader-boundary--
         """.trimIndent()
 
     private fun markdownDocument(): String =

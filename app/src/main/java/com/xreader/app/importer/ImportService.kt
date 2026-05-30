@@ -79,6 +79,7 @@ class ImportService(
     private val odtConverter = OdtToEpubConverter()
     private val docxConverter = DocxToEpubConverter()
     private val htmlConverter = HtmlToEpubConverter()
+    private val mhtmlConverter = MhtmlToEpubConverter()
     private val markdownConverter = MarkdownToEpubConverter()
     private val pdfTools = PdfTools(context)
 
@@ -165,6 +166,10 @@ class ImportService(
                 }
                 "html", "htm", "xhtml" -> {
                     htmlConverter.convert(tmp, stagedFile, sourceTitle(displayName, effectiveSourceExtension))
+                    null
+                }
+                "mhtml", "mht" -> {
+                    mhtmlConverter.convert(tmp, stagedFile, sourceTitle(displayName, effectiveSourceExtension))
                     null
                 }
                 "md", "markdown" -> {
@@ -806,6 +811,7 @@ class ImportService(
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document" -> "docx"
             "text/html" -> "html"
             "application/xhtml+xml" -> "xhtml"
+            "multipart/related", "application/x-mimearchive", "application/mhtml", "message/rfc822" -> "mhtml"
             "text/markdown", "text/x-markdown", "application/markdown", "application/x-markdown" -> "md"
             "application/x-fictionbook+xml", "application/fb2+xml", "text/fb2+xml" -> "fb2"
             else -> ""
@@ -846,6 +852,8 @@ class ImportService(
             "html",
             "htm",
             "xhtml",
+            "mhtml",
+            "mht",
             "md",
             "markdown"
         )
@@ -860,6 +868,10 @@ class ImportService(
             "application/vnd.amazon.ebook",
             "text/html",
             "application/xhtml+xml",
+            "multipart/related",
+            "application/x-mimearchive",
+            "application/mhtml",
+            "message/rfc822",
             "text/markdown",
             "text/x-markdown",
             "application/markdown",

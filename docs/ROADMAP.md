@@ -24,7 +24,7 @@ This is the working product roadmap for the personal APK line. Items should appe
 
 - AZW3/KF8 conversion through a real local conversion pipeline.
 - CBR/DJVU/legacy binary DOC only if each format can land as a real import path without cluttering the reader.
-- Web archive formats such as MHTML only if bundled assets can be imported and converted reliably without pretending standalone HTML support covers them.
+- Continue hardening MHTML imports against larger browser-created web archives and unusual MIME encodings.
 - OPDS catalog import if it can stay optional and low-bloat.
 - Evaluate an optional small on-device neural/NLP TTS model after APK size, battery, latency, privacy, licensing, and text-position sync testing. Android TextToSpeech remains the default unless a local model is genuinely better offline, streams reliably on midrange phones, and can keep page-level spoken-locator sync at least as reliably as the current read-aloud path.
 - Optional encrypted local backup.

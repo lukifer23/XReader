@@ -19,6 +19,7 @@ Implemented:
 - ODT import converted into EPUB with OpenDocument metadata, headings, paragraphs, lists, tables, and searchable text extraction.
 - DOCX import converted into EPUB with document metadata, headings, paragraphs, lists, tables, and searchable text extraction.
 - HTML, HTM, and XHTML import converted into EPUB with page metadata, headings, lists, tables, blockquotes, and searchable text extraction.
+- MHTML and MHT web-archive import converted into EPUB with page metadata, embedded image assets, headings, lists, tables, blockquotes, and searchable text extraction.
 - Markdown import converted into EPUB with front matter metadata, headings, lists, blockquotes, code blocks, and searchable text extraction.
 - Private app-library imports from selected files or SAF folders, with checksum duplicate detection, missing private-file recovery on re-import, and an `Open` action after single-book imports or duplicate re-imports.
 - Library organization by books, authors, series, genres, years, custom collections, recent, unread, in progress, finished, and favorites, with group-aware ordering.
