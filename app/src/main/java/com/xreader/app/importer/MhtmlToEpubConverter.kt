@@ -217,20 +217,42 @@ class MhtmlToEpubConverter {
 
     private fun rewriteImageReferences(document: Document, assets: Map<String, MhtmlAsset>) {
         val rootLocation = document.location().takeIf { it.isNotBlank() }
-        document.select("img[src]").forEach { image ->
-            val source = image.attr("src")
-            val asset = documentReferenceVariants(rootLocation, source)
+        document.select("img").forEach { image ->
+            val asset = image.referenceSources()
                 .asSequence()
+                .flatMap { source -> documentReferenceVariants(rootLocation, source).asSequence() }
                 .mapNotNull { assets[it.normalizedReferenceKey()] }
                 .firstOrNull()
             if (asset == null) {
                 image.removeAttr("src")
+                image.removeAttr("srcset")
             } else {
                 image.attr("src", "../${asset.href}")
+                image.removeAttr("srcset")
                 image.attr("data-xreader-asset", asset.href)
             }
         }
     }
+
+    private fun Element.referenceSources(): List<String> =
+        buildList {
+            IMAGE_SOURCE_ATTRIBUTES.forEach { attribute ->
+                attr(attribute).takeIf { it.isNotBlank() }?.let { add(it) }
+            }
+            IMAGE_SRCSET_ATTRIBUTES.forEach { attribute ->
+                addAll(attr(attribute).srcsetReferences())
+            }
+        }.distinct()
+
+    private fun String.srcsetReferences(): List<String> =
+        split(',')
+            .mapNotNull { candidate ->
+                candidate.trim()
+                    .split(SRCSET_DESCRIPTOR_REGEX, limit = 2)
+                    .firstOrNull()
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() }
+            }
 
     private fun documentReferenceVariants(rootLocation: String?, source: String): List<String> =
         buildList {
@@ -707,8 +729,19 @@ class MhtmlToEpubConverter {
         private const val MAX_ASSET_COUNT = 256
         private val HTML_MEDIA_TYPES = setOf("text/html", "application/xhtml+xml")
         private val FALLBACK_IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "gif", "svg", "webp")
+        private val IMAGE_SOURCE_ATTRIBUTES = listOf(
+            "src",
+            "data-src",
+            "data-original",
+            "data-lazy-src",
+            "data-original-src",
+            "data-hi-res-src",
+            "data-url"
+        )
+        private val IMAGE_SRCSET_ATTRIBUTES = listOf("srcset", "data-srcset", "data-lazy-srcset")
         private val YEAR_REGEX = Regex("""\d{4}""")
         private val WHITESPACE_REGEX = Regex("\\s+")
+        private val SRCSET_DESCRIPTOR_REGEX = Regex("\\s+")
         private val HEADING_TAG_REGEX = Regex("""h[1-6]""")
         private val SKIP_TAGS = setOf("script", "style", "noscript", "template", "svg", "canvas", "form", "nav")
         private val PARAGRAPH_TAGS = setOf("p", "address", "figcaption")

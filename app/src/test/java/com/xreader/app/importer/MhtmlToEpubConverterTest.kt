@@ -53,6 +53,29 @@ class MhtmlToEpubConverterTest {
     }
 
     @Test
+    fun recoversLazyAndResponsiveImages() {
+        val dir = Files.createTempDirectory("xreader-mhtml-responsive-test").toFile()
+        val source = File(dir, "Responsive Images.mhtml")
+        val output = File(dir, "Responsive Images.epub")
+        source.writeText(responsiveImageMhtml(), Charsets.ISO_8859_1)
+
+        MhtmlToEpubConverter().convert(source, output, "Fallback")
+
+        ZipFile(output).use { zip ->
+            assertNotNull(zip.getEntry("OEBPS/assets/asset-1.png"))
+            assertNotNull(zip.getEntry("OEBPS/assets/asset-2.png"))
+            val chapter = zip.getInputStream(requireNotNull(zip.getEntry("OEBPS/chapters/chapter-0001.xhtml")))
+                .readBytes()
+                .toString(Charsets.UTF_8)
+            assertTrue(chapter.contains("""src="../assets/asset-1.png""""))
+            assertTrue(chapter.contains("""src="../assets/asset-2.png""""))
+            assertTrue(chapter.contains("Lazy observation"))
+            assertTrue(chapter.contains("Responsive observation"))
+            assertFalse(chapter.contains("srcset="))
+        }
+    }
+
+    @Test
     fun rejectsArchiveWithoutHtmlRoot() {
         val dir = Files.createTempDirectory("xreader-empty-mhtml-test").toFile()
         val source = File(dir, "No Html.mhtml")
@@ -128,6 +151,39 @@ class MhtmlToEpubConverterTest {
 
         <html><head><title>Quoted=20Printable</title></head><body><h1>Chapter</h1><p>Caf=C3=A9=20greenhouse=20sealed.</p></body></html>
         --quoted-boundary--
+        """.trimIndent()
+
+    private fun responsiveImageMhtml(): String =
+        """
+        MIME-Version: 1.0
+        Content-Type: multipart/related; boundary="responsive-boundary"; type="text/html"
+
+        --responsive-boundary
+        Content-Type: text/html; charset="utf-8"
+        Content-Location: https://example.test/articles/responsive.html
+
+        <html>
+          <head><title>Responsive Images</title></head>
+          <body>
+            <h1>Images</h1>
+            <p>The archive keeps lazy and responsive image references.</p>
+            <img data-src="images/lazy.png" alt="Lazy observation">
+            <img srcset="images/small.png 480w, images/responsive-large.png 960w" alt="Responsive observation">
+          </body>
+        </html>
+        --responsive-boundary
+        Content-Type: image/png
+        Content-Location: https://example.test/articles/images/lazy.png
+        Content-Transfer-Encoding: base64
+
+        ${Base64.getEncoder().encodeToString(PNG_BYTES)}
+        --responsive-boundary
+        Content-Type: image/png
+        Content-Location: https://example.test/articles/images/responsive-large.png
+        Content-Transfer-Encoding: base64
+
+        ${Base64.getEncoder().encodeToString(PNG_BYTES)}
+        --responsive-boundary--
         """.trimIndent()
 
     private companion object {
