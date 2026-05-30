@@ -22,6 +22,7 @@ class ReaderSettingsTest {
         assertEquals(ReaderPdfFit.WIDTH, ReaderSettings().pdfFit)
         assertEquals(ReaderPdfScrollAxis.HORIZONTAL, ReaderSettings().pdfScrollAxis)
         assertEquals(ReaderPageDirection.AUTO, ReaderSettings().pageDirection)
+        assertEquals(ReaderOrientation.SYSTEM, ReaderSettings().orientation)
         assertEquals(0f, ReaderSettings().screenDim, 0.001f)
     }
 
@@ -48,6 +49,7 @@ class ReaderSettingsTest {
         assertEquals(listOf("Page", "Width", "Height"), ReaderPdfFit.entries.map { it.label })
         assertEquals(listOf("Paged", "Scroll"), ReaderPdfScrollAxis.entries.map { it.label })
         assertEquals(listOf("Auto", "Left to right", "Right to left"), ReaderPageDirection.entries.map { it.label })
+        assertEquals(listOf("System", "Portrait", "Landscape"), ReaderOrientation.entries.map { it.label })
     }
 
     @Test
@@ -66,6 +68,7 @@ class ReaderSettingsTest {
             pdfFit = ReaderPdfFit.HEIGHT,
             pdfScrollAxis = ReaderPdfScrollAxis.VERTICAL,
             pageDirection = ReaderPageDirection.RIGHT_TO_LEFT,
+            orientation = ReaderOrientation.LANDSCAPE,
             keepScreenAwake = true,
             volumeKeysTurnPages = true,
             screenDim = 0.3f
@@ -83,6 +86,7 @@ class ReaderSettingsTest {
         assertEquals(ReaderPdfFit.HEIGHT, accessible.pdfFit)
         assertEquals(ReaderPdfScrollAxis.VERTICAL, accessible.pdfScrollAxis)
         assertEquals(ReaderPageDirection.RIGHT_TO_LEFT, accessible.pageDirection)
+        assertEquals(ReaderOrientation.LANDSCAPE, accessible.orientation)
         assertTrue(accessible.keepScreenAwake)
         assertTrue(accessible.volumeKeysTurnPages)
         assertEquals(0.3f, accessible.screenDim, 0.001f)
@@ -121,6 +125,7 @@ class ReaderSettingsTest {
             pdfFit = ReaderPdfFit.CONTAIN,
             pdfScrollAxis = ReaderPdfScrollAxis.VERTICAL,
             pageDirection = ReaderPageDirection.LEFT_TO_RIGHT,
+            orientation = ReaderOrientation.PORTRAIT,
             idleTimeoutMillis = 30_000L
         )
         val appearance = BookReaderAppearance(
@@ -151,6 +156,7 @@ class ReaderSettingsTest {
         assertEquals(ReadAloudSleepTimer.FORTY_FIVE_MINUTES, combined.readAloudSleepTimer)
         assertEquals(ReaderHighlightColor.PURPLE.hex, combined.highlightColor)
         assertTrue(combined.fullScreen)
+        assertEquals(ReaderOrientation.PORTRAIT, combined.orientation)
         assertEquals(30_000L, combined.idleTimeoutMillis)
         assertEquals(1.4f, combined.fontScale, 0.001f)
         assertEquals(1.7f, combined.lineHeight, 0.001f)

@@ -6,6 +6,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.net.Uri
 import android.view.WindowManager
 import androidx.compose.foundation.layout.Arrangement
@@ -50,6 +51,7 @@ import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -65,6 +67,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import com.xreader.app.data.AnnotationKind
 import com.xreader.app.data.BookEntity
 import com.xreader.app.data.ReaderTheme
+import com.xreader.app.settings.ReaderOrientation
 import com.xreader.app.data.ReadingStateEntity
 import com.xreader.app.settings.LibrarySort
 import java.util.Locale
@@ -507,6 +510,19 @@ internal fun ReaderSystemBars(
 }
 
 @Composable
+internal fun ReaderOrientationEffect(activity: Activity?, orientation: ReaderOrientation) {
+    val requestedOrientation = orientation.requestedActivityOrientation()
+    val previousOrientation = remember(activity) { activity?.requestedOrientation }
+    DisposableEffect(activity, requestedOrientation) {
+        val activeActivity = activity ?: return@DisposableEffect onDispose {}
+        activeActivity.requestedOrientation = requestedOrientation
+        onDispose {
+            previousOrientation?.let { activeActivity.requestedOrientation = it }
+        }
+    }
+}
+
+@Composable
 internal fun KeepScreenAwakeEffect(activity: Activity?, enabled: Boolean) {
     val window = activity?.window
     SideEffect {
@@ -522,6 +538,13 @@ internal fun KeepScreenAwakeEffect(activity: Activity?, enabled: Boolean) {
         }
     }
 }
+
+private fun ReaderOrientation.requestedActivityOrientation(): Int =
+    when (this) {
+        ReaderOrientation.SYSTEM -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        ReaderOrientation.PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+        ReaderOrientation.LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+    }
 
 internal fun Context.openDictionarySearch(word: String) {
     val query = Uri.encode("$word definition")

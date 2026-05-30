@@ -112,6 +112,7 @@ Reader and library settings are persisted with DataStore. Settings include:
 - read-aloud speed
 - read-aloud sleep timer
 - fullscreen
+- reader orientation
 - publisher styles
 - alignment
 - PDF fit, layout, and page direction
@@ -119,7 +120,9 @@ Reader and library settings are persisted with DataStore. Settings include:
 - library sort
 - library density
 
-Per-book reader appearance overrides are also stored in DataStore, keyed by book id. They only override typography, hyphenation, publisher styles, alignment, PDF fit/layout, and page direction. Theme, fullscreen, keep-screen-awake, reader dimming, tap zones, page animations, volume-button page turns, and idle timeout stay global so reading behavior remains predictable across books.
+Per-book reader appearance overrides are also stored in DataStore, keyed by book id. They only override typography, hyphenation, publisher styles, alignment, PDF fit/layout, and page direction. Theme, fullscreen, reader orientation, keep-screen-awake, reader dimming, tap zones, page animations, volume-button page turns, and idle timeout stay global so reading behavior remains predictable across books.
+
+Reader orientation is applied only while the reader surface is visible, using Android's Activity orientation request for system, sensor portrait, or sensor landscape. Leaving the reader restores the previous Activity orientation request instead of changing the rest of the app or the device's global rotation setting.
 
 Reader dimming is implemented as a reader-only Compose overlay capped by `MAX_READER_DIM_AMOUNT`; it never writes Android system brightness settings and is cleared naturally when leaving the reader surface.
 

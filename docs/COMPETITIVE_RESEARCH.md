@@ -68,6 +68,7 @@ The research points to several areas that matter more than raw feature count:
 - Per-book reader appearance. Books can keep their own font, font weight, spacing, hyphenation, alignment, publisher-style, PDF fit, and page-direction choices without changing global reading behavior, and local library backup restores those choices by checksum.
 - PDF layout comfort. PDFs can use page, width, or height fit, paged or vertical layout, and page-direction overrides for manuals, scans, and right-to-left page sets.
 - Keep screen awake. Reader sessions can opt into Android's screen-awake flag while the reader is visible, avoiding sleep interruptions without changing global phone settings.
+- Reader orientation. Reading can follow the device/system setting or lock to sensor portrait/landscape only while the reader is open, keeping rotation control near the existing comfort controls without changing the rest of the app.
 - Reader dimming. Night reading can use a reader-only dim overlay without requesting system brightness permissions or changing the rest of the phone.
 - Optional volume-button page turns. Phone volume buttons remain system volume controls by default, but readers can opt into physical page turns from global or in-reader settings without adding permanent chrome.
 - Reader spacing presets. Compact, comfort, and accessible presets provide fast setup while still using the same manual font, line-height, and margin controls.

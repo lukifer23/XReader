@@ -76,6 +76,7 @@ class SettingsRepositoryInstrumentedTest {
         repository.setPdfFit(ReaderPdfFit.CONTAIN)
         repository.setPdfScrollAxis(ReaderPdfScrollAxis.VERTICAL)
         repository.setPageDirection(ReaderPageDirection.RIGHT_TO_LEFT)
+        repository.setOrientation(ReaderOrientation.LANDSCAPE)
         repository.setLibrarySort(LibrarySort.SERIES)
         repository.setLibraryDensity(LibraryDensity.COMPACT)
 
@@ -105,6 +106,7 @@ class SettingsRepositoryInstrumentedTest {
         assertEquals(ReaderPdfFit.CONTAIN, readerSettings.pdfFit)
         assertEquals(ReaderPdfScrollAxis.VERTICAL, readerSettings.pdfScrollAxis)
         assertEquals(ReaderPageDirection.RIGHT_TO_LEFT, readerSettings.pageDirection)
+        assertEquals(ReaderOrientation.LANDSCAPE, readerSettings.orientation)
         assertEquals(LibrarySort.SERIES, librarySettings.sort)
         assertEquals(LibraryDensity.COMPACT, librarySettings.density)
 

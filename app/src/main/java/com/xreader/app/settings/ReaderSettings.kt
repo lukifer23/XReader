@@ -24,6 +24,12 @@ enum class ReaderPageDirection(val label: String) {
     RIGHT_TO_LEFT("Right to left"),
 }
 
+enum class ReaderOrientation(val label: String) {
+    SYSTEM("System"),
+    PORTRAIT("Portrait"),
+    LANDSCAPE("Landscape"),
+}
+
 enum class ReaderTapZonePreset(
     val label: String,
     val sideFraction: Float,
@@ -123,6 +129,7 @@ data class ReaderSettings(
     val pdfFit: ReaderPdfFit = ReaderPdfFit.WIDTH,
     val pdfScrollAxis: ReaderPdfScrollAxis = ReaderPdfScrollAxis.HORIZONTAL,
     val pageDirection: ReaderPageDirection = ReaderPageDirection.AUTO,
+    val orientation: ReaderOrientation = ReaderOrientation.SYSTEM,
     val highlightColor: String = ReaderHighlightColor.defaultHex,
     val idleTimeoutMillis: Long = 90_000L,
 )

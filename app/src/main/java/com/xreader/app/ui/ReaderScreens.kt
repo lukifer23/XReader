@@ -90,6 +90,7 @@ import com.xreader.app.settings.MAX_READER_FONT_WEIGHT
 import com.xreader.app.settings.MIN_READER_FONT_WEIGHT
 import com.xreader.app.settings.ReaderFontFamily
 import com.xreader.app.settings.ReaderHighlightColor
+import com.xreader.app.settings.ReaderOrientation
 import com.xreader.app.settings.ReaderPageDirection
 import com.xreader.app.settings.ReaderPdfFit
 import com.xreader.app.settings.ReaderPdfScrollAxis
@@ -183,6 +184,7 @@ internal fun ReaderRoute(
         onPdfFit = viewModel::setPdfFit,
         onPdfScrollAxis = viewModel::setPdfScrollAxis,
         onPageDirection = viewModel::setPageDirection,
+        onOrientation = viewModel::setOrientation,
         onBookAppearanceEnabled = viewModel::setBookAppearanceEnabled,
         onToggleReadAloud = { visibleUnit, visibleLocator ->
             viewModel.toggleReadAloud(visibleUnit, visibleLocator)
@@ -238,6 +240,7 @@ internal fun ReaderScreen(
     onPdfFit: (ReaderPdfFit) -> Unit,
     onPdfScrollAxis: (ReaderPdfScrollAxis) -> Unit,
     onPageDirection: (ReaderPageDirection) -> Unit,
+    onOrientation: (ReaderOrientation) -> Unit,
     onBookAppearanceEnabled: (Boolean) -> Unit,
     onToggleReadAloud: (Int, String?) -> Unit,
     onStopReadAloud: () -> Unit,
@@ -297,6 +300,7 @@ internal fun ReaderScreen(
         theme = state.settings.theme,
         immersive = state.settings.fullScreen && !state.chromeVisible
     )
+    ReaderOrientationEffect(activity = activity, orientation = state.settings.orientation)
     KeepScreenAwakeEffect(activity = activity, enabled = state.settings.keepScreenAwake)
 
     BackHandler {
@@ -504,6 +508,7 @@ internal fun ReaderScreen(
             onPdfFit = onPdfFit,
             onPdfScrollAxis = onPdfScrollAxis,
             onPageDirection = onPageDirection,
+            onOrientation = onOrientation,
             onBookAppearanceEnabled = onBookAppearanceEnabled,
             showPdfControls = publication.format == BookFormat.PDF
         )
@@ -773,6 +778,7 @@ internal fun ReaderQuickSettingsDialog(
     onPdfFit: (ReaderPdfFit) -> Unit,
     onPdfScrollAxis: (ReaderPdfScrollAxis) -> Unit,
     onPageDirection: (ReaderPageDirection) -> Unit,
+    onOrientation: (ReaderOrientation) -> Unit,
     onBookAppearanceEnabled: (Boolean) -> Unit,
     showPdfControls: Boolean,
 ) {
@@ -901,6 +907,16 @@ internal fun ReaderQuickSettingsDialog(
                                 selected = settings.pageDirection == direction,
                                 onClick = { onPageDirection(direction) },
                                 label = { Text(direction.label) }
+                            )
+                        }
+                    }
+                    Text("Orientation", style = MaterialTheme.typography.titleMedium)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ReaderOrientation.entries.forEach { orientation ->
+                            FilterChip(
+                                selected = settings.orientation == orientation,
+                                onClick = { onOrientation(orientation) },
+                                label = { Text(orientation.label) }
                             )
                         }
                     }

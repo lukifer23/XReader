@@ -44,6 +44,7 @@ class SettingsRepository(
         val pdfFit = stringPreferencesKey("pdf_fit")
         val pdfScrollAxis = stringPreferencesKey("pdf_scroll_axis")
         val pageDirection = stringPreferencesKey("page_direction")
+        val orientation = stringPreferencesKey("orientation")
         val highlightColor = stringPreferencesKey("highlight_color")
         val idleTimeoutMillis = longPreferencesKey("idle_timeout_millis")
         val librarySort = stringPreferencesKey("library_sort")
@@ -98,6 +99,8 @@ class SettingsRepository(
                     ?: ReaderPdfScrollAxis.HORIZONTAL,
                 pageDirection = prefs[Keys.pageDirection]?.let { runCatching { ReaderPageDirection.valueOf(it) }.getOrNull() }
                     ?: ReaderPageDirection.AUTO,
+                orientation = prefs[Keys.orientation]?.let { runCatching { ReaderOrientation.valueOf(it) }.getOrNull() }
+                    ?: ReaderOrientation.SYSTEM,
                 highlightColor = ReaderHighlightColor.normalized(prefs[Keys.highlightColor]),
                 idleTimeoutMillis = prefs[Keys.idleTimeoutMillis] ?: 90_000L
             )
@@ -240,6 +243,10 @@ class SettingsRepository(
 
     suspend fun setPageDirection(value: ReaderPageDirection) {
         dataStore.edit { it[Keys.pageDirection] = value.name }
+    }
+
+    suspend fun setOrientation(value: ReaderOrientation) {
+        dataStore.edit { it[Keys.orientation] = value.name }
     }
 
     suspend fun setHighlightColor(value: String) {

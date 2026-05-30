@@ -19,6 +19,7 @@ import com.xreader.app.reader.ReadingUnit
 import com.xreader.app.settings.ReadAloudSleepTimer
 import com.xreader.app.settings.ReaderFontFamily
 import com.xreader.app.settings.ReaderHighlightColor
+import com.xreader.app.settings.ReaderOrientation
 import com.xreader.app.settings.ReaderPageDirection
 import com.xreader.app.settings.ReaderPdfFit
 import com.xreader.app.settings.ReaderPdfScrollAxis
@@ -396,6 +397,10 @@ class ReaderViewModel(
                 container.settingsRepository.setPageDirection(value)
             }
         }
+    }
+
+    fun setOrientation(value: ReaderOrientation) {
+        viewModelScope.launch { container.settingsRepository.setOrientation(value) }
     }
 
     fun setHighlightColor(value: String) {
