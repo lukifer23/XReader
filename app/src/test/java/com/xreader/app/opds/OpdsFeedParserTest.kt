@@ -46,6 +46,28 @@ class OpdsFeedParserTest {
     }
 
     @Test
+    fun resolvesXmlBaseForFeedAndEntryLinks() {
+        val feed = OpdsFeedParser.parse(
+            """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <feed xmlns="http://www.w3.org/2005/Atom" xml:base="https://cdn.example.test/opds/current/">
+              <title>Mirror Catalog</title>
+              <link rel="subsection" title="Recent" href="recent.xml" type="application/atom+xml;profile=opds-catalog"/>
+              <entry xml:base="../downloads/scifi/">
+                <title>Mirror Dawn</title>
+                <link rel="http://opds-spec.org/acquisition/open-access" href="mirror-dawn.epub" type="application/epub+zip"/>
+              </entry>
+            </feed>
+            """.trimIndent(),
+            "https://catalog.example.test/root.xml"
+        )
+
+        assertEquals("https://cdn.example.test/opds/current/", feed.url)
+        assertEquals("https://cdn.example.test/opds/current/recent.xml", feed.navigationLinks.single().href)
+        assertEquals("https://cdn.example.test/opds/downloads/scifi/mirror-dawn.epub", feed.entries.single().acquisitionLinks.single().href)
+    }
+
+    @Test
     fun acquisitionSupportRequiresBookTypeOrExtension() {
         assertTrue(
             OpdsLink(

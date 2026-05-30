@@ -57,7 +57,7 @@ Folder imports walk SAF document trees recursively, filter to EPUB, PDF, TXT, CB
 
 Single-book imports and duplicate re-imports carry the target book id back to the library UI, where the snackbar exposes a contextual `Open` action. Batch and folder imports keep summary-only feedback unless the completed import set contains exactly one actionable book.
 
-OPDS support stays inside the existing import dialog. `OpdsCatalogService` fetches HTTP/HTTPS Atom feeds, follows feed navigation links, filters to supported open-access/enclosure acquisition links, bounds feed and book downloads, and hands the downloaded file to `ImportService.importFile` so checksum identity, conversion, metadata extraction, covers, search indexing, and private-library storage remain identical to SAF imports. It does not add account, DRM, or cloud-sync behavior.
+OPDS support stays inside the existing import dialog. `OpdsCatalogService` fetches HTTP/HTTPS Atom feeds, resolves relative links against the final redirected feed URL and any Atom `xml:base` values, follows feed navigation links, filters to supported open-access/enclosure acquisition links, bounds feed and book downloads, and hands the downloaded file to `ImportService.importFile` so checksum identity, conversion, metadata extraction, covers, search indexing, and private-library storage remain identical to SAF imports. It does not add account, DRM, or cloud-sync behavior.
 
 Book rows expose a save-copy action that launches Android's `CreateDocument` picker and streams the app-private stored reader file to the selected URI. Converted imports such as TXT, CBZ, FB2, RTF, MOBI, ODT, DOCX, HTML, MHTML, and Markdown export as the actual EPUB file XReader stores for reading.
 

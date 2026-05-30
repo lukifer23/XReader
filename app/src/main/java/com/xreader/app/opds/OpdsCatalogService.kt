@@ -41,31 +41,31 @@ data class OpdsLink(
 }
 
 class OpdsCatalogService(
-    private val importService: ImportService,
+    private val importService: ImportService?,
     private val cacheDir: File,
     private val clock: Clock = Clock.systemUTC(),
 ) {
     suspend fun load(url: String): OpdsFeed = withContext(Dispatchers.IO) {
         val normalizedUrl = normalizeCatalogUrl(url)
-        val response = openConnection(normalizedUrl).useResponse { connection ->
+        openConnection(normalizedUrl).useResponse { connection ->
             val charset = connection.contentType.charsetFromContentType() ?: Charsets.UTF_8
             val bytes = connection.inputStream.buffered().use { input ->
                 input.readBounded(MAX_FEED_BYTES)
             }
-            bytes.toString(charset)
+            OpdsFeedParser.parse(bytes.toString(charset), connection.url.toString())
         }
-        OpdsFeedParser.parse(response, normalizedUrl.toString())
     }
 
     suspend fun importLink(link: OpdsLink): ImportService.ImportResult = withContext(Dispatchers.IO) {
         require(link.isSupportedAcquisition()) { "This catalog item is not a supported book download." }
+        val importer = requireNotNull(importService) { "Book import is unavailable." }
         val url = normalizeCatalogUrl(link.href)
         var target: File? = null
         try {
             openConnection(url).useResponse { connection ->
                 val responseType = connection.contentType?.substringBefore(';')?.trim().orEmpty()
                 val importType = responseType.ifBlank { link.type.orEmpty() }
-                val download = File(cacheDir, "opds-${clock.millis()}-${url.safeDownloadName(importType)}")
+                val download = File(cacheDir, "opds-${clock.millis()}-${connection.url.safeDownloadName(importType)}")
                 target = download
                 download.parentFile?.mkdirs()
                 connection.inputStream.buffered().use { input ->
@@ -73,7 +73,7 @@ class OpdsCatalogService(
                         input.copyBoundedTo(output, MAX_BOOK_BYTES)
                     }
                 }
-                importService.importFile(download, download.name, importType)
+                importer.importFile(download, download.name, importType)
             }
         } finally {
             target?.delete()
@@ -121,31 +121,34 @@ class OpdsCatalogService(
 object OpdsFeedParser {
     fun parse(xml: String, baseUrl: String): OpdsFeed {
         val document = Jsoup.parse(xml, baseUrl, Parser.xmlParser())
+        val feed = document.selectFirst("feed") ?: document
+        val feedBaseUrl = feed.effectiveBaseUrl(baseUrl)
         val feedTitle = document.selectFirst("feed > title")?.cleanText()
             ?: document.selectFirst("title")?.cleanText()
             ?: "Catalog"
         val entries = document.select("feed > entry, entry")
-            .mapNotNull { it.toEntry(baseUrl) }
+            .mapNotNull { it.toEntry(feedBaseUrl) }
             .distinctBy { it.id }
         val navigationLinks = document.select("feed > link[href]")
-            .mapNotNull { it.toLink(baseUrl) }
+            .mapNotNull { it.toLink(feedBaseUrl) }
             .filter { it.isNavigationLink() }
             .distinctBy { "${it.rel.orEmpty()}\u0000${it.href}" }
         return OpdsFeed(
             title = feedTitle,
-            url = baseUrl,
+            url = feedBaseUrl,
             entries = entries,
             navigationLinks = navigationLinks
         )
     }
 
     private fun Element.toEntry(baseUrl: String): OpdsEntry? {
+        val entryBaseUrl = effectiveBaseUrl(baseUrl)
         val title = selectFirst("> title")?.cleanText()?.takeIf { it.isNotBlank() } ?: return null
         val id = selectFirst("> id")?.cleanText()?.takeIf { it.isNotBlank() }
-            ?: selectFirst("> link[href]")?.absHref(baseUrl)
+            ?: selectFirst("> link[href]")?.absHref(entryBaseUrl)
             ?: title
         val links = select("> link[href]")
-            .mapNotNull { it.toLink(baseUrl) }
+            .mapNotNull { it.toLink(entryBaseUrl) }
             .filter { it.isSupportedAcquisition() }
             .distinctBy { it.href }
         return OpdsEntry(
@@ -169,7 +172,16 @@ object OpdsFeedParser {
 
     private fun Element.absHref(baseUrl: String): String? {
         val href = attr("href").trim().takeIf { it.isNotBlank() } ?: return null
-        return runCatching { URI(baseUrl).resolve(href).toString() }.getOrDefault(href)
+        return resolveUrl(effectiveBaseUrl(baseUrl), href)
+    }
+
+    private fun Element.effectiveBaseUrl(baseUrl: String): String {
+        val xmlBase = attr("xml:base").trim().takeIf { it.isNotBlank() } ?: return baseUrl
+        return resolveUrl(baseUrl, xmlBase)
+    }
+
+    private fun resolveUrl(baseUrl: String, value: String): String {
+        return runCatching { URI(baseUrl).resolve(value).toString() }.getOrDefault(value)
     }
 
     private fun Element.cleanText(): String =
