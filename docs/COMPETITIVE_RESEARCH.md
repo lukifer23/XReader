@@ -26,7 +26,7 @@ This is the working competitive map for XReader. It should drive implementation 
 | MOBI/AZW3 | Not implemented in UI. | Common in Moon+, ReadEra, PocketBook, FBReader. | Later, only with real local conversion. |
 | DJVU/CBR/DOC | Not implemented. | Broad-format apps cover many of these. | Later; avoid format sprawl before the current reader path is excellent. |
 | No ads/no account | Implemented. | ReadEra and Lithium lead here; Moon+ free has ads; sync apps require accounts. | Preserve. |
-| Private app library | Implemented with SAF file/folder copies and checksum duplicates. | Some apps scan folders or request broad file access. | Preserve SAF-only imports and private copies. |
+| Private app library | Implemented with SAF file/folder copies, checksum duplicates, and per-book save-copy export back through Android's document picker. | Some apps scan folders or request broad file access. | Preserve SAF-only imports and private copies while keeping user-controlled escape hatches. |
 | Resume/progress | Implemented with Readium locators and sessions. | Table stakes; sync apps add cloud resume. | Keep testing across restarts and screen sizes. |
 | Notes/highlights/bookmarks | Implemented with annotation tags, tag filtering, local JSON backup/import, and human-readable Markdown export. | Table stakes in strong readers; Lithium users specifically ask for richer metadata/tags. | Keep export local and useful outside the app. |
 | Reader search | Implemented with in-book search, result jumps, and a compact find bar for previous/next match navigation. | Search is table stakes, but modal-only search interrupts reading. | Keep it temporary, small, and tied to real indexed/Readium results. |
@@ -57,6 +57,7 @@ The research points to several areas that matter more than raw feature count:
 - Read-aloud passage controls. Active read-aloud now exposes compact previous/next passage controls in the reader bar and uses the same page-aligned chunks that drive spoken locator persistence.
 - Annotation tags. Notes and highlights can carry normalized comma-separated tags, visible in reader/global note lists, filterable from the global notes screen, and preserved in JSON/Markdown exports.
 - Series continuation. The Books home now shows a single compact "Up next" recommendation when the library has the next unfinished title after the most recently finished book in a series, using series index with year/title fallback.
+- Save book copy. Each book action menu can export the stored private reader file through SAF, so local-first storage does not trap the user's files or require broad storage permissions.
 - Range-aware reading stats. The stats screen now supports 7-day, 30-day, 13-week, and all-time ranges, with grouped analytics and activity buckets recalculated for the selected period.
 - Local reading stats export. The stats screen can export all analytics ranges to CSV or JSON through Android's document picker, keeping the workflow local and user-controlled.
 - Per-book reader appearance. Books can keep their own font, spacing, alignment, publisher-style, and PDF fit choices without changing global reading behavior.

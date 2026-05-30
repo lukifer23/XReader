@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -81,6 +82,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.xreader.app.AppContainer
 import com.xreader.app.data.BookEntity
 import com.xreader.app.data.ReaderTheme
+import com.xreader.app.repository.bookExportFileName
+import com.xreader.app.repository.bookExportMimeType
 import com.xreader.app.settings.LibraryDensity
 import com.xreader.app.settings.LibrarySort
 import kotlin.math.roundToInt
@@ -101,6 +104,7 @@ internal fun LibraryRoute(
     val context = LocalContext.current
     var importMenuOpen by remember { mutableStateOf(false) }
     var importDialogOpen by remember { mutableStateOf(false) }
+    var exportTarget by remember { mutableStateOf<BookEntity?>(null) }
     val supportedBookMimeTypes = remember {
         arrayOf(
             "application/epub+zip",
@@ -133,6 +137,21 @@ internal fun LibraryRoute(
             viewModel.importFolder(uri)
         }
     }
+    val epubExportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/epub+zip")) { uri ->
+        val book = exportTarget
+        exportTarget = null
+        if (uri != null && book != null) viewModel.exportBook(book, uri)
+    }
+    val pdfExportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
+        val book = exportTarget
+        exportTarget = null
+        if (uri != null && book != null) viewModel.exportBook(book, uri)
+    }
+    val genericExportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
+        val book = exportTarget
+        exportTarget = null
+        if (uri != null && book != null) viewModel.exportBook(book, uri)
+    }
     val openFileImportPicker = {
         if (!state.importing) fileLauncher.launch(supportedBookMimeTypes)
     }
@@ -145,6 +164,15 @@ internal fun LibraryRoute(
         when (action) {
             LibraryImportAction.FILES -> openFileImportPicker()
             LibraryImportAction.FOLDER -> openFolderImportPicker()
+        }
+    }
+    fun exportBook(book: BookEntity) {
+        exportTarget = book
+        val fileName = bookExportFileName(book)
+        when (bookExportMimeType(book)) {
+            "application/epub+zip" -> epubExportLauncher.launch(fileName)
+            "application/pdf" -> pdfExportLauncher.launch(fileName)
+            else -> genericExportLauncher.launch(fileName)
         }
     }
 
@@ -207,6 +235,7 @@ internal fun LibraryRoute(
             },
             onUpdateMetadata = viewModel::updateMetadata,
             onReplaceCover = viewModel::replaceCover,
+            onExportBook = ::exportBook,
             onRefreshBookHealth = viewModel::refreshBookHealth,
             onRepairBook = viewModel::repairBook,
             onDeleteBook = viewModel::deleteBook,
@@ -325,6 +354,7 @@ internal fun LibraryScreen(
     onShowAll: () -> Unit,
     onUpdateMetadata: (BookEntity, String, String, Int?, String?, String?, Double?, Boolean) -> Unit,
     onReplaceCover: (BookEntity, Uri) -> Unit,
+    onExportBook: (BookEntity) -> Unit,
     onRefreshBookHealth: (Long) -> Unit,
     onRepairBook: (BookEntity) -> Unit,
     onDeleteBook: (BookEntity) -> Unit,
@@ -463,6 +493,7 @@ internal fun LibraryScreen(
                             onSetFinished = { finished -> onSetFinished(item, finished) },
                             onCollections = { collectionsTarget = item },
                             onEdit = { editing = item.book },
+                            onExport = { onExportBook(item.book) },
                             onDelete = { deleteCandidate = item.book }
                         )
                     }
@@ -993,6 +1024,7 @@ internal fun BookRow(
     onSetFinished: (Boolean) -> Unit,
     onCollections: () -> Unit,
     onEdit: () -> Unit,
+    onExport: () -> Unit,
     onDelete: () -> Unit,
 ) {
     val progress = item.displayLibraryProgress()
@@ -1088,6 +1120,14 @@ internal fun BookRow(
                         onClick = {
                             menuOpen = false
                             onEdit()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Save copy") },
+                        leadingIcon = { Icon(Icons.Filled.FileDownload, contentDescription = null) },
+                        onClick = {
+                            menuOpen = false
+                            onExport()
                         }
                     )
                     DropdownMenuItem(

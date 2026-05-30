@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 enum class LibraryGroup {
     BOOKS,
@@ -340,6 +341,19 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    fun exportBook(book: BookEntity, uri: Uri) {
+        viewModelScope.launch {
+            runCatching { container.libraryRepository.exportBook(book, uri) }
+                .onSuccess { bytes ->
+                    message.value = "Saved ${book.title} (${bytes.toReadableFileSize()})"
+                }
+                .onFailure { error ->
+                    Log.e("XReader", "Book export failed for ${book.id}", error)
+                    message.value = error.message ?: "Book export failed"
+                }
+        }
+    }
+
     fun refreshBookHealth(bookId: Long) {
         viewModelScope.launch {
             runCatching { container.libraryRepository.bookHealth(bookId) }
@@ -419,6 +433,13 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
 
     private fun bookCount(count: Int): String =
         if (count == 1) "1 book" else "$count books"
+
+    private fun Long.toReadableFileSize(): String =
+        when {
+            this >= 1_048_576L -> "%.1f MB".format(Locale.US, this / 1_048_576.0)
+            this >= 1024L -> "%.1f KB".format(Locale.US, this / 1024.0)
+            else -> "$this B"
+        }
 
     private fun List<CollectionEntity>.toUiItems(): List<CollectionUiItem> =
         map { CollectionUiItem(id = it.id, name = it.name) }

@@ -248,6 +248,18 @@ class ImportService(
         book.coverImagePath?.let { File(context.filesDir, it).delete() }
     }
 
+    suspend fun exportStoredFile(book: BookEntity, uri: Uri): Long = withContext(Dispatchers.IO) {
+        val source = File(context.filesDir, book.filePath)
+        require(source.isFile) { "Book file is missing. Reimport or repair this title before exporting." }
+        context.contentResolver.openOutputStream(uri, "wt").use { output ->
+            requireNotNull(output) { "Could not open export destination." }
+            source.inputStream().buffered().use { input ->
+                input.copyTo(output)
+            }
+        }
+        source.length()
+    }
+
     suspend fun backfillLibraryDetails(limit: Int = 50) = withContext(Dispatchers.IO) {
         backfillMissingCoversInternal(limit)
         backfillMetadataInternal(limit)
