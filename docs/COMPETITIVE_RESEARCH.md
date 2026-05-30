@@ -67,6 +67,7 @@ The research points to several areas that matter more than raw feature count:
 - Range-aware reading stats. The stats screen now supports 7-day, 30-day, 13-week, and all-time ranges, with grouped analytics and activity buckets recalculated for the selected period.
 - Local reading stats export. The stats screen can export all analytics ranges to CSV or JSON through Android's document picker, keeping the workflow local and user-controlled.
 - Per-book reader appearance. Books can keep their own font, font weight, spacing, hyphenation, alignment, publisher-style, PDF fit, and page-direction choices without changing global reading behavior, and local library backup restores those choices by checksum.
+- Global settings backup. Local library backup also carries reader comfort controls and library sort/density preferences, so a restore preserves the tuned reading experience without adding sync accounts or another backup surface.
 - PDF layout comfort. PDFs can use page, width, or height fit, paged or vertical layout, and page-direction overrides for manuals, scans, and right-to-left page sets.
 - Keep screen awake. Reader sessions can opt into Android's screen-awake flag while the reader is visible, avoiding sleep interruptions without changing global phone settings.
 - Reader orientation. Reading can follow the device/system setting or lock to sensor portrait/landscape only while the reader is open, keeping rotation control near the existing comfort controls without changing the rest of the app.

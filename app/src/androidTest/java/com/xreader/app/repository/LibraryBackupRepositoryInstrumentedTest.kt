@@ -11,12 +11,20 @@ import com.xreader.app.data.BookFormat
 import com.xreader.app.data.CollectionEntity
 import com.xreader.app.data.ReadingSessionEntity
 import com.xreader.app.data.ReadingStateEntity
+import com.xreader.app.data.ReaderTheme
 import com.xreader.app.data.XReaderDatabase
+import com.xreader.app.settings.LibraryDensity
+import com.xreader.app.settings.LibrarySettings
+import com.xreader.app.settings.LibrarySort
+import com.xreader.app.settings.ReadAloudSleepTimer
 import com.xreader.app.settings.ReaderFontFamily
+import com.xreader.app.settings.ReaderHighlightColor
+import com.xreader.app.settings.ReaderOrientation
 import com.xreader.app.settings.ReaderPageDirection
 import com.xreader.app.settings.ReaderPdfFit
 import com.xreader.app.settings.ReaderPdfScrollAxis
 import com.xreader.app.settings.ReaderSettings
+import com.xreader.app.settings.ReaderTapZonePreset
 import com.xreader.app.settings.ReaderTextAlign
 import com.xreader.app.settings.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
@@ -108,6 +116,41 @@ class LibraryBackupRepositoryInstrumentedTest {
             )
         )
         val sourceSettings = testSettingsRepository("source")
+        sourceSettings.setReaderSettings(
+            ReaderSettings(
+                theme = ReaderTheme.OLED,
+                fontScale = 1.28f,
+                lineHeight = 1.5f,
+                marginScale = 0.7f,
+                fontFamily = ReaderFontFamily.DUOSPACE,
+                fontWeight = 1.15f,
+                hyphenation = true,
+                tapZonesEnabled = false,
+                tapZonePreset = ReaderTapZonePreset.WIDE,
+                pageTurnAnimations = false,
+                keepScreenAwake = true,
+                volumeKeysTurnPages = true,
+                screenDim = 0.2f,
+                readAloudRate = 1.2f,
+                readAloudVoiceName = "local-test-voice",
+                readAloudSleepTimer = ReadAloudSleepTimer.THIRTY_MINUTES,
+                fullScreen = true,
+                publisherStyles = true,
+                textAlign = ReaderTextAlign.JUSTIFY,
+                pdfFit = ReaderPdfFit.HEIGHT,
+                pdfScrollAxis = ReaderPdfScrollAxis.VERTICAL,
+                pageDirection = ReaderPageDirection.RIGHT_TO_LEFT,
+                orientation = ReaderOrientation.LANDSCAPE,
+                highlightColor = ReaderHighlightColor.BLUE.hex,
+                idleTimeoutMillis = 120_000L
+            )
+        )
+        sourceSettings.setLibrarySettings(
+            LibrarySettings(
+                sort = LibrarySort.SERIES,
+                density = LibraryDensity.COMPACT
+            )
+        )
         sourceSettings.setBookAppearanceEnabled(
             bookId = sourceBookId,
             enabled = true,
@@ -153,13 +196,23 @@ class LibraryBackupRepositoryInstrumentedTest {
         val imported = targetRepository.importBackupJson(exported.json)
 
         assertEquals(1, exported.collections)
+        assertEquals(2, exported.globalSettings)
         assertEquals(1, exported.readerAppearances)
         assertEquals("Sci-Fi", JSONObject(exported.json).getJSONArray("collections").getJSONObject(0).getString("name"))
+        assertEquals(
+            ReaderTheme.OLED.name,
+            JSONObject(exported.json).getJSONObject("readerSettings").getString("theme")
+        )
+        assertEquals(
+            LibrarySort.SERIES.name,
+            JSONObject(exported.json).getJSONObject("librarySettings").getString("sort")
+        )
         assertEquals(
             ReaderPageDirection.RIGHT_TO_LEFT.name,
             JSONObject(exported.json).getJSONArray("readerAppearances").getJSONObject(0).getString("pageDirection")
         )
         assertEquals(1, imported.booksUpdated)
+        assertEquals(2, imported.globalSettingsImported)
         assertEquals(1, imported.collectionsImported)
         assertEquals(1, imported.collectionMembershipsImported)
         assertEquals(1, imported.readerAppearancesImported)
@@ -181,6 +234,21 @@ class LibraryBackupRepositoryInstrumentedTest {
         assertEquals(1, targetDb.reading().allSessions().size)
         assertEquals(listOf("Sci-Fi"), targetDb.collections().observeCollections().first().map { it.name })
         assertEquals(listOf(targetBookId), targetDb.collections().allBookCollections().map { it.bookId })
+        val restoredSettings = targetSettings.settings.first()
+        assertEquals(ReaderTheme.OLED, restoredSettings.theme)
+        assertEquals(1.28f, restoredSettings.fontScale, 0.001f)
+        assertEquals(ReaderFontFamily.DUOSPACE, restoredSettings.fontFamily)
+        assertEquals(ReaderTapZonePreset.WIDE, restoredSettings.tapZonePreset)
+        assertEquals(false, restoredSettings.pageTurnAnimations)
+        assertEquals(true, restoredSettings.keepScreenAwake)
+        assertEquals("local-test-voice", restoredSettings.readAloudVoiceName)
+        assertEquals(ReadAloudSleepTimer.THIRTY_MINUTES, restoredSettings.readAloudSleepTimer)
+        assertEquals(ReaderOrientation.LANDSCAPE, restoredSettings.orientation)
+        assertEquals(ReaderHighlightColor.BLUE.hex, restoredSettings.highlightColor)
+        assertEquals(120_000L, restoredSettings.idleTimeoutMillis)
+        val restoredLibrarySettings = targetSettings.librarySettings.first()
+        assertEquals(LibrarySort.SERIES, restoredLibrarySettings.sort)
+        assertEquals(LibraryDensity.COMPACT, restoredLibrarySettings.density)
         val restoredAppearance = requireNotNull(targetSettings.bookAppearance(targetBookId).first())
         assertEquals(1.35f, restoredAppearance.fontScale, 0.001f)
         assertEquals(ReaderFontFamily.ACCESSIBLE, restoredAppearance.fontFamily)
@@ -192,6 +260,8 @@ class LibraryBackupRepositoryInstrumentedTest {
         val secondImport = targetRepository.importBackupJson(exported.json)
 
         assertEquals(0, secondImport.booksUpdated)
+        assertEquals(0, secondImport.globalSettingsImported)
+        assertEquals(2, secondImport.globalSettingsSkipped)
         assertEquals(0, secondImport.collectionsImported)
         assertEquals(0, secondImport.collectionMembershipsImported)
         assertEquals(1, secondImport.collectionMembershipsSkipped)

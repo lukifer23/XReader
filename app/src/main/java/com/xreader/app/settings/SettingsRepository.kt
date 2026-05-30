@@ -147,6 +147,40 @@ class SettingsRepository(
         dataStore.edit { it[Keys.theme] = theme.name }
     }
 
+    suspend fun setReaderSettings(value: ReaderSettings) {
+        dataStore.edit { prefs ->
+            prefs[Keys.theme] = value.theme.name
+            prefs[Keys.fontScale] = value.fontScale.coerceIn(0.75f, 1.65f)
+            prefs[Keys.lineHeight] = value.lineHeight.coerceIn(1.1f, 2.0f)
+            prefs[Keys.marginScale] = value.marginScale.coerceIn(0.35f, 1.8f)
+            prefs[Keys.fontFamily] = value.fontFamily.name
+            prefs[Keys.fontWeight] = normalizedReaderFontWeight(value.fontWeight)
+            prefs[Keys.hyphenation] = value.hyphenation
+            prefs[Keys.tapZonesEnabled] = value.tapZonesEnabled
+            prefs[Keys.tapZonePreset] = value.tapZonePreset.name
+            prefs[Keys.pageTurnAnimations] = value.pageTurnAnimations
+            prefs[Keys.keepScreenAwake] = value.keepScreenAwake
+            prefs[Keys.volumeKeysTurnPages] = value.volumeKeysTurnPages
+            prefs[Keys.screenDim] = normalizedReaderDimAmount(value.screenDim)
+            prefs[Keys.readAloudRate] = value.readAloudRate.coerceIn(0.7f, 1.4f)
+            if (value.readAloudVoiceName.isNullOrBlank()) {
+                prefs.remove(Keys.readAloudVoiceName)
+            } else {
+                prefs[Keys.readAloudVoiceName] = value.readAloudVoiceName
+            }
+            prefs[Keys.readAloudSleepTimer] = value.readAloudSleepTimer.name
+            prefs[Keys.fullScreen] = value.fullScreen
+            prefs[Keys.publisherStyles] = value.publisherStyles
+            prefs[Keys.textAlign] = value.textAlign.name
+            prefs[Keys.pdfFit] = value.pdfFit.name
+            prefs[Keys.pdfScrollAxis] = value.pdfScrollAxis.name
+            prefs[Keys.pageDirection] = value.pageDirection.name
+            prefs[Keys.orientation] = value.orientation.name
+            prefs[Keys.highlightColor] = ReaderHighlightColor.normalized(value.highlightColor)
+            prefs[Keys.idleTimeoutMillis] = value.idleTimeoutMillis.coerceAtLeast(10_000L)
+        }
+    }
+
     suspend fun setFontScale(value: Float) {
         dataStore.edit { it[Keys.fontScale] = value.coerceIn(0.75f, 1.65f) }
     }
@@ -341,6 +375,13 @@ class SettingsRepository(
 
     suspend fun setLibraryDensity(value: LibraryDensity) {
         dataStore.edit { it[Keys.libraryDensity] = value.name }
+    }
+
+    suspend fun setLibrarySettings(value: LibrarySettings) {
+        dataStore.edit {
+            it[Keys.librarySort] = value.sort.name
+            it[Keys.libraryDensity] = value.density.name
+        }
     }
 
     private fun readerFontFamily(value: String?): ReaderFontFamily? =

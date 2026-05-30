@@ -10,14 +10,24 @@ import com.xreader.app.data.GenreEntity
 import com.xreader.app.data.ReadingDao
 import com.xreader.app.data.ReadingSessionEntity
 import com.xreader.app.data.ReadingStateEntity
+import com.xreader.app.data.ReaderTheme
 import com.xreader.app.data.SeriesEntity
 import com.xreader.app.settings.BookReaderAppearance
+import com.xreader.app.settings.LibraryDensity
+import com.xreader.app.settings.LibrarySettings
+import com.xreader.app.settings.LibrarySort
+import com.xreader.app.settings.ReadAloudSleepTimer
 import com.xreader.app.settings.ReaderFontFamily
+import com.xreader.app.settings.ReaderHighlightColor
+import com.xreader.app.settings.ReaderOrientation
 import com.xreader.app.settings.ReaderPageDirection
 import com.xreader.app.settings.ReaderPdfFit
 import com.xreader.app.settings.ReaderPdfScrollAxis
+import com.xreader.app.settings.ReaderSettings
+import com.xreader.app.settings.ReaderTapZonePreset
 import com.xreader.app.settings.ReaderTextAlign
 import com.xreader.app.settings.SettingsRepository
+import com.xreader.app.settings.normalizedReaderDimAmount
 import com.xreader.app.settings.normalizedReaderFontWeight
 import kotlinx.coroutines.flow.first
 import org.json.JSONArray
@@ -36,6 +46,7 @@ class LibraryBackupRepository(
         val json: String,
         val books: Int,
         val collections: Int,
+        val globalSettings: Int,
         val readerAppearances: Int,
         val readingStates: Int,
         val readingSessions: Int,
@@ -46,6 +57,8 @@ class LibraryBackupRepository(
         val collectionsImported: Int,
         val collectionMembershipsImported: Int,
         val collectionMembershipsSkipped: Int,
+        val globalSettingsImported: Int,
+        val globalSettingsSkipped: Int,
         val readerAppearancesImported: Int,
         val readerAppearancesSkipped: Int,
         val readingStatesImported: Int,
@@ -64,6 +77,12 @@ class LibraryBackupRepository(
         val membershipsByCollection = bookCollections.groupBy { it.collectionId }
         val states = readingDao.allStates()
         val sessions = readingDao.allSessions()
+        val globalSettings = settingsRepository?.let { repository ->
+            GlobalSettingsBackup(
+                readerSettings = repository.settings.first(),
+                librarySettings = repository.librarySettings.first()
+            )
+        }
         val readerAppearances = settingsRepository?.let { repository ->
             books.mapNotNull { book ->
                 repository.bookAppearance(book.id).first()?.let { appearance -> book to appearance }
@@ -96,6 +115,8 @@ class LibraryBackupRepository(
                     }
                 }
             )
+            .putNullable("readerSettings", globalSettings?.readerSettings?.toJson())
+            .putNullable("librarySettings", globalSettings?.librarySettings?.toJson())
             .put(
                 "collections",
                 JSONArray().also { array ->
@@ -171,6 +192,7 @@ class LibraryBackupRepository(
             json = root.toString(2),
             books = books.size,
             collections = collections.count { collection -> membershipsByCollection[collection.id].orEmpty().isNotEmpty() },
+            globalSettings = if (globalSettings == null) 0 else 2,
             readerAppearances = readerAppearances.size,
             readingStates = states.size,
             readingSessions = sessions.size
@@ -186,6 +208,8 @@ class LibraryBackupRepository(
         var collectionsImported = 0
         var collectionMembershipsImported = 0
         var collectionMembershipsSkipped = 0
+        var globalSettingsImported = 0
+        var globalSettingsSkipped = 0
         var readerAppearancesImported = 0
         var readerAppearancesSkipped = 0
         var readingStatesImported = 0
@@ -232,6 +256,36 @@ class LibraryBackupRepository(
                 updated.genre?.let { bookDao.insertGenre(GenreEntity(name = it)) }
                 updated.series?.let { bookDao.insertSeries(SeriesEntity(name = it)) }
                 booksUpdated += 1
+            }
+        }
+
+        val readerSettings = root.optJSONObject("readerSettings")
+        if (readerSettings != null) {
+            val imported = readerSettings.toReaderSettingsOrNull()
+            val repository = settingsRepository
+            when {
+                imported == null -> invalidItems += 1
+                repository == null -> globalSettingsSkipped += 1
+                repository.settings.first() == imported -> globalSettingsSkipped += 1
+                else -> {
+                    repository.setReaderSettings(imported)
+                    globalSettingsImported += 1
+                }
+            }
+        }
+
+        val librarySettings = root.optJSONObject("librarySettings")
+        if (librarySettings != null) {
+            val imported = librarySettings.toLibrarySettingsOrNull()
+            val repository = settingsRepository
+            when {
+                imported == null -> invalidItems += 1
+                repository == null -> globalSettingsSkipped += 1
+                repository.librarySettings.first() == imported -> globalSettingsSkipped += 1
+                else -> {
+                    repository.setLibrarySettings(imported)
+                    globalSettingsImported += 1
+                }
             }
         }
 
@@ -407,6 +461,8 @@ class LibraryBackupRepository(
             collectionsImported = collectionsImported,
             collectionMembershipsImported = collectionMembershipsImported,
             collectionMembershipsSkipped = collectionMembershipsSkipped,
+            globalSettingsImported = globalSettingsImported,
+            globalSettingsSkipped = globalSettingsSkipped,
             readerAppearancesImported = readerAppearancesImported,
             readerAppearancesSkipped = readerAppearancesSkipped,
             readingStatesImported = readingStatesImported,
@@ -432,6 +488,78 @@ class LibraryBackupRepository(
 
     private fun JSONObject.optNullableDouble(name: String): Double? =
         if (!has(name) || isNull(name)) null else optDouble(name)
+
+    private fun ReaderSettings.toJson(): JSONObject =
+        JSONObject()
+            .put("theme", theme.name)
+            .put("fontScale", fontScale)
+            .put("lineHeight", lineHeight)
+            .put("marginScale", marginScale)
+            .put("fontFamily", fontFamily.name)
+            .put("fontWeight", fontWeight)
+            .put("hyphenation", hyphenation)
+            .put("tapZonesEnabled", tapZonesEnabled)
+            .put("tapZonePreset", tapZonePreset.name)
+            .put("pageTurnAnimations", pageTurnAnimations)
+            .put("keepScreenAwake", keepScreenAwake)
+            .put("volumeKeysTurnPages", volumeKeysTurnPages)
+            .put("screenDim", screenDim)
+            .put("readAloudRate", readAloudRate)
+            .putNullable("readAloudVoiceName", readAloudVoiceName)
+            .put("readAloudSleepTimer", readAloudSleepTimer.name)
+            .put("fullScreen", fullScreen)
+            .put("publisherStyles", publisherStyles)
+            .put("textAlign", textAlign.name)
+            .put("pdfFit", pdfFit.name)
+            .put("pdfScrollAxis", pdfScrollAxis.name)
+            .put("pageDirection", pageDirection.name)
+            .put("orientation", orientation.name)
+            .put("highlightColor", ReaderHighlightColor.normalized(highlightColor))
+            .put("idleTimeoutMillis", idleTimeoutMillis)
+
+    private fun JSONObject.toReaderSettingsOrNull(): ReaderSettings? =
+        runCatching {
+            ReaderSettings(
+                theme = enumValueOrNull<ReaderTheme>("theme") ?: ReaderTheme.LIGHT,
+                fontScale = optDouble("fontScale", 1.18).toFloat().coerceIn(0.75f, 1.65f),
+                lineHeight = optDouble("lineHeight", 1.42).toFloat().coerceIn(1.1f, 2.0f),
+                marginScale = optDouble("marginScale", 0.52).toFloat().coerceIn(0.35f, 1.8f),
+                fontFamily = enumValueOrNull<ReaderFontFamily>("fontFamily") ?: ReaderFontFamily.DEFAULT,
+                fontWeight = normalizedReaderFontWeight(optDouble("fontWeight", 1.0).toFloat()),
+                hyphenation = optBoolean("hyphenation", false),
+                tapZonesEnabled = optBoolean("tapZonesEnabled", true),
+                tapZonePreset = enumValueOrNull<ReaderTapZonePreset>("tapZonePreset") ?: ReaderTapZonePreset.BALANCED,
+                pageTurnAnimations = optBoolean("pageTurnAnimations", true),
+                keepScreenAwake = optBoolean("keepScreenAwake", false),
+                volumeKeysTurnPages = optBoolean("volumeKeysTurnPages", false),
+                screenDim = normalizedReaderDimAmount(optDouble("screenDim", 0.0).toFloat()),
+                readAloudRate = optDouble("readAloudRate", 1.0).toFloat().coerceIn(0.7f, 1.4f),
+                readAloudVoiceName = optNullableString("readAloudVoiceName")?.takeIf { it.isNotBlank() },
+                readAloudSleepTimer = enumValueOrNull<ReadAloudSleepTimer>("readAloudSleepTimer") ?: ReadAloudSleepTimer.OFF,
+                fullScreen = optBoolean("fullScreen", false),
+                publisherStyles = optBoolean("publisherStyles", false),
+                textAlign = enumValueOrNull<ReaderTextAlign>("textAlign") ?: ReaderTextAlign.START,
+                pdfFit = enumValueOrNull<ReaderPdfFit>("pdfFit") ?: ReaderPdfFit.WIDTH,
+                pdfScrollAxis = enumValueOrNull<ReaderPdfScrollAxis>("pdfScrollAxis") ?: ReaderPdfScrollAxis.HORIZONTAL,
+                pageDirection = enumValueOrNull<ReaderPageDirection>("pageDirection") ?: ReaderPageDirection.AUTO,
+                orientation = enumValueOrNull<ReaderOrientation>("orientation") ?: ReaderOrientation.SYSTEM,
+                highlightColor = ReaderHighlightColor.normalized(optNullableString("highlightColor")),
+                idleTimeoutMillis = optLong("idleTimeoutMillis", 90_000L).coerceAtLeast(10_000L)
+            )
+        }.getOrNull()
+
+    private fun LibrarySettings.toJson(): JSONObject =
+        JSONObject()
+            .put("sort", sort.name)
+            .put("density", density.name)
+
+    private fun JSONObject.toLibrarySettingsOrNull(): LibrarySettings? =
+        runCatching {
+            LibrarySettings(
+                sort = enumValueOrNull<LibrarySort>("sort") ?: LibrarySort.RECENT,
+                density = enumValueOrNull<LibraryDensity>("density") ?: LibraryDensity.COMFORTABLE
+            )
+        }.getOrNull()
 
     private fun BookReaderAppearance.toJson(bookChecksum: String): JSONObject =
         JSONObject()
@@ -476,6 +604,11 @@ class LibraryBackupRepository(
         require(cleaned.length <= MAX_COLLECTION_NAME_LENGTH) { "Collection names can be up to $MAX_COLLECTION_NAME_LENGTH characters" }
         return cleaned
     }
+
+    private data class GlobalSettingsBackup(
+        val readerSettings: ReaderSettings,
+        val librarySettings: LibrarySettings,
+    )
 
     private companion object {
         const val BACKUP_FORMAT = "com.xreader.library-metadata.v1"

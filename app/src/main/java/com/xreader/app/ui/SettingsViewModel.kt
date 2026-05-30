@@ -208,7 +208,13 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
             val message = runCatching { container.libraryBackupService.exportTo(uri) }
                 .fold(
                     onSuccess = {
-                        "Exported ${it.books} ${if (it.books == 1) "book" else "books"}, ${it.collections} ${if (it.collections == 1) "collection" else "collections"}, ${it.readingStates} progress states, and ${it.readingSessions} sessions"
+                        val details = buildList {
+                            add("${it.collections} ${if (it.collections == 1) "collection" else "collections"}")
+                            add("${it.readingStates} progress states")
+                            add("${it.readingSessions} sessions")
+                            if (it.globalSettings > 0) add("app settings")
+                        }
+                        "Exported ${it.books} ${if (it.books == 1) "book" else "books"}, ${details.joinToString(", ")}"
                     },
                     onFailure = { it.message ?: "Library export failed" }
                 )
@@ -270,14 +276,16 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     private fun com.xreader.app.repository.LibraryBackupRepository.ImportResult.summaryMessage(): String {
         val changed = booksUpdated + collectionsImported + collectionMembershipsImported +
-            readerAppearancesImported + readingStatesImported + readingSessionsImported
-        val skipped = collectionMembershipsSkipped + readerAppearancesSkipped + readingStatesSkipped + readingSessionsSkipped
+            globalSettingsImported + readerAppearancesImported + readingStatesImported + readingSessionsImported
+        val skipped = collectionMembershipsSkipped + globalSettingsSkipped + readerAppearancesSkipped +
+            readingStatesSkipped + readingSessionsSkipped
         val base = "Imported $changed library ${if (changed == 1) "item" else "items"}"
         val details = buildList {
             if (booksUpdated > 0) add("$booksUpdated metadata updates")
+            if (globalSettingsImported > 0) add("$globalSettingsImported app settings")
             if (collectionsImported > 0) add("$collectionsImported collections")
             if (collectionMembershipsImported > 0) add("$collectionMembershipsImported collection links")
-            if (readerAppearancesImported > 0) add("$readerAppearancesImported reader settings")
+            if (readerAppearancesImported > 0) add("$readerAppearancesImported per-book reader settings")
             if (skipped > 0) add("$skipped skipped")
             if (missingBooks > 0) add("$missingBooks missing books")
             if (invalidItems > 0) add("$invalidItems invalid")
