@@ -11,6 +11,7 @@ import com.xreader.app.data.BookEntity
 import com.xreader.app.data.CollectionDao
 import com.xreader.app.data.CollectionEntity
 import com.xreader.app.data.GenreEntity
+import com.xreader.app.data.LibrarySearchRow
 import com.xreader.app.data.SearchDao
 import com.xreader.app.data.SearchIndexEntity
 import com.xreader.app.data.SeriesEntity
@@ -186,8 +187,8 @@ class LibraryRepository(
     suspend fun maxIndexedUnitForBook(bookId: Long): Int =
         searchDao.maxUnitIndexForBook(bookId) ?: 0
 
-    suspend fun searchLibrary(query: String): List<SearchIndexEntity> =
-        ftsQuery(query)?.let { searchDao.searchLibrary(it) }.orEmpty()
+    suspend fun searchLibrary(query: String): List<LibrarySearchRow> =
+        ftsQuery(query)?.let { searchDao.searchLibraryWithBooks(it) }.orEmpty()
 
     private fun ftsQuery(query: String): String? {
         val terms = com.xreader.app.core.TextTools.words(

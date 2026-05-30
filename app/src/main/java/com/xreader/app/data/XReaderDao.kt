@@ -1,6 +1,7 @@
 package com.xreader.app.data
 
 import androidx.room.Dao
+import androidx.room.Embedded
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
@@ -13,6 +14,12 @@ data class BookCollectionName(
     val bookId: Long,
     val collectionId: Long,
     val name: String,
+)
+
+data class LibrarySearchRow(
+    @Embedded val row: SearchIndexEntity,
+    val bookTitle: String,
+    val bookAuthor: String,
 )
 
 @Dao
@@ -346,6 +353,19 @@ interface SearchDao {
         """
     )
     suspend fun searchLibrary(query: String, limit: Int = 120): List<SearchIndexEntity>
+
+    @Query(
+        """
+        SELECT search_index.*, books.title AS bookTitle, books.author AS bookAuthor
+        FROM search_index
+        INNER JOIN search_index_fts ON search_index.id = search_index_fts.rowid
+        INNER JOIN books ON books.id = search_index.bookId
+        WHERE search_index_fts MATCH :query
+        ORDER BY books.lastOpenedAt DESC, search_index.unitIndex ASC
+        LIMIT :limit
+        """
+    )
+    suspend fun searchLibraryWithBooks(query: String, limit: Int = 120): List<LibrarySearchRow>
 }
 
 @Dao

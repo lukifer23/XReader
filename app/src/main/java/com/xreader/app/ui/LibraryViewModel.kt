@@ -9,8 +9,8 @@ import androidx.lifecycle.viewModelScope
 import com.xreader.app.AppContainer
 import com.xreader.app.data.BookEntity
 import com.xreader.app.data.CollectionEntity
+import com.xreader.app.data.LibrarySearchRow
 import com.xreader.app.data.ReadingStateEntity
-import com.xreader.app.data.SearchIndexEntity
 import com.xreader.app.settings.LibraryDensity
 import com.xreader.app.settings.LibrarySort
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -73,7 +73,7 @@ data class LibraryUiState(
     val totalBookCount: Int = 0,
     val importing: Boolean = false,
     val message: LibraryMessage? = null,
-    val librarySearchResults: List<com.xreader.app.data.SearchIndexEntity> = emptyList(),
+    val librarySearchResults: List<LibrarySearchRow> = emptyList(),
     val bookHealth: Map<Long, BookHealthUiState> = emptyMap(),
     val repairingBookIds: Set<Long> = emptySet(),
     val authorOptions: List<String> = emptyList(),
@@ -89,7 +89,7 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     private val importing = MutableStateFlow(false)
     private val message = MutableStateFlow<LibraryMessage?>(null)
     private var nextMessageId = 0L
-    private val searchResults = MutableStateFlow<List<com.xreader.app.data.SearchIndexEntity>>(emptyList())
+    private val searchResults = MutableStateFlow<List<LibrarySearchRow>>(emptyList())
     private val bookHealth = MutableStateFlow<Map<Long, BookHealthUiState>>(emptyMap())
     private val repairingBookIds = MutableStateFlow<Set<Long>>(emptySet())
 
@@ -121,7 +121,7 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         val selection: LibrarySelectionState,
         val importing: Boolean,
         val message: LibraryMessage?,
-        val searchResults: List<com.xreader.app.data.SearchIndexEntity>,
+        val searchResults: List<LibrarySearchRow>,
     )
 
     private val selectionState = combine(query, group, container.settingsRepository.librarySettings) {

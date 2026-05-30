@@ -25,6 +25,8 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.MenuBook
@@ -75,6 +77,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -82,6 +85,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.xreader.app.AppContainer
 import com.xreader.app.data.BookEntity
+import com.xreader.app.data.LibrarySearchRow
 import com.xreader.app.data.ReaderTheme
 import com.xreader.app.repository.bookExportFileName
 import com.xreader.app.repository.bookExportMimeType
@@ -450,7 +454,11 @@ internal fun LibraryScreen(
             )
         }
         if (state.librarySearchResults.isNotEmpty()) {
-            SearchResultsStrip(state.librarySearchResults, onOpenSearchResult)
+            SearchResultsStrip(
+                results = state.librarySearchResults,
+                query = state.query,
+                onOpenResult = onOpenSearchResult
+            )
         }
         if (state.books.isEmpty()) {
             LibraryEmptyState(
@@ -707,6 +715,8 @@ internal fun LibrarySearchField(
         singleLine = true,
         label = { Text("Search library") },
         leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        keyboardActions = KeyboardActions(onSearch = { if (query.isNotBlank()) onSearch() }),
         trailingIcon = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (query.isNotBlank()) {
@@ -1166,7 +1176,8 @@ internal fun BookRow(
 
 @Composable
 internal fun SearchResultsStrip(
-    results: List<com.xreader.app.data.SearchIndexEntity>,
+    results: List<LibrarySearchRow>,
+    query: String,
     onOpenResult: (Long, String?) -> Unit,
 ) {
     Surface(
@@ -1177,22 +1188,43 @@ internal fun SearchResultsStrip(
         color = MaterialTheme.colorScheme.surfaceVariant
     ) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Text matches", style = MaterialTheme.typography.labelLarge)
-            results.take(5).forEach {
-                val snippet = it.body.replace(Regex("\\s+"), " ").trim().take(140)
+            val visibleResults = results.take(5)
+            val header = if (visibleResults.size < results.size) {
+                "Text matches ${visibleResults.size} of ${results.size}"
+            } else {
+                "Text matches"
+            }
+            Text(header, style = MaterialTheme.typography.labelLarge)
+            visibleResults.forEach { result ->
+                val row = result.row
+                val snippet = searchResultSnippet(row.body, query)
+                val subtitle = listOf(row.heading, result.bookAuthor)
+                    .map { it.trim() }
+                    .filter { it.isNotBlank() && !it.equals(result.bookTitle, ignoreCase = true) }
+                    .distinct()
+                    .joinToString(" • ")
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { onOpenResult(it.bookId, "$SEARCH_UNIT_LOCATOR_PREFIX${it.unitIndex}") },
+                        .clickable { onOpenResult(row.bookId, "$SEARCH_UNIT_LOCATOR_PREFIX${row.unitIndex}") },
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     Text(
-                        text = it.heading,
+                        text = result.bookTitle,
                         style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                    if (subtitle.isNotBlank()) {
+                        Text(
+                            text = subtitle,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                     Text(
                         text = snippet,
                         style = MaterialTheme.typography.bodySmall,
@@ -1205,3 +1237,46 @@ internal fun SearchResultsStrip(
         }
     }
 }
+
+internal fun searchResultSnippet(
+    body: String,
+    query: String,
+    maxLength: Int = 150,
+): String {
+    val cleanBody = body.replace(SEARCH_SNIPPET_WHITESPACE, " ").trim()
+    if (cleanBody.length <= maxLength) return cleanBody
+    val terms = SEARCH_SNIPPET_TERM_PATTERN
+        .findAll(query)
+        .map { it.value }
+        .filter { it.isNotBlank() }
+        .distinctBy { it.lowercase() }
+        .sortedByDescending { it.length }
+    val matchIndex = terms
+        .asSequence()
+        .map { cleanBody.indexOf(it, ignoreCase = true) }
+        .filter { it >= 0 }
+        .minOrNull()
+    val center = matchIndex ?: 0
+    val halfWindow = maxLength / 2
+    var start = (center - halfWindow).coerceAtLeast(0)
+    var end = (start + maxLength).coerceAtMost(cleanBody.length)
+    if (end - start < maxLength) {
+        start = (end - maxLength).coerceAtLeast(0)
+    }
+    if (start > 0) {
+        val nextSpace = cleanBody.indexOf(' ', start)
+        if (nextSpace in (start + 1)..(end - 20)) start = nextSpace + 1
+    }
+    if (end < cleanBody.length) {
+        val previousSpace = cleanBody.lastIndexOf(' ', end)
+        if (previousSpace in (start + 20)..(end - 1)) end = previousSpace
+    }
+    return buildString {
+        if (start > 0) append("...")
+        append(cleanBody.substring(start, end).trim())
+        if (end < cleanBody.length) append("...")
+    }
+}
+
+private val SEARCH_SNIPPET_WHITESPACE = Regex("\\s+")
+private val SEARCH_SNIPPET_TERM_PATTERN = Regex("[\\p{L}\\p{N}]+")
