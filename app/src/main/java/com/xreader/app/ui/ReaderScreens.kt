@@ -35,6 +35,8 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.OpenInBrowser
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
@@ -177,6 +179,7 @@ internal fun ReaderRoute(
         onToggleReadAloud = { visibleUnit, visibleLocator ->
             viewModel.toggleReadAloud(visibleUnit, visibleLocator)
         },
+        onStopReadAloud = viewModel::stopReadAloud,
         onReadAloudPrevious = viewModel::skipReadAloudPrevious,
         onReadAloudNext = viewModel::skipReadAloudNext,
         onClearReadAloudMessage = viewModel::clearReadAloudMessage
@@ -226,6 +229,7 @@ internal fun ReaderScreen(
     onPdfScrollAxis: (ReaderPdfScrollAxis) -> Unit,
     onBookAppearanceEnabled: (Boolean) -> Unit,
     onToggleReadAloud: (Int, String?) -> Unit,
+    onStopReadAloud: () -> Unit,
     onReadAloudPrevious: () -> Unit,
     onReadAloudNext: () -> Unit,
     onClearReadAloudMessage: () -> Unit,
@@ -300,7 +304,7 @@ internal fun ReaderScreen(
     }
 
     LaunchedEffect(state.readAloud.currentLocator) {
-        if (state.readAloud.playing) {
+        if (state.readAloud.playing || state.readAloud.paused) {
             state.readAloud.currentLocator?.let { pagingController.goToLocator(it) }
         }
     }
@@ -371,6 +375,7 @@ internal fun ReaderScreen(
                         pagingController.currentLocatorJson
                     )
                 },
+                onStopReadAloud = onStopReadAloud,
                 onReadAloudPrevious = onReadAloudPrevious,
                 onReadAloudNext = onReadAloudNext,
                 modifier = Modifier
@@ -596,6 +601,7 @@ internal fun ReaderBottomBar(
     onToggleFullScreen: () -> Unit,
     readAloud: ReadAloudState,
     onToggleReadAloud: () -> Unit,
+    onStopReadAloud: () -> Unit,
     onReadAloudPrevious: () -> Unit,
     onReadAloudNext: () -> Unit,
     modifier: Modifier = Modifier,
@@ -615,7 +621,7 @@ internal fun ReaderBottomBar(
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            if (readAloud.playing) {
+            if (readAloud.active) {
                 Text(
                     text = readAloudStatusText(readAloud),
                     style = MaterialTheme.typography.labelMedium,
@@ -631,7 +637,7 @@ internal fun ReaderBottomBar(
             ) {
                 ThemeToggleButton(theme = theme, onClick = onToggleTheme)
                 FullScreenToggleButton(fullScreen = fullScreen, onClick = onToggleFullScreen)
-                if (readAloud.playing) {
+                if (readAloud.active) {
                     TooltipIconButton(
                         label = "Previous read-aloud passage",
                         onClick = onReadAloudPrevious,
@@ -642,7 +648,16 @@ internal fun ReaderBottomBar(
                     }
                 }
                 ReadAloudButton(readAloud = readAloud, onClick = onToggleReadAloud)
-                if (readAloud.playing) {
+                if (readAloud.active) {
+                    TooltipIconButton(
+                        label = "Stop read aloud",
+                        onClick = onStopReadAloud,
+                        modifier = Modifier.size(44.dp)
+                    ) {
+                        Icon(Icons.Filled.Stop, contentDescription = null)
+                    }
+                }
+                if (readAloud.active) {
                     TooltipIconButton(
                         label = "Next read-aloud passage",
                         onClick = onReadAloudNext,
@@ -652,7 +667,7 @@ internal fun ReaderBottomBar(
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
                     }
                 }
-                if (!readAloud.playing) {
+                if (!readAloud.active) {
                     IconButton(onClick = onPrevious, modifier = Modifier.size(44.dp)) {
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous page")
                     }
@@ -668,7 +683,7 @@ internal fun ReaderBottomBar(
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                if (!readAloud.playing) {
+                if (!readAloud.active) {
                     IconButton(onClick = onNext, modifier = Modifier.size(44.dp)) {
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next page")
                     }
@@ -683,7 +698,8 @@ private fun ReadAloudButton(readAloud: ReadAloudState, onClick: () -> Unit) {
     IconButton(onClick = onClick, modifier = Modifier.size(44.dp)) {
         when {
             readAloud.initializing -> CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
-            readAloud.playing -> Icon(Icons.Filled.Stop, contentDescription = "Stop read aloud")
+            readAloud.playing -> Icon(Icons.Filled.Pause, contentDescription = "Pause read aloud")
+            readAloud.paused -> Icon(Icons.Filled.PlayArrow, contentDescription = "Resume read aloud")
             else -> Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = "Read aloud")
         }
     }

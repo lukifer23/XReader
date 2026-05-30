@@ -7,17 +7,25 @@ import org.junit.Test
 
 class ReadAloudEngineTest {
     @Test
-    fun audioFocusStopMessageOnlyStopsForHardInterruptions() {
+    fun audioFocusStopMessageOnlyStopsForPermanentLoss() {
         assertEquals(
             "Read aloud stopped because another app took audio focus.",
             readAloudAudioFocusStopMessage(AudioManager.AUDIOFOCUS_LOSS)
         )
-        assertEquals(
-            "Read aloud stopped because another app needed audio.",
-            readAloudAudioFocusStopMessage(AudioManager.AUDIOFOCUS_LOSS_TRANSIENT)
-        )
+        assertNull(readAloudAudioFocusStopMessage(AudioManager.AUDIOFOCUS_LOSS_TRANSIENT))
         assertNull(readAloudAudioFocusStopMessage(AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK))
         assertNull(readAloudAudioFocusStopMessage(AudioManager.AUDIOFOCUS_GAIN))
+    }
+
+    @Test
+    fun audioFocusPauseMessageOnlyPausesForTransientLoss() {
+        assertEquals(
+            "Read aloud paused because another app needed audio.",
+            readAloudAudioFocusPauseMessage(AudioManager.AUDIOFOCUS_LOSS_TRANSIENT)
+        )
+        assertNull(readAloudAudioFocusPauseMessage(AudioManager.AUDIOFOCUS_LOSS))
+        assertNull(readAloudAudioFocusPauseMessage(AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK))
+        assertNull(readAloudAudioFocusPauseMessage(AudioManager.AUDIOFOCUS_GAIN))
     }
 
     @Test

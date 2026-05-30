@@ -100,7 +100,7 @@ class ReaderViewModel(
                     )
                 }
                 val readAloud = container.readAloudEngine.state.value
-                if (readAloud.activeBookId == bookId && (readAloud.playing || readAloud.initializing)) {
+                if (readAloud.activeBookId == bookId && (readAloud.playing || readAloud.paused || readAloud.initializing)) {
                     container.readAloudEngine.setSpeechRate(settings.readAloudRate)
                     container.readAloudEngine.setVoice(settings.readAloudVoiceName)
                 }
@@ -125,7 +125,7 @@ class ReaderViewModel(
                             locator = spokenLocator
                         )
                     }
-                } else if (!relevantReadAloud.initializing) {
+                } else if (!relevantReadAloud.initializing && !relevantReadAloud.paused) {
                     lastReadAloudLocator = null
                 }
             }
@@ -388,8 +388,16 @@ class ReaderViewModel(
         visibleLocator: String? = null,
     ) {
         val readAloud = _uiState.value.readAloud
-        if (readAloud.playing || readAloud.initializing) {
+        if (readAloud.initializing) {
             container.readAloudEngine.stop(bookId)
+            return
+        }
+        if (readAloud.playing) {
+            container.readAloudEngine.pause(bookId)
+            return
+        }
+        if (readAloud.paused) {
+            container.readAloudEngine.resume(bookId)
             return
         }
         viewModelScope.launch {
@@ -418,6 +426,10 @@ class ReaderViewModel(
 
     fun clearReadAloudMessage() {
         container.readAloudEngine.clearMessage(bookId)
+    }
+
+    fun stopReadAloud() {
+        container.readAloudEngine.stop(bookId)
     }
 
     fun skipReadAloudPrevious() {

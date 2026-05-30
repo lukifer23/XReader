@@ -20,6 +20,19 @@ class ReadAloudControlsTest {
     }
 
     @Test
+    fun statusTextShowsPausedStateWithoutLosingPosition() {
+        val state = ReadAloudState(
+            paused = true,
+            currentChunk = 1,
+            totalChunks = 4,
+            currentHeading = "Chapter Two"
+        )
+
+        assertTrue(state.active)
+        assertEquals("Paused - 2/4 - Chapter Two", readAloudStatusText(state))
+    }
+
+    @Test
     fun progressTextHandlesMissingOrOutOfRangeProgress() {
         assertEquals(null, readAloudProgressText(ReadAloudState(totalChunks = 0)))
         assertEquals(
@@ -34,13 +47,15 @@ class ReadAloudControlsTest {
     }
 
     @Test
-    fun skipControlsOnlyEnableWhilePlayingInsideBounds() {
+    fun skipControlsOnlyEnableWhileActiveInsideBounds() {
         assertFalse(readAloudCanSkipPrevious(ReadAloudState(playing = false, currentChunk = 1, totalChunks = 3)))
         assertFalse(readAloudCanSkipPrevious(ReadAloudState(playing = true, currentChunk = 0, totalChunks = 3)))
         assertTrue(readAloudCanSkipPrevious(ReadAloudState(playing = true, currentChunk = 1, totalChunks = 3)))
+        assertTrue(readAloudCanSkipPrevious(ReadAloudState(paused = true, currentChunk = 1, totalChunks = 3)))
 
         assertFalse(readAloudCanSkipNext(ReadAloudState(playing = false, currentChunk = 1, totalChunks = 3)))
         assertFalse(readAloudCanSkipNext(ReadAloudState(playing = true, currentChunk = 2, totalChunks = 3)))
         assertTrue(readAloudCanSkipNext(ReadAloudState(playing = true, currentChunk = 1, totalChunks = 3)))
+        assertTrue(readAloudCanSkipNext(ReadAloudState(paused = true, currentChunk = 1, totalChunks = 3)))
     }
 }

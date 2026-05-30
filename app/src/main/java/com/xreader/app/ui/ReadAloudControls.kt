@@ -2,13 +2,17 @@ package com.xreader.app.ui
 
 import com.xreader.app.tts.ReadAloudState
 
+internal val ReadAloudState.active: Boolean
+    get() = playing || paused || initializing
+
 internal fun readAloudStatusText(readAloud: ReadAloudState): String {
     val progress = readAloudProgressText(readAloud)
     val heading = readAloud.currentHeading
         ?.replace(Regex("\\s+"), " ")
         ?.trim()
         ?.takeIf { it.isNotBlank() }
-    return listOfNotNull("Read aloud", progress, heading).joinToString(" - ")
+    val status = if (readAloud.paused) "Paused" else "Read aloud"
+    return listOfNotNull(status, progress, heading).joinToString(" - ")
 }
 
 internal fun readAloudProgressText(readAloud: ReadAloudState): String? {
@@ -19,7 +23,7 @@ internal fun readAloudProgressText(readAloud: ReadAloudState): String? {
 }
 
 internal fun readAloudCanSkipPrevious(readAloud: ReadAloudState): Boolean =
-    readAloud.playing && readAloud.currentChunk > 0
+    (readAloud.playing || readAloud.paused) && readAloud.currentChunk > 0
 
 internal fun readAloudCanSkipNext(readAloud: ReadAloudState): Boolean =
-    readAloud.playing && readAloud.totalChunks > 0 && readAloud.currentChunk < readAloud.totalChunks - 1
+    (readAloud.playing || readAloud.paused) && readAloud.totalChunks > 0 && readAloud.currentChunk < readAloud.totalChunks - 1
