@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -1218,6 +1219,11 @@ internal fun SearchResultsStrip(
     query: String,
     onOpenResult: (Long, String?) -> Unit,
 ) {
+    var expanded by remember(query, results) { mutableStateOf(false) }
+    val visibleResults = remember(results, expanded) {
+        visibleLibrarySearchResults(results, expanded)
+    }
+    val canExpand = results.size > COLLAPSED_LIBRARY_SEARCH_RESULT_COUNT
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -1226,55 +1232,108 @@ internal fun SearchResultsStrip(
         color = MaterialTheme.colorScheme.surfaceVariant
     ) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            val visibleResults = results.take(5)
-            val header = if (visibleResults.size < results.size) {
-                "Text matches ${visibleResults.size} of ${results.size}"
-            } else {
-                "Text matches"
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = librarySearchResultsHeader(visibleResults.size, results.size),
+                    style = MaterialTheme.typography.labelLarge
+                )
+                if (canExpand) {
+                    TextButton(onClick = { expanded = !expanded }) {
+                        Text(if (expanded) "Show fewer" else "Show more")
+                    }
+                }
             }
-            Text(header, style = MaterialTheme.typography.labelLarge)
-            visibleResults.forEach { result ->
-                val row = result.row
-                val snippet = searchResultSnippet(row.body, query)
-                val subtitle = listOf(row.heading, result.bookAuthor)
-                    .map { it.trim() }
-                    .filter { it.isNotBlank() && !it.equals(result.bookTitle, ignoreCase = true) }
-                    .distinct()
-                    .joinToString(" • ")
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onOpenResult(row.bookId, "$SEARCH_UNIT_LOCATOR_PREFIX${row.unitIndex}") },
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
+            if (expanded) {
+                LazyColumn(
+                    modifier = Modifier.heightIn(max = 360.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(
-                        text = result.bookTitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    if (subtitle.isNotBlank()) {
-                        Text(
-                            text = subtitle,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                    items(
+                        items = visibleResults,
+                        key = { "${it.row.bookId}:${it.row.unitIndex}:${it.row.id}" }
+                    ) { result ->
+                        LibrarySearchResultItem(
+                            result = result,
+                            query = query,
+                            onOpenResult = onOpenResult
                         )
                     }
-                    Text(
-                        text = snippet,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    visibleResults.forEach { result ->
+                        LibrarySearchResultItem(
+                            result = result,
+                            query = query,
+                            onOpenResult = onOpenResult
+                        )
+                    }
                 }
             }
         }
     }
 }
+
+@Composable
+private fun LibrarySearchResultItem(
+    result: LibrarySearchRow,
+    query: String,
+    onOpenResult: (Long, String?) -> Unit,
+) {
+    val row = result.row
+    val snippet = searchResultSnippet(row.body, query)
+    val subtitle = listOf(row.heading, result.bookAuthor)
+        .map { it.trim() }
+        .filter { it.isNotBlank() && !it.equals(result.bookTitle, ignoreCase = true) }
+        .distinct()
+        .joinToString(" • ")
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onOpenResult(row.bookId, "$SEARCH_UNIT_LOCATOR_PREFIX${row.unitIndex}") },
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Text(
+            text = result.bookTitle,
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        if (subtitle.isNotBlank()) {
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Text(
+            text = snippet,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+internal const val COLLAPSED_LIBRARY_SEARCH_RESULT_COUNT = 5
+
+internal fun <T> visibleLibrarySearchResults(results: List<T>, expanded: Boolean): List<T> =
+    if (expanded) results else results.take(COLLAPSED_LIBRARY_SEARCH_RESULT_COUNT)
+
+internal fun librarySearchResultsHeader(visibleCount: Int, totalCount: Int): String =
+    when {
+        totalCount <= 0 -> "Text matches"
+        visibleCount < totalCount -> "Text matches $visibleCount of $totalCount"
+        else -> "Text matches $totalCount"
+    }
 
 internal fun searchResultSnippet(
     body: String,

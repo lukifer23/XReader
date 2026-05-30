@@ -58,7 +58,7 @@ Initial public repository snapshot.
 - Local JSON export/import for library catalog metadata, favorites, finished state, reading progress, and reading sessions matched back to imported books by checksum.
 - Offline English dictionary backed by Princeton WordNet, with phrase, hyphenated-word, common plural, possessive, and inflected-form lookup.
 - Local full-text search with fallback from Readium search to the app search index.
-- Library full-text search results identify the source book and author, center snippets on the matched query, and support the keyboard search action.
+- Library full-text search results identify the source book and author, center snippets on the matched query, support the keyboard search action, and can expand beyond the compact preview without adding another search screen.
 - In-reader search dialog polish with keyboard search action, clear affordance, result counts, stale-result clearing, and cancellation of superseded searches.
 - Reading analytics for active time, WPM estimate, streaks, range-aware activity, and book/author/genre summaries.
 - Reader chrome and the Continue Reading card show conservative time-left estimates when WPM and word-count data are available.
