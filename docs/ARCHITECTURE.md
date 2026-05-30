@@ -54,7 +54,7 @@ The manual Settings repair action and the per-book metadata repair action reuse 
 
 Folder imports walk SAF document trees recursively, filter to EPUB, PDF, TXT, CBZ, FB2, `.fb2.zip`, RTF, and ODT documents, and summarize imported, duplicate, unsupported, and failed files. They do not require broad all-files access.
 
-Manual metadata edits can optionally apply the edited genre and series name to other books by the same author that match the old or new series name. The bulk cleanup runs in a Room transaction and keeps per-book fields such as title, year, and series index isolated to each book.
+Manual metadata edits can optionally apply shared author, genre, and series metadata to other books that match the same old or new author and series pair. The bulk cleanup runs in a Room transaction and keeps per-book fields such as title, year, and series index isolated to each book.
 
 ## Reader Flow
 
@@ -73,12 +73,14 @@ Manual metadata edits can optionally apply the edited genre and series name to o
 - calibrated tap-zone page navigation
 - hardware keyboard and DPAD page navigation without hijacking volume keys
 - chrome toggle
-- bounded return history for manual TOC, bookmark, note, and search-result jumps
+- bounded return history for manual TOC, bookmark, note, search-result, and find-next/find-previous jumps
 - selection actions for highlight, note, and dictionary lookup
 - scrollbar cleanup for nested Readium/WebView content
 - reader preferences for theme, typography, PDF fit, fullscreen, tap-zone sizing, page-turn animation behavior, and per-book appearance overrides
 
 Read aloud is handled by `ReadAloudEngine`, a small wrapper around Android `TextToSpeech`. `ReaderViewModel` builds speech chunks from the app's local search index, splits them into Readium-position-sized chunks by reading-order word progress, starts from the visible reader position or nearest earlier position, persists the spoken locator as playback advances, and keeps Compose limited to play/stop, speed, sleep timer, installed offline voice selection, and error feedback. Playback owns Android audio focus while speaking, releases it on stop/shutdown, and stops with a clear message when another app or system event takes focus.
+
+Reader search first tries Readium's publication search and falls back to XReader's local search index when needed. Search results carry an approximate reading unit so the compact find bar can jump to the previous or next match from the visible page, then keep the search active until the user closes it.
 
 ## Settings
 
@@ -135,7 +137,7 @@ Device checks should cover:
 
 - importing EPUB/PDF/TXT/CBZ/FB2
 - opening a real EPUB and PDF
-- page navigation by swipe, tap, hardware keyboard/DPAD keys, TOC, bookmark, search result, scrubber, and Back-based return after manual jumps
+- page navigation by swipe, tap, hardware keyboard/DPAD keys, TOC, bookmark, search result, find-next/find-previous, scrubber, and Back-based return after manual jumps
 - resume after process/app restart
 - adding/removing notes, highlights, and bookmarks
 - dictionary lookup from selected text

@@ -102,7 +102,8 @@ class PublicationService(
                                     ?: collection.metadata.title
                                     ?: locator.href.toString(),
                                 snippet = locator.searchSnippet(query),
-                                locatorJson = locator.toJSON().toString()
+                                locatorJson = locator.toJSON().toString(),
+                                unitIndex = locator.searchUnitIndex(openPublication.positions.size)
                             )
                         }
                     }
@@ -159,6 +160,18 @@ class PublicationService(
             .replace(Regex("\\s+"), " ")
             .trim()
             .ifBlank { title ?: query }
+    }
+
+    private fun Locator.searchUnitIndex(positionCount: Int): Int? {
+        if (positionCount <= 0) return null
+        val lastIndex = positionCount - 1
+        locations.position?.let { position ->
+            if (position > 0) return (position - 1).coerceIn(0, lastIndex)
+        }
+        locations.totalProgression?.let { progression ->
+            return (lastIndex * progression.coerceIn(0.0, 1.0)).roundToInt().coerceIn(0, lastIndex)
+        }
+        return null
     }
 
     @SuppressLint("UnclosedTrace")

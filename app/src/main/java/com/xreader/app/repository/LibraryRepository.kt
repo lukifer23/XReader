@@ -157,11 +157,12 @@ class LibraryRepository(
             )
             peers.forEach { peer ->
                 val peerUpdated = peer.copy(
+                    author = resolvedAuthor,
                     genre = resolvedGenre,
                     series = resolvedSeries,
                     updatedAt = now
                 )
-                if (peer.genre != resolvedGenre || peer.series != resolvedSeries) {
+                if (peer.author != resolvedAuthor || peer.genre != resolvedGenre || peer.series != resolvedSeries) {
                     bookDao.update(peerUpdated)
                     updatedBooks += 1
                 }

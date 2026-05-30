@@ -20,10 +20,10 @@ Implemented:
 - Library organization by books, authors, series, genres, years, custom collections, recent, unread, in progress, finished, and favorites, with group-aware ordering.
 - Persisted library sort and comfortable/compact density controls that apply in grouped and ungrouped views.
 - Compact book actions for custom collections, favorites, manual finished/not-finished state, metadata edits, and removal.
-- Metadata editing for title, author, year, genre, series, series order, and opt-in bulk series/genre cleanup.
+- Metadata editing for title, author, year, genre, series, series order, and opt-in bulk author/genre/series cleanup.
 - Covers, including EPUB guide/title-page cover references, metadata extraction, manual cover replacement, per-book health checks, and repair/reindex actions.
 - Resume from persisted Readium locators with percent read and progress state.
-- Swipe, calibrated tap-zone, hardware-key, TOC, search-result, bookmark, and scrubber navigation.
+- Swipe, calibrated tap-zone, hardware-key, TOC, search-result, find-next/find-previous, bookmark, and scrubber navigation.
 - Reader themes: light, dark, sepia, and OLED black.
 - Reader typography and behavior controls: spacing presets, font size, line height, margins, alignment, publisher styles, PDF fit, fullscreen, page animation toggle, tap-zone sizing, real Readium/CSS-resolvable font choices, and per-book appearance overrides.
 - Read aloud from the visible reading position through Android TextToSpeech using page-aligned local indexed book text, with persisted spoken position, speech speed, sleep timer, and installed offline voice selection.

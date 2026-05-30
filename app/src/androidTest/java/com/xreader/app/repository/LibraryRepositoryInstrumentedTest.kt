@@ -37,11 +37,11 @@ class LibraryRepositoryInstrumentedTest {
     }
 
     @Test
-    fun updateMetadataCanApplyGenreAndSeriesToMatchingSeriesBooks() = runBlocking {
+    fun updateMetadataCanApplySharedMetadataToMatchingSeriesBooks() = runBlocking {
         val firstId = db.books().insert(
             book(
                 title = "Red Rising",
-                author = "Pierce Brown",
+                author = "P. Brown",
                 series = "Red Rising Saga",
                 seriesIndex = 1.0,
                 genre = "Dystopian"
@@ -50,7 +50,7 @@ class LibraryRepositoryInstrumentedTest {
         val secondId = db.books().insert(
             book(
                 title = "Golden Son",
-                author = "Pierce Brown",
+                author = "P. Brown",
                 series = "Red Rising Saga",
                 seriesIndex = 2.0,
                 genre = "Adventure"
@@ -79,7 +79,7 @@ class LibraryRepositoryInstrumentedTest {
         val result = repository.updateMetadata(
             book = first,
             title = first.title,
-            author = first.author,
+            author = "Pierce Brown",
             year = first.year,
             genre = "Science Fiction",
             series = "Red Rising",
@@ -88,6 +88,10 @@ class LibraryRepositoryInstrumentedTest {
         )
 
         assertEquals(3, result.updatedBooks)
+        assertEquals("Pierce Brown", db.books().getBook(firstId)?.author)
+        assertEquals("Pierce Brown", db.books().getBook(secondId)?.author)
+        assertEquals("Pierce Brown", db.books().getBook(alreadyRenamedId)?.author)
+        assertEquals("Other Author", db.books().getBook(differentAuthorId)?.author)
         assertEquals("Science Fiction", db.books().getBook(firstId)?.genre)
         assertEquals("Science Fiction", db.books().getBook(secondId)?.genre)
         assertEquals("Science Fiction", db.books().getBook(alreadyRenamedId)?.genre)
@@ -96,6 +100,9 @@ class LibraryRepositoryInstrumentedTest {
         assertEquals("Red Rising", db.books().getBook(alreadyRenamedId)?.series)
         assertEquals("Fantasy", db.books().getBook(differentAuthorId)?.genre)
         assertEquals("Red Rising Saga", db.books().getBook(differentAuthorId)?.series)
+        assertEquals(2.0, db.books().getBook(secondId)?.seriesIndex)
+        assertEquals(2026, db.books().getBook(secondId)?.year)
+        assertEquals(listOf("Other Author", "Pierce Brown"), db.books().observeAuthors().first())
         assertEquals(listOf("Fantasy", "Science Fiction"), db.books().observeGenres().first())
         assertEquals(listOf("Red Rising", "Red Rising Saga"), db.books().observeSeries().first())
     }

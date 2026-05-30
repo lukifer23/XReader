@@ -129,7 +129,7 @@ internal fun BookMetadataDialog(
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Text(
-                            "Apply genre and series to matching books",
+                            "Apply shared metadata to matching books",
                             modifier = Modifier.weight(1f),
                             style = MaterialTheme.typography.bodyMedium
                         )

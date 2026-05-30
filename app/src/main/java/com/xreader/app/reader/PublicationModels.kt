@@ -35,6 +35,7 @@ data class ReaderSearchResult(
     val title: String,
     val snippet: String,
     val locatorJson: String,
+    val unitIndex: Int? = null,
 )
 
 sealed interface OpenPublication : AutoCloseable {

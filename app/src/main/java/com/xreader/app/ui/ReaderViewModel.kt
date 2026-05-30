@@ -53,6 +53,7 @@ data class ReaderUiState(
     val tableOfContentsLoading: Boolean = false,
     val searchQuery: String = "",
     val searchResults: List<ReaderSearchResult> = emptyList(),
+    val activeSearchResultIndex: Int? = null,
     val searchRunning: Boolean = false,
     val searchPerformed: Boolean = false,
     val dictionaryWord: String? = null,
@@ -410,6 +411,7 @@ class ReaderViewModel(
                 it.copy(
                     searchQuery = value,
                     searchResults = emptyList(),
+                    activeSearchResultIndex = null,
                     searchRunning = false,
                     searchPerformed = false
                 )
@@ -422,7 +424,14 @@ class ReaderViewModel(
         if (query.isBlank()) {
             searchJob?.cancel()
             searchJob = null
-            _uiState.update { it.copy(searchResults = emptyList(), searchRunning = false, searchPerformed = false) }
+            _uiState.update {
+                it.copy(
+                    searchResults = emptyList(),
+                    activeSearchResultIndex = null,
+                    searchRunning = false,
+                    searchPerformed = false
+                )
+            }
             return
         }
         searchJob?.cancel()
@@ -431,7 +440,12 @@ class ReaderViewModel(
             if (publication == null) {
                 _uiState.update { current ->
                     if (current.searchQuery.trim() == query) {
-                        current.copy(searchResults = emptyList(), searchRunning = false, searchPerformed = true)
+                        current.copy(
+                            searchResults = emptyList(),
+                            activeSearchResultIndex = null,
+                            searchRunning = false,
+                            searchPerformed = true
+                        )
                     } else {
                         current
                     }
@@ -448,7 +462,12 @@ class ReaderViewModel(
             }
             _uiState.update { current ->
                 if (current.searchQuery.trim() == query) {
-                    current.copy(searchResults = results, searchRunning = false, searchPerformed = true)
+                    current.copy(
+                        searchResults = results,
+                        activeSearchResultIndex = null,
+                        searchRunning = false,
+                        searchPerformed = true
+                    )
                 } else {
                     current
                 }
@@ -460,7 +479,20 @@ class ReaderViewModel(
         searchJob?.cancel()
         searchJob = null
         _uiState.update {
-            it.copy(searchQuery = "", searchResults = emptyList(), searchRunning = false, searchPerformed = false)
+            it.copy(
+                searchQuery = "",
+                searchResults = emptyList(),
+                activeSearchResultIndex = null,
+                searchRunning = false,
+                searchPerformed = false
+            )
+        }
+    }
+
+    fun setActiveSearchResult(index: Int?) {
+        _uiState.update { state ->
+            val safeIndex = index?.takeIf { it in state.searchResults.indices }
+            state.copy(activeSearchResultIndex = safeIndex)
         }
     }
 
@@ -761,7 +793,8 @@ class ReaderViewModel(
             ReaderSearchResult(
                 title = row.heading,
                 snippet = row.snippet(query),
-                locatorJson = publication.positions.getOrNull(positionIndex)?.toJSON()?.toString() ?: row.locator
+                locatorJson = publication.positions.getOrNull(positionIndex)?.toJSON()?.toString() ?: row.locator,
+                unitIndex = positionIndex
             )
         }
     }

@@ -41,7 +41,7 @@ internal fun ReaderSearchDialog(
     onQuery: (String) -> Unit,
     onRun: () -> Unit,
     onDismiss: () -> Unit,
-    onJump: (String) -> Unit,
+    onJump: (Int, String) -> Unit,
 ) {
     val focusRequester = remember { FocusRequester() }
     val canRun = state.searchQuery.isNotBlank() && !state.searchRunning
@@ -107,8 +107,8 @@ internal fun ReaderSearchDialog(
                             }
                         }
                         state.searchResults.isNotEmpty() -> {
-                            state.searchResults.forEach { result ->
-                                SearchResultRow(result = result, onJump = onJump)
+                            state.searchResults.forEachIndexed { index, result ->
+                                SearchResultRow(index = index, result = result, onJump = onJump)
                             }
                         }
                     }
@@ -143,13 +143,14 @@ internal fun readerSearchStatusText(
 
 @Composable
 private fun SearchResultRow(
+    index: Int,
     result: ReaderSearchResult,
-    onJump: (String) -> Unit,
+    onJump: (Int, String) -> Unit,
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onJump(result.locatorJson) }
+            .clickable { onJump(index, result.locatorJson) }
             .padding(vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {

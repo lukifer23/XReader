@@ -29,6 +29,7 @@ This is the working competitive map for XReader. It should drive implementation 
 | Private app library | Implemented with SAF file/folder copies and checksum duplicates. | Some apps scan folders or request broad file access. | Preserve SAF-only imports and private copies. |
 | Resume/progress | Implemented with Readium locators and sessions. | Table stakes; sync apps add cloud resume. | Keep testing across restarts and screen sizes. |
 | Notes/highlights/bookmarks | Implemented with local JSON backup/import and human-readable Markdown export. | Table stakes in strong readers. | Keep export local and useful outside the app. |
+| Reader search | Implemented with in-book search, result jumps, and a compact find bar for previous/next match navigation. | Search is table stakes, but modal-only search interrupts reading. | Keep it temporary, small, and tied to real indexed/Readium results. |
 | Library grouping/sorting | Implemented across books, authors, series, genres, years, custom collections, recent, unread, in progress, finished, and favorites; the existing sort control now applies to grouped views and in-group book order. | Strong readers support flexible organization; cluttered apps often expose too many parallel filters. | Keep the single compact control surface and make it behave predictably. |
 | Dictionary | Offline WordNet implemented with common possessive, plural, irregular plural, and inflected-form lookup. | Many rely on external dictionaries or online lookup. | Strong differentiator; keep improving morphology/phrase handling. |
 | Search | Local full-text index plus Readium fallback. | Common, but quality varies by format. | Keep hardening PDF/EPUB extraction. |
@@ -37,7 +38,7 @@ This is the working competitive map for XReader. It should drive implementation 
 | OPDS/catalogs | Not implemented. | Moon+, Librera, FBReader, PocketBook support OPDS. | Good optional later feature. |
 | PDF reflow/crop | PDF fit implemented; reflow/crop not implemented. | PocketBook/ReadEra have PDF comfort features. | Evaluate after reader polish. |
 | Custom user fonts | Built-in family choices, spacing presets, and per-book appearance overrides implemented; user font import not implemented. | FBReader/Moon+ support user fonts. | User font import is a later reader-polish candidate. |
-| Bulk metadata cleanup | Matching-series genre/series cleanup implemented in the metadata editor. | Metadata quality is a recurring library pain. | Continue with broader bulk tools later. |
+| Bulk metadata cleanup | Matching-series author/genre/series cleanup implemented in the metadata editor. | Metadata quality is a recurring library pain. | Continue with broader bulk tools later. |
 
 ## High-Impact Gaps
 
@@ -51,7 +52,8 @@ The research points to several areas that matter more than raw feature count:
 
 ## Patches From This Research
 
-- Opt-in matching-series metadata cleanup. From the metadata editor, changing a book's genre or series can now apply those two fields to other books by the same author that match the old or new series name. The operation is atomic and keeps per-book fields such as title, year, and series index untouched.
+- Opt-in matching-series metadata cleanup. From the metadata editor, changing shared author, genre, or series values can apply them to other books that match the old or new author and series pair. The operation is atomic and keeps per-book fields such as title, year, and series index untouched.
+- Reader find bar. After an in-book search, XReader keeps a compact temporary find bar with match count plus previous/next controls, using Readium search positions or the local search index fallback instead of a placeholder overlay.
 - Range-aware reading stats. The stats screen now supports 7-day, 30-day, 13-week, and all-time ranges, with grouped analytics and activity buckets recalculated for the selected period.
 - Local reading stats export. The stats screen can export all analytics ranges to CSV or JSON through Android's document picker, keeping the workflow local and user-controlled.
 - Per-book reader appearance. Books can keep their own font, spacing, alignment, publisher-style, and PDF fit choices without changing global reading behavior.

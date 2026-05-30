@@ -136,6 +136,7 @@ internal fun ReaderRoute(
         onSearchQuery = viewModel::setSearchQuery,
         onRunSearch = viewModel::runSearch,
         onClearSearch = viewModel::clearSearch,
+        onActiveSearchResult = viewModel::setActiveSearchResult,
         onLookup = viewModel::lookupWord,
         onSelectedNote = viewModel::openSelectedNote,
         onSelectedHighlight = { locator, quote -> viewModel.addSelectedHighlight(locator, quote) },
@@ -180,6 +181,7 @@ internal fun ReaderScreen(
     onSearchQuery: (String) -> Unit,
     onRunSearch: () -> Unit,
     onClearSearch: () -> Unit,
+    onActiveSearchResult: (Int?) -> Unit,
     onLookup: (String) -> Unit,
     onSelectedNote: (org.readium.r2.shared.publication.Locator, String) -> Unit,
     onSelectedHighlight: (org.readium.r2.shared.publication.Locator, String) -> Unit,
@@ -252,6 +254,11 @@ internal fun ReaderScreen(
         pagingController.goToLocator(locator)
         return true
     }
+    fun jumpToSearchResult(index: Int) {
+        val result = state.searchResults.getOrNull(index) ?: return
+        onActiveSearchResult(index)
+        jumpWithReturn(result.locatorJson)
+    }
 
     ReaderSystemBars(
         activity = activity,
@@ -261,10 +268,7 @@ internal fun ReaderScreen(
 
     BackHandler {
         when {
-            searchOpen -> {
-                onClearSearch()
-                searchOpen = false
-            }
+            searchOpen -> searchOpen = false
             editingAnnotation != null -> editingAnnotation = null
             navigationOpen -> navigationOpen = false
             readerSettingsOpen -> readerSettingsOpen = false
@@ -272,6 +276,7 @@ internal fun ReaderScreen(
             state.noteDraftOpen -> onCloseNote()
             state.chromeVisible -> onToggleChrome()
             returnHistory.isNotEmpty() -> goBackWithinBook()
+            state.searchResults.isNotEmpty() && state.searchQuery.isNotBlank() -> onClearSearch()
             else -> onBack()
         }
     }
@@ -353,6 +358,26 @@ internal fun ReaderScreen(
                     .zIndex(2f)
             )
         }
+
+        val findNavigation = readerSearchNavigationState(
+            currentUnit = pagingController.currentUnit,
+            results = state.searchResults,
+            activeIndex = state.activeSearchResultIndex
+        )
+        if (!searchOpen && findNavigation != null && state.searchQuery.isNotBlank()) {
+            ReaderFindBar(
+                query = state.searchQuery.trim(),
+                navigation = findNavigation,
+                onPrevious = { jumpToSearchResult(findNavigation.previousIndex) },
+                onNext = { jumpToSearchResult(findNavigation.nextIndex) },
+                onOpenSearch = { searchOpen = true },
+                onClose = onClearSearch,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = if (state.chromeVisible) 86.dp else 12.dp)
+                    .zIndex(3f)
+            )
+        }
     }
 
     if (searchOpen) {
@@ -360,11 +385,9 @@ internal fun ReaderScreen(
             state = state,
             onQuery = onSearchQuery,
             onRun = onRunSearch,
-            onDismiss = {
-                onClearSearch()
-                searchOpen = false
-            },
-            onJump = { locator ->
+            onDismiss = { searchOpen = false },
+            onJump = { index, locator ->
+                onActiveSearchResult(index)
                 jumpWithReturn(locator)
                 searchOpen = false
             }
