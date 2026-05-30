@@ -310,6 +310,60 @@ internal fun BookListItem.isLibraryInProgress(): Boolean =
 internal fun BookListItem.isLibraryUnread(): Boolean =
     !isLibraryFinished() && rawLibraryProgress() <= 0.01
 
+internal data class SeriesNextRecommendation(
+    val series: String,
+    val previous: BookListItem,
+    val next: BookListItem,
+)
+
+internal fun recommendNextSeriesBook(books: List<BookListItem>): SeriesNextRecommendation? =
+    books
+        .asSequence()
+        .filter { !it.book.series.isNullOrBlank() }
+        .groupBy { it.book.series.orEmpty().normalizedSeriesKey() }
+        .values
+        .asSequence()
+        .filter { it.size > 1 }
+        .flatMap { items ->
+            val sortedItems = items.sortedWith(seriesReadingOrderComparator)
+            sortedItems.asSequence().mapIndexedNotNull { index, item ->
+                if (!item.isLibraryFinished()) {
+                    null
+                } else {
+                    sortedItems
+                        .drop(index + 1)
+                        .firstOrNull { !it.isLibraryFinished() }
+                        ?.let { next ->
+                            SeriesNextRecommendation(
+                                series = item.book.series.orEmpty().trim(),
+                                previous = item,
+                                next = next
+                            )
+                        }
+                }
+            }
+        }
+        .sortedWith(
+            compareByDescending<SeriesNextRecommendation> { it.previous.libraryRecentTimestamp() }
+                .thenBy { it.series.lowercase(Locale.US) }
+                .thenBy { it.next.book.seriesIndex ?: Double.MAX_VALUE }
+                .thenBy { it.next.book.year ?: Int.MAX_VALUE }
+                .thenBy { it.next.book.sortTitle.lowercase(Locale.US) }
+                .thenBy { it.next.book.id }
+        )
+        .firstOrNull()
+
+private val seriesReadingOrderComparator: Comparator<BookListItem> =
+    compareBy<BookListItem> { it.book.seriesIndex ?: Double.MAX_VALUE }
+        .thenBy { it.book.year ?: Int.MAX_VALUE }
+        .thenBy { it.book.sortTitle.lowercase(Locale.US) }
+        .thenBy { it.book.id }
+
+private fun String.normalizedSeriesKey(): String =
+    trim()
+        .replace(Regex("\\s+"), " ")
+        .lowercase(Locale.US)
+
 internal fun LibraryGroup.label(): String =
     name.lowercase().split('_').joinToString(" ") { it.replaceFirstChar(Char::titlecase) }
 

@@ -56,6 +56,8 @@ Folder imports walk SAF document trees recursively, filter to EPUB, PDF, TXT, CB
 
 Manual metadata edits can optionally apply shared author, genre, and series metadata to other books that match the same old or new author and series pair. The bulk cleanup runs in a Room transaction and keeps per-book fields such as title, year, and series index isolated to each book.
 
+The Books home derives series continuation recommendations from the already loaded Room library state. It groups books by normalized series name, orders each series by series index with year/title fallback, and surfaces the next unfinished title after the most recently finished series book as a single compact action card.
+
 ## Reader Flow
 
 `PublicationService` opens stored EPUB/PDF publications with Readium and exposes:

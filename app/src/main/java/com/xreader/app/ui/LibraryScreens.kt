@@ -355,6 +355,14 @@ internal fun LibraryScreen(
             null
         }
     }
+    val nextSeriesItem = remember(state.allBooks, state.group, state.query, continueItem) {
+        if (state.group == LibraryGroup.BOOKS && state.query.isBlank()) {
+            recommendNextSeriesBook(state.allBooks)
+                ?.takeUnless { it.next.book.id == continueItem?.book?.id }
+        } else {
+            null
+        }
+    }
     val displayBooks = remember(state.books, state.group, continueItem) {
         if (state.group == LibraryGroup.BOOKS && continueItem != null) {
             state.books.filterNot { it.book.id == continueItem.book.id }
@@ -418,6 +426,14 @@ internal fun LibraryScreen(
                         ContinueReadingCard(
                             item = current,
                             onOpen = { onOpenBook(current.book.id) }
+                        )
+                    }
+                }
+                nextSeriesItem?.let { recommendation ->
+                    item {
+                        SeriesNextCard(
+                            recommendation = recommendation,
+                            onOpen = { onOpenBook(recommendation.next.book.id) }
                         )
                     }
                 }
@@ -701,6 +717,66 @@ internal fun ContinueReadingCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+internal fun SeriesNextCard(
+    recommendation: SeriesNextRecommendation,
+    onOpen: () -> Unit,
+) {
+    val item = recommendation.next
+    val progress = item.displayLibraryProgress()
+    val position = item.book.seriesIndex?.let { index ->
+        val wholeNumber = index % 1.0 == 0.0
+        if (wholeNumber) "Book ${index.toInt()}" else "Book $index"
+    }
+    val readingState = when {
+        item.isLibraryInProgress() -> "${(progress * 100).roundToInt()}% read"
+        item.isLibraryFinished() -> "Finished"
+        else -> "Unread"
+    }
+    Card(
+        onClick = onOpen,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            BookCoverTile(item.book, width = 48.dp, height = 68.dp)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = "Up next in ${recommendation.series}",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    item.book.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    item.book.author,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    position?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall)
+                    }
+                    Text(readingState, style = MaterialTheme.typography.bodySmall)
+                    Text(bookFormatLabel(item.book), style = MaterialTheme.typography.bodySmall)
+                }
             }
             Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }

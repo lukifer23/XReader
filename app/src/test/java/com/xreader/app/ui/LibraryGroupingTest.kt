@@ -5,6 +5,7 @@ import com.xreader.app.data.BookFormat
 import com.xreader.app.data.ReadingStateEntity
 import com.xreader.app.settings.LibrarySort
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class LibraryGroupingTest {
@@ -136,6 +137,47 @@ class LibraryGroupingTest {
         assertEquals(listOf("Dune", "Red Rising"), grouped.getValue("Sci-Fi").map { it.book.title })
     }
 
+    @Test
+    fun nextSeriesRecommendationUsesMostRecentFinishedAnchor() {
+        val recommendation = recommendNextSeriesBook(
+            listOf(
+                item(title = "First", series = "Saga", seriesIndex = 1.0, progress = 1.0, lastReadAt = 10L),
+                item(title = "Second", series = "Saga", seriesIndex = 2.0, progress = 1.0, lastReadAt = 30L),
+                item(title = "Third", series = "Saga", seriesIndex = 3.0, progress = 0.0),
+                item(title = "Other", series = "Other Saga", seriesIndex = 2.0, progress = 0.0)
+            )
+        )
+
+        assertEquals("Saga", recommendation?.series)
+        assertEquals("Second", recommendation?.previous?.book?.title)
+        assertEquals("Third", recommendation?.next?.book?.title)
+    }
+
+    @Test
+    fun nextSeriesRecommendationFallsBackToYearAndTitleWhenIndexesAreMissing() {
+        val recommendation = recommendNextSeriesBook(
+            listOf(
+                item(title = "Dawn", series = "Loose Saga", year = 2001, progress = 1.0, lastReadAt = 20L),
+                item(title = "Zenith", series = "Loose Saga", year = 2003, progress = 0.0),
+                item(title = "Apex", series = "Loose Saga", year = 2002, progress = 0.0)
+            )
+        )
+
+        assertEquals("Apex", recommendation?.next?.book?.title)
+    }
+
+    @Test
+    fun nextSeriesRecommendationIsMissingWithoutFinishedEarlierBook() {
+        assertNull(
+            recommendNextSeriesBook(
+                listOf(
+                    item(title = "First", series = "Saga", seriesIndex = 1.0, progress = 0.8, lastReadAt = 30L),
+                    item(title = "Second", series = "Saga", seriesIndex = 2.0, progress = 0.0)
+                )
+            )
+        )
+    }
+
     private fun item(
         title: String,
         author: String = "Author",
@@ -145,6 +187,7 @@ class LibraryGroupingTest {
         year: Int? = null,
         progress: Double? = null,
         lastReadAt: Long? = null,
+        finished: Boolean = false,
         collections: List<CollectionUiItem> = emptyList(),
     ): BookListItem =
         BookListItem(
@@ -164,6 +207,7 @@ class LibraryGroupingTest {
                 checksum = "checksum-$title",
                 fileSizeBytes = 1024L,
                 wordCount = 10_000,
+                finished = finished,
                 importedAt = 1_700_000_000_000L,
                 updatedAt = 1_700_000_000_000L
             ),

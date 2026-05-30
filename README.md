@@ -18,6 +18,7 @@ Implemented:
 - ODT import converted into EPUB with OpenDocument metadata, headings, paragraphs, lists, tables, and searchable text extraction.
 - Private app-library imports from selected files or SAF folders, with checksum duplicate detection.
 - Library organization by books, authors, series, genres, years, custom collections, recent, unread, in progress, finished, and favorites, with group-aware ordering.
+- Home-screen series continuation that suggests the next unfinished title after the most recently finished book in a series.
 - Persisted library sort and comfortable/compact density controls that apply in grouped and ungrouped views.
 - Compact book actions for custom collections, favorites, manual finished/not-finished state, metadata edits, and removal.
 - Metadata editing for title, author, year, genre, series, series order, and opt-in bulk author/genre/series cleanup.
