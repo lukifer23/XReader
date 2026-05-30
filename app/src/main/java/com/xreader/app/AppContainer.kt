@@ -9,6 +9,7 @@ import com.xreader.app.analytics.AnalyticsRepository
 import com.xreader.app.data.XReaderDatabase
 import com.xreader.app.dictionary.DictionaryRepository
 import com.xreader.app.importer.ImportService
+import com.xreader.app.opds.OpdsCatalogService
 import com.xreader.app.readium.ReadiumRuntime
 import com.xreader.app.reader.PublicationService
 import com.xreader.app.repository.AnnotationBackupService
@@ -23,6 +24,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 
 @SuppressLint("LogNotTimber")
@@ -47,6 +49,9 @@ class AppContainer(
 
     val libraryRepository: LibraryRepository by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         LibraryRepository(database, importService)
+    }
+    val opdsCatalogService: OpdsCatalogService by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        OpdsCatalogService(importService, File(appContext.cacheDir, "opds"))
     }
     val readingRepository: ReadingRepository by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         ReadingRepository(database.reading())

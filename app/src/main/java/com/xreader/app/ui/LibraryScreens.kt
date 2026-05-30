@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ViewAgenda
@@ -109,6 +110,7 @@ internal fun LibraryRoute(
     val context = LocalContext.current
     var importMenuOpen by remember { mutableStateOf(false) }
     var importDialogOpen by remember { mutableStateOf(false) }
+    var opdsDialogOpen by remember { mutableStateOf(false) }
     var exportTarget by remember { mutableStateOf<BookEntity?>(null) }
     val supportedBookMimeTypes = remember {
         arrayOf(
@@ -182,6 +184,7 @@ internal fun LibraryRoute(
         when (action) {
             LibraryImportAction.FILES -> openFileImportPicker()
             LibraryImportAction.FOLDER -> openFolderImportPicker()
+            LibraryImportAction.CATALOG -> opdsDialogOpen = true
         }
     }
     fun exportBook(book: BookEntity) {
@@ -274,11 +277,23 @@ internal fun LibraryRoute(
             onAction = ::runImportAction
         )
     }
+    if (opdsDialogOpen) {
+        OpdsCatalogDialog(
+            state = state.opdsCatalog,
+            busy = state.importing,
+            onUrlChange = viewModel::setOpdsCatalogUrl,
+            onLoad = viewModel::loadOpdsCatalog,
+            onOpenLink = viewModel::openOpdsCatalogLink,
+            onImportEntry = viewModel::importOpdsEntry,
+            onDismiss = { opdsDialogOpen = false }
+        )
+    }
 }
 
 internal enum class LibraryImportAction {
     FILES,
     FOLDER,
+    CATALOG,
 }
 
 @Composable
@@ -297,6 +312,12 @@ private fun LibraryImportActionMenuItems(
         leadingIcon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null) },
         enabled = enabled,
         onClick = { onAction(LibraryImportAction.FOLDER) }
+    )
+    DropdownMenuItem(
+        text = { Text("Catalog URL") },
+        leadingIcon = { Icon(Icons.Filled.Public, contentDescription = null) },
+        enabled = enabled,
+        onClick = { onAction(LibraryImportAction.CATALOG) }
     )
 }
 
@@ -330,6 +351,11 @@ internal fun LibraryImportDialog(
                         label = "Import folder",
                         icon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null) },
                         onClick = { onAction(LibraryImportAction.FOLDER) }
+                    )
+                    LibraryImportActionButton(
+                        label = "Catalog URL",
+                        icon = { Icon(Icons.Filled.Public, contentDescription = null) },
+                        onClick = { onAction(LibraryImportAction.CATALOG) }
                     )
                 }
             }

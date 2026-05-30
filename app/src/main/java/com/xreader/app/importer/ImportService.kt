@@ -99,23 +99,36 @@ class ImportService(
     suspend fun import(uri: Uri): ImportResult = withContext(Dispatchers.IO) {
         val displayName = context.contentResolver.displayName(uri)
         val mimeType = context.contentResolver.getType(uri).orEmpty()
-        val sourceExtension = sourceExtension(displayName, mimeType)
-        require(sourceExtension in SUPPORTED_BOOK_EXTENSIONS) {
-            "Unsupported file type: .$sourceExtension"
-        }
-
         val safeName = displayName.replace(Regex("""[^\w.\- ]"""), "_")
         val tmp = File(context.cacheDir, "import-${System.nanoTime()}-$safeName")
         context.contentResolver.openInputStream(uri).use { input ->
             requireNotNull(input) { "Could not open selected file." }
             tmp.outputStream().buffered().use { output -> input.copyTo(output) }
         }
+        importCachedFile(tmp, displayName, mimeType)
+    }
+
+    suspend fun importFile(file: File, displayName: String = file.name, mimeType: String = ""): ImportResult = withContext(Dispatchers.IO) {
+        require(file.isFile) { "Could not open selected file." }
+        val safeName = displayName.replace(Regex("""[^\w.\- ]"""), "_")
+        val tmp = File(context.cacheDir, "import-${System.nanoTime()}-$safeName")
+        file.inputStream().buffered().use { input ->
+            tmp.outputStream().buffered().use { output -> input.copyTo(output) }
+        }
+        importCachedFile(tmp, displayName, mimeType)
+    }
+
+    private suspend fun importCachedFile(tmp: File, displayName: String, mimeType: String): ImportResult {
+        val sourceExtension = sourceExtension(displayName, mimeType)
+        require(sourceExtension in SUPPORTED_BOOK_EXTENSIONS) {
+            "Unsupported file type: .$sourceExtension"
+        }
 
         val checksum = sha256(tmp)
         val existingBook = bookDao.getByChecksum(checksum)
         if (existingBook != null && File(context.filesDir, existingBook.filePath).exists()) {
             tmp.delete()
-            return@withContext ImportResult(existingBook.id, duplicate = true)
+            return ImportResult(existingBook.id, duplicate = true)
         }
 
         val now = clock.millis()
@@ -135,7 +148,7 @@ class ImportService(
             ?: File(libraryDir, "$checksum.$storedExtension")
         val stagedFile = File(stagingDir, "$checksum-${System.nanoTime()}.$storedExtension")
 
-        try {
+        return try {
             val convertedPageCount = when (effectiveSourceExtension) {
                 "txt" -> {
                     txtConverter.convert(tmp, stagedFile, sourceTitle(displayName, effectiveSourceExtension))

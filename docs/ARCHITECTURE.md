@@ -40,8 +40,8 @@ Search uses a normal table plus an FTS table. Book deletion removes search rows 
 
 ## Import Flow
 
-1. Android Storage Access Framework returns one or more document URIs, or a folder tree URI.
-2. `ImportService` copies the selected file to a temporary app cache file.
+1. Android Storage Access Framework returns one or more document URIs or a folder tree URI; optional OPDS import fetches an Atom catalog URL and downloads a supported open-access acquisition link.
+2. `ImportService` copies the selected or downloaded file to a temporary app cache file.
 3. The file checksum is calculated to prevent duplicate imports. If the checksum already exists but the app-private stored file is missing, import becomes an in-place recovery path for that existing book id rather than a duplicate no-op.
 4. TXT files are converted into a minimal EPUB package, CBZ files are converted into fixed-layout EPUB packages, FB2 / `.fb2.zip` files are converted into EPUB packages, RTF files are converted into EPUB packages with extracted text and basic metadata, DRM-free legacy MOBI/PalmDOC files are converted into EPUB packages with decompressed text and basic metadata, ODT/DOCX files are converted into EPUB packages with document metadata and reading-order text, standalone HTML/HTM/XHTML files are converted into EPUB packages with page metadata and readable block structure, MHTML/MHT web archives are converted into EPUB packages with decoded HTML roots and embedded image assets, and Markdown files are converted into EPUB packages with front matter metadata and readable block structure.
 5. EPUB/PDF files and converted EPUB outputs are copied into app-owned private library storage.
@@ -56,6 +56,8 @@ The manual Settings repair action and the per-book metadata repair action reuse 
 Folder imports walk SAF document trees recursively, filter to EPUB, PDF, TXT, CBZ, FB2, `.fb2.zip`, RTF, MOBI, PRC, ODT, DOCX, HTML, HTM, XHTML, MHTML, MHT, MD, and Markdown documents, and summarize imported, restored, duplicate, unsupported, and failed files. They do not require broad all-files access.
 
 Single-book imports and duplicate re-imports carry the target book id back to the library UI, where the snackbar exposes a contextual `Open` action. Batch and folder imports keep summary-only feedback unless the completed import set contains exactly one actionable book.
+
+OPDS support stays inside the existing import dialog. `OpdsCatalogService` fetches HTTP/HTTPS Atom feeds, follows feed navigation links, filters to supported open-access/enclosure acquisition links, bounds feed and book downloads, and hands the downloaded file to `ImportService.importFile` so checksum identity, conversion, metadata extraction, covers, search indexing, and private-library storage remain identical to SAF imports. It does not add account, DRM, or cloud-sync behavior.
 
 Book rows expose a save-copy action that launches Android's `CreateDocument` picker and streams the app-private stored reader file to the selected URI. Converted imports such as TXT, CBZ, FB2, RTF, MOBI, ODT, DOCX, HTML, MHTML, and Markdown export as the actual EPUB file XReader stores for reading.
 

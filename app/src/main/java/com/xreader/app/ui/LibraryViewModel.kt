@@ -11,6 +11,10 @@ import com.xreader.app.data.BookEntity
 import com.xreader.app.data.CollectionEntity
 import com.xreader.app.data.LibrarySearchRow
 import com.xreader.app.data.ReadingStateEntity
+import com.xreader.app.importer.ImportService
+import com.xreader.app.opds.OpdsEntry
+import com.xreader.app.opds.OpdsFeed
+import com.xreader.app.opds.OpdsLink
 import com.xreader.app.settings.LibraryDensity
 import com.xreader.app.settings.LibrarySort
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -79,6 +83,15 @@ data class LibraryUiState(
     val authorOptions: List<String> = emptyList(),
     val genreOptions: List<String> = emptyList(),
     val seriesOptions: List<String> = emptyList(),
+    val opdsCatalog: OpdsCatalogUiState = OpdsCatalogUiState(),
+)
+
+data class OpdsCatalogUiState(
+    val url: String = "",
+    val loading: Boolean = false,
+    val importingLink: String? = null,
+    val feed: OpdsFeed? = null,
+    val error: String? = null,
 )
 
 @SuppressLint("LogNotTimber")
@@ -92,6 +105,7 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     private val searchResults = MutableStateFlow<List<LibrarySearchRow>>(emptyList())
     private val bookHealth = MutableStateFlow<Map<Long, BookHealthUiState>>(emptyMap())
     private val repairingBookIds = MutableStateFlow<Set<Long>>(emptySet())
+    private val opdsCatalog = MutableStateFlow(OpdsCatalogUiState())
 
     private val queriedBooks = query.flatMapLatest { container.libraryRepository.observeBooks(it) }
     private val allBooks = container.libraryRepository.observeBooks("")
@@ -122,6 +136,7 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         val importing: Boolean,
         val message: LibraryMessage?,
         val searchResults: List<LibrarySearchRow>,
+        val opdsCatalog: OpdsCatalogUiState,
     )
 
     private val selectionState = combine(query, group, container.settingsRepository.librarySettings) {
@@ -131,12 +146,13 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         LibrarySelectionState(currentQuery, currentGroup, librarySettings.sort, librarySettings.density)
     }
 
-    private val chromeState = combine(selectionState, importing, message, searchResults) {
+    private val chromeState = combine(selectionState, importing, message, searchResults, opdsCatalog) {
             selection,
             currentImporting,
             currentMessage,
-            currentResults ->
-        LibraryChromeState(selection, currentImporting, currentMessage, currentResults)
+            currentResults,
+            currentCatalog ->
+        LibraryChromeState(selection, currentImporting, currentMessage, currentResults, currentCatalog)
     }
 
     private data class LibraryBooksState(
@@ -212,7 +228,8 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
                 repairingBookIds = support.repairingBookIds,
                 authorOptions = support.metadataOptions.authorOptions,
                 genreOptions = support.metadataOptions.genreOptions,
-                seriesOptions = support.metadataOptions.seriesOptions
+                seriesOptions = support.metadataOptions.seriesOptions,
+                opdsCatalog = chrome.opdsCatalog
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState())
 
@@ -306,6 +323,75 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
                     }
             } finally {
                 importing.value = false
+            }
+        }
+    }
+
+    fun setOpdsCatalogUrl(value: String) {
+        opdsCatalog.value = opdsCatalog.value.copy(url = value, error = null)
+    }
+
+    fun loadOpdsCatalog(url: String = opdsCatalog.value.url) {
+        val trimmed = url.trim()
+        if (trimmed.isBlank()) {
+            opdsCatalog.value = opdsCatalog.value.copy(error = "Enter a catalog URL.")
+            return
+        }
+        viewModelScope.launch {
+            opdsCatalog.value = opdsCatalog.value.copy(url = trimmed, loading = true, error = null)
+            runCatching { container.opdsCatalogService.load(trimmed) }
+                .onSuccess { feed ->
+                    opdsCatalog.value = opdsCatalog.value.copy(
+                        url = feed.url,
+                        loading = false,
+                        feed = feed,
+                        error = null
+                    )
+                }
+                .onFailure { error ->
+                    Log.e("XReader", "OPDS catalog load failed for $trimmed", error)
+                    opdsCatalog.value = opdsCatalog.value.copy(
+                        loading = false,
+                        error = error.message ?: "Catalog load failed"
+                    )
+                }
+        }
+    }
+
+    fun openOpdsCatalogLink(link: OpdsLink) {
+        setOpdsCatalogUrl(link.href)
+        loadOpdsCatalog(link.href)
+    }
+
+    fun importOpdsEntry(entry: OpdsEntry) {
+        val link = entry.acquisitionLinks.preferredCatalogDownload()
+        if (link == null) {
+            opdsCatalog.value = opdsCatalog.value.copy(error = "No supported download link for this book.")
+            return
+        }
+        importOpdsLink(link)
+    }
+
+    private fun importOpdsLink(link: OpdsLink) {
+        viewModelScope.launch {
+            importing.value = true
+            opdsCatalog.value = opdsCatalog.value.copy(importingLink = link.href, error = null)
+            try {
+                runCatching { container.opdsCatalogService.importLink(link) }
+                    .onSuccess { result ->
+                        postMessage(
+                            text = result.summaryMessage(),
+                            actionLabel = "Open",
+                            openBookId = result.bookId
+                        )
+                    }
+                    .onFailure { error ->
+                        Log.e("XReader", "OPDS import failed for ${link.href}", error)
+                        opdsCatalog.value = opdsCatalog.value.copy(error = error.message ?: "Catalog import failed")
+                    }
+            } finally {
+                importing.value = false
+                opdsCatalog.value = opdsCatalog.value.copy(importingLink = null)
             }
         }
     }
@@ -495,6 +581,13 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     private fun com.xreader.app.importer.ImportService.ImportBatchResult.openActionLabel(): String? =
         if (primaryBookId != null) "Open" else null
 
+    private fun ImportService.ImportResult.summaryMessage(): String =
+        when {
+            duplicate -> "Already in library"
+            recovered -> "Restored book"
+            else -> "Imported book"
+        }
+
     private fun com.xreader.app.importer.ImportService.ImportBatchResult.summaryMessage(): String {
         if (scanned == 0) return "No supported book files found"
         if (imported == 1 && duplicates == 0 && unsupported == 0 && failed == 0) return "Imported book"
@@ -536,3 +629,14 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
             }
     }
 }
+
+private fun List<OpdsLink>.preferredCatalogDownload(): OpdsLink? =
+    minWithOrNull(
+        compareBy<OpdsLink> { link ->
+            when (link.type?.substringBefore(';')?.lowercase(Locale.US)) {
+                "application/epub+zip" -> 0
+                "application/pdf" -> 1
+                else -> 2
+            }
+        }.thenBy { it.displayTitle.lowercase(Locale.US) }
+    )

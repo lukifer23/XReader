@@ -20,6 +20,7 @@ Initial public repository snapshot.
 - Markdown import converted into EPUB packages with front matter metadata, headings, lists, blockquotes, code blocks, and searchable text extraction.
 - SAF-based private library imports.
 - Batch file and folder import through Android's Storage Access Framework.
+- Optional OPDS catalog URL import with Atom feed browsing, navigation links, supported open-access acquisition downloads, and private-library import integration.
 - Duplicate detection by checksum.
 - Re-importing a checksum-matched book whose private app-library file is missing restores the stored file and search index without changing the book id.
 - Single-book import and duplicate re-import snackbars can open the imported or already-existing title directly.

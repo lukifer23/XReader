@@ -65,6 +65,34 @@ class ImportServiceInstrumentedTest {
     }
 
     @Test
+    fun importsDownloadedFileThroughPrivatePipeline() = runBlocking {
+        val source = File(root, "downloaded/Remote Book.txt").apply {
+            parentFile?.mkdirs()
+            writeText(
+                """
+                Remote Book
+
+                Catalog imports should use the same private pipeline as local files.
+                """.trimIndent()
+            )
+        }
+
+        val result = ImportService(context, db).importFile(
+            file = source,
+            displayName = "Remote Book.txt",
+            mimeType = "text/plain"
+        )
+
+        val book = requireNotNull(db.books().getBook(result.bookId))
+        assertFalse(result.duplicate)
+        assertEquals(BookFormat.EPUB, book.format)
+        assertEquals("txt", book.sourceExtension)
+        assertEquals("Remote Book", book.title)
+        assertTrue(File(context.filesDir, book.filePath).exists())
+        assertTrue(db.search().searchBook(result.bookId, "normalizedBody:catalog*").isNotEmpty())
+    }
+
+    @Test
     fun importsPublicDomainEpubFixtureAndIndexesText() = runBlocking {
         val source = fixtures.aliceEpub()
 
