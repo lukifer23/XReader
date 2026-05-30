@@ -37,7 +37,7 @@ This is the working competitive map for XReader. It should drive implementation 
 | TTS | Implemented as in-reader Android TextToSpeech read-aloud from page-aligned local indexed book text, starting from the visible reader position, persisting spoken position as playback advances, and supporting pause/resume, previous/next passage, installed offline device voice selection, speed control, and a sleep timer. | Moon+, Librera, PocketBook, BookFusion, and others offer it. | Keep hardening lock-screen/background/headset lifecycle behavior; evaluate optional on-device neural TTS only if quality, latency, battery, position sync, and APK size justify it. |
 | OPDS/catalogs | Not implemented. | Moon+, Librera, FBReader, PocketBook support OPDS. | Good optional later feature. |
 | PDF reflow/crop | PDF fit and paged/vertical layout are implemented; reflow/crop are not implemented. | PocketBook/ReadEra have PDF comfort features. | Continue adding only real Readium-backed comfort controls. |
-| Custom user fonts | Built-in family choices, spacing presets, and per-book appearance overrides implemented; user font import not implemented. | FBReader/Moon+ support user fonts. | User font import is a later reader-polish candidate. |
+| Typography depth | Built-in family choices including OpenDyslexic, spacing presets, font weight, hyphenation, and per-book appearance overrides implemented; user font import not implemented. | FBReader/Moon+ support user fonts, background customization, and hyphenation. | Keep adding only reader-backed controls; user font import remains later until custom files can be served reliably. |
 | Bulk metadata cleanup | Matching-series author/genre/series cleanup implemented in the metadata editor. | Metadata quality is a recurring library pain. | Continue with broader bulk tools later. |
 
 ## High-Impact Gaps
@@ -61,12 +61,13 @@ The research points to several areas that matter more than raw feature count:
 - Save book copy. Each book action menu can export the stored private reader file through SAF, so local-first storage does not trap the user's files or require broad storage permissions.
 - Range-aware reading stats. The stats screen now supports 7-day, 30-day, 13-week, and all-time ranges, with grouped analytics and activity buckets recalculated for the selected period.
 - Local reading stats export. The stats screen can export all analytics ranges to CSV or JSON through Android's document picker, keeping the workflow local and user-controlled.
-- Per-book reader appearance. Books can keep their own font, spacing, alignment, publisher-style, and PDF fit choices without changing global reading behavior.
+- Per-book reader appearance. Books can keep their own font, font weight, spacing, hyphenation, alignment, publisher-style, and PDF fit choices without changing global reading behavior.
 - PDF layout comfort. PDFs can use page, width, or height fit and paged or vertical layout, with per-book overrides for manuals, scans, and landscape documents.
 - Keep screen awake. Reader sessions can opt into Android's screen-awake flag while the reader is visible, avoiding sleep interruptions without changing global phone settings.
 - Reader dimming. Night reading can use a reader-only dim overlay without requesting system brightness permissions or changing the rest of the phone.
 - Optional volume-button page turns. Phone volume buttons remain system volume controls by default, but readers can opt into physical page turns from global or in-reader settings without adding permanent chrome.
 - Reader spacing presets. Compact, comfort, and accessible presets provide fast setup while still using the same manual font, line-height, and margin controls.
+- Typography depth. The reader exposes Readium-backed OpenDyslexic, text weight, and hyphenation controls globally and per book instead of pretending to import custom fonts the WebView cannot serve.
 - Read aloud. The reader can speak forward from the visible position through Android TextToSpeech using XReader's private full-text index split into Readium-position-sized speech chunks, persists its spoken locator as it advances, supports pause/resume plus previous/next passage controls, and uses installed offline device voice selection plus sleep timer controls without permanent reader chrome.
 - Calibrated tap zones. Reader taps now use compact, balanced, or wide presets with edge guards for gesture-navigation devices, keeping page-turn control predictable without adding permanent reader chrome.
 - Batch SAF import. The library can import multiple files or a whole SAF folder without broad storage permission, while preserving checksum duplicate handling.

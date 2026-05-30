@@ -293,6 +293,26 @@ class ReaderViewModel(
         }
     }
 
+    fun setFontWeight(value: Float) {
+        viewModelScope.launch {
+            if (_uiState.value.bookAppearanceEnabled) {
+                container.settingsRepository.setBookFontWeight(bookId, value)
+            } else {
+                container.settingsRepository.setFontWeight(value)
+            }
+        }
+    }
+
+    fun setHyphenation(value: Boolean) {
+        viewModelScope.launch {
+            if (_uiState.value.bookAppearanceEnabled) {
+                container.settingsRepository.setBookHyphenation(bookId, value)
+            } else {
+                container.settingsRepository.setHyphenation(value)
+            }
+        }
+    }
+
     fun setPublisherStyles(value: Boolean) {
         viewModelScope.launch {
             if (_uiState.value.bookAppearanceEnabled) {

@@ -34,6 +34,8 @@ import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -84,6 +86,8 @@ import com.xreader.app.data.BookFormat
 import com.xreader.app.data.ReaderTheme
 import com.xreader.app.reader.OpenPublication
 import com.xreader.app.settings.MAX_READER_DIM_AMOUNT
+import com.xreader.app.settings.MAX_READER_FONT_WEIGHT
+import com.xreader.app.settings.MIN_READER_FONT_WEIGHT
 import com.xreader.app.settings.ReaderFontFamily
 import com.xreader.app.settings.ReaderHighlightColor
 import com.xreader.app.settings.ReaderPdfFit
@@ -162,6 +166,8 @@ internal fun ReaderRoute(
         onMarginScale = viewModel::setMarginScale,
         onSpacingPreset = viewModel::setSpacingPreset,
         onFontFamily = viewModel::setFontFamily,
+        onFontWeight = viewModel::setFontWeight,
+        onHyphenation = viewModel::setHyphenation,
         onPublisherStyles = viewModel::setPublisherStyles,
         onTapZonesEnabled = viewModel::setTapZonesEnabled,
         onTapZonePreset = viewModel::setTapZonePreset,
@@ -214,6 +220,8 @@ internal fun ReaderScreen(
     onMarginScale: (Float) -> Unit,
     onSpacingPreset: (ReaderSpacingPreset) -> Unit,
     onFontFamily: (ReaderFontFamily) -> Unit,
+    onFontWeight: (Float) -> Unit,
+    onHyphenation: (Boolean) -> Unit,
     onPublisherStyles: (Boolean) -> Unit,
     onTapZonesEnabled: (Boolean) -> Unit,
     onTapZonePreset: (ReaderTapZonePreset) -> Unit,
@@ -476,6 +484,8 @@ internal fun ReaderScreen(
             onMarginScale = onMarginScale,
             onSpacingPreset = onSpacingPreset,
             onFontFamily = onFontFamily,
+            onFontWeight = onFontWeight,
+            onHyphenation = onHyphenation,
             onPublisherStyles = onPublisherStyles,
             onTapZonesEnabled = onTapZonesEnabled,
             onTapZonePreset = onTapZonePreset,
@@ -725,6 +735,8 @@ internal fun ReaderQuickSettingsDialog(
     onMarginScale: (Float) -> Unit,
     onSpacingPreset: (ReaderSpacingPreset) -> Unit,
     onFontFamily: (ReaderFontFamily) -> Unit,
+    onFontWeight: (Float) -> Unit,
+    onHyphenation: (Boolean) -> Unit,
     onPublisherStyles: (Boolean) -> Unit,
     onTapZonesEnabled: (Boolean) -> Unit,
     onTapZonePreset: (ReaderTapZonePreset) -> Unit,
@@ -741,6 +753,7 @@ internal fun ReaderQuickSettingsDialog(
     onBookAppearanceEnabled: (Boolean) -> Unit,
     showPdfControls: Boolean,
 ) {
+    var advancedTypographyOpen by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Reader settings") },
@@ -791,14 +804,31 @@ internal fun ReaderQuickSettingsDialog(
                         )
                     }
                 }
-                Text("Alignment", style = MaterialTheme.typography.titleMedium)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ReaderTextAlign.entries.forEach { alignment ->
-                        FilterChip(
-                            selected = settings.textAlign == alignment,
-                            onClick = { onTextAlign(alignment) },
-                            label = { Text(alignment.name.lowercase().replaceFirstChar(Char::titlecase)) }
-                        )
+                TextButton(
+                    onClick = { advancedTypographyOpen = !advancedTypographyOpen },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Advanced typography", modifier = Modifier.weight(1f))
+                    Icon(
+                        if (advancedTypographyOpen) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                        contentDescription = null
+                    )
+                }
+                if (advancedTypographyOpen) {
+                    SettingSlider("Text weight", settings.fontWeight, MIN_READER_FONT_WEIGHT..MAX_READER_FONT_WEIGHT, onFontWeight)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Hyphenation", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                        Switch(checked = settings.hyphenation, onCheckedChange = onHyphenation)
+                    }
+                    Text("Alignment", style = MaterialTheme.typography.titleMedium)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ReaderTextAlign.entries.forEach { alignment ->
+                            FilterChip(
+                                selected = settings.textAlign == alignment,
+                                onClick = { onTextAlign(alignment) },
+                                label = { Text(alignment.name.lowercase().replaceFirstChar(Char::titlecase)) }
+                            )
+                        }
                     }
                 }
                 if (showPdfControls) {

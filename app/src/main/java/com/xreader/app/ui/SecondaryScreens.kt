@@ -83,6 +83,8 @@ import com.xreader.app.analytics.GroupAnalytics
 import com.xreader.app.settings.LibraryDensity
 import com.xreader.app.settings.LibrarySort
 import com.xreader.app.settings.MAX_READER_DIM_AMOUNT
+import com.xreader.app.settings.MAX_READER_FONT_WEIGHT
+import com.xreader.app.settings.MIN_READER_FONT_WEIGHT
 import com.xreader.app.settings.ReadAloudSleepTimer
 import com.xreader.app.settings.ReaderFontFamily
 import com.xreader.app.settings.ReaderHighlightColor
@@ -712,6 +714,17 @@ internal fun SettingsRoute(viewModel: SettingsViewModel, onBack: () -> Unit) {
                         selected = settings.fontFamily,
                         label = { it.label },
                         onSelected = viewModel::setFontFamily
+                    )
+                    SettingSlider(
+                        "Text weight",
+                        settings.fontWeight,
+                        MIN_READER_FONT_WEIGHT..MAX_READER_FONT_WEIGHT,
+                        viewModel::setFontWeight
+                    )
+                    SettingsToggleRow(
+                        label = "Hyphenation",
+                        checked = settings.hyphenation,
+                        onCheckedChange = viewModel::setHyphenation
                     )
                     SettingsChipGroup(
                         title = "Alignment",

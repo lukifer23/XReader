@@ -15,6 +15,8 @@ class ReaderSettingsTest {
         assertNull(ReaderSettings().readAloudVoiceName)
         assertEquals(ReadAloudSleepTimer.OFF, ReaderSettings().readAloudSleepTimer)
         assertEquals(ReaderHighlightColor.YELLOW.hex, ReaderSettings().highlightColor)
+        assertEquals(1.0f, ReaderSettings().fontWeight, 0.001f)
+        assertFalse(ReaderSettings().hyphenation)
         assertFalse(ReaderSettings().keepScreenAwake)
         assertFalse(ReaderSettings().volumeKeysTurnPages)
         assertEquals(ReaderPdfFit.WIDTH, ReaderSettings().pdfFit)
@@ -35,9 +37,9 @@ class ReaderSettingsTest {
         assertEquals("sans-serif", ReaderFontFamily.SANS_SERIF.readiumName)
         assertEquals("Trebuchet MS", ReaderFontFamily.HUMANIST.readiumName)
         assertEquals("AccessibleDfA", ReaderFontFamily.ACCESSIBLE.readiumName)
+        assertEquals("OpenDyslexic", ReaderFontFamily.DYSLEXIC.readiumName)
         assertEquals("IA Writer Duospace", ReaderFontFamily.DUOSPACE.readiumName)
         assertEquals("monospace", ReaderFontFamily.MONOSPACE.readiumName)
-        assertFalse(ReaderFontFamily.entries.any { it.readiumName == "OpenDyslexic" })
     }
 
     @Test
@@ -80,6 +82,8 @@ class ReaderSettingsTest {
         assertTrue(accessible.keepScreenAwake)
         assertTrue(accessible.volumeKeysTurnPages)
         assertEquals(0.3f, accessible.screenDim, 0.001f)
+        assertEquals(1.0f, accessible.fontWeight, 0.001f)
+        assertFalse(accessible.hyphenation)
         assertEquals(ReaderSpacingPreset.ACCESSIBLE.fontScale, accessible.fontScale, 0.001f)
         assertEquals(ReaderSpacingPreset.ACCESSIBLE.lineHeight, accessible.lineHeight, 0.001f)
         assertEquals(ReaderSpacingPreset.ACCESSIBLE.marginScale, accessible.marginScale, 0.001f)
@@ -95,6 +99,8 @@ class ReaderSettingsTest {
             lineHeight = 1.2f,
             marginScale = 0.7f,
             fontFamily = ReaderFontFamily.SERIF,
+            fontWeight = 1.1f,
+            hyphenation = true,
             tapZonesEnabled = false,
             tapZonePreset = ReaderTapZonePreset.COMPACT,
             pageTurnAnimations = false,
@@ -117,6 +123,8 @@ class ReaderSettingsTest {
             lineHeight = 1.7f,
             marginScale = 1.2f,
             fontFamily = ReaderFontFamily.ACCESSIBLE,
+            fontWeight = 1.35f,
+            hyphenation = false,
             publisherStyles = false,
             textAlign = ReaderTextAlign.START,
             pdfFit = ReaderPdfFit.HEIGHT,
@@ -142,6 +150,8 @@ class ReaderSettingsTest {
         assertEquals(1.7f, combined.lineHeight, 0.001f)
         assertEquals(1.2f, combined.marginScale, 0.001f)
         assertEquals(ReaderFontFamily.ACCESSIBLE, combined.fontFamily)
+        assertEquals(1.35f, combined.fontWeight, 0.001f)
+        assertFalse(combined.hyphenation)
         assertFalse(combined.publisherStyles)
         assertEquals(ReaderTextAlign.START, combined.textAlign)
         assertEquals(ReaderPdfFit.HEIGHT, combined.pdfFit)
@@ -169,5 +179,12 @@ class ReaderSettingsTest {
         assertEquals(0f, normalizedReaderDimAmount(-0.5f), 0.001f)
         assertEquals(0.25f, normalizedReaderDimAmount(0.25f), 0.001f)
         assertEquals(MAX_READER_DIM_AMOUNT, normalizedReaderDimAmount(2.0f), 0.001f)
+    }
+
+    @Test
+    fun readerFontWeightIsBoundedForLegibility() {
+        assertEquals(MIN_READER_FONT_WEIGHT, normalizedReaderFontWeight(-1f), 0.001f)
+        assertEquals(1.15f, normalizedReaderFontWeight(1.15f), 0.001f)
+        assertEquals(MAX_READER_FONT_WEIGHT, normalizedReaderFontWeight(5f), 0.001f)
     }
 }

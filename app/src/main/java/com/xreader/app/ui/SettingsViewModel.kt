@@ -80,6 +80,14 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch { container.settingsRepository.setFontFamily(value) }
     }
 
+    fun setFontWeight(value: Float) {
+        viewModelScope.launch { container.settingsRepository.setFontWeight(value) }
+    }
+
+    fun setHyphenation(value: Boolean) {
+        viewModelScope.launch { container.settingsRepository.setHyphenation(value) }
+    }
+
     fun setTapZonesEnabled(value: Boolean) {
         viewModelScope.launch { container.settingsRepository.setTapZonesEnabled(value) }
     }

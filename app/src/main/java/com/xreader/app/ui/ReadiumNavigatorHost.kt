@@ -368,6 +368,8 @@ private fun ReaderSettings.toEpubPreferences(): EpubPreferences =
     EpubPreferences(
         fontSize = fontScale.toDouble(),
         fontFamily = fontFamily.readiumName?.let(::ReadiumFontFamily),
+        fontWeight = fontWeight.toDouble(),
+        hyphens = hyphenation,
         lineHeight = lineHeight.toDouble(),
         pageMargins = marginScale.toDouble(),
         publisherStyles = publisherStyles,

@@ -97,6 +97,8 @@ Reader and library settings are persisted with DataStore. Settings include:
 - margin scale
 - compact, comfort, and accessible spacing presets that write the same typography fields
 - font family
+- font weight
+- hyphenation
 - tap zones and tap-zone size preset
 - page animations
 - keep screen awake
@@ -112,11 +114,11 @@ Reader and library settings are persisted with DataStore. Settings include:
 - library sort
 - library density
 
-Per-book reader appearance overrides are also stored in DataStore, keyed by book id. They only override typography, publisher styles, alignment, and PDF fit/layout. Theme, fullscreen, keep-screen-awake, reader dimming, tap zones, page animations, volume-button page turns, and idle timeout stay global so reading behavior remains predictable across books.
+Per-book reader appearance overrides are also stored in DataStore, keyed by book id. They only override typography, hyphenation, publisher styles, alignment, and PDF fit/layout. Theme, fullscreen, keep-screen-awake, reader dimming, tap zones, page animations, volume-button page turns, and idle timeout stay global so reading behavior remains predictable across books.
 
 Reader dimming is implemented as a reader-only Compose overlay capped by `MAX_READER_DIM_AMOUNT`; it never writes Android system brightness settings and is cleared naturally when leaving the reader surface.
 
-Font choices are limited to families that Android/Readium CSS can resolve or fall back from cleanly.
+Font choices are limited to families that Android/Readium CSS can resolve or fall back from cleanly, including Readium's bundled OpenDyslexic asset. XReader does not expose user font import until the reader stack can serve those files reliably.
 
 Settings also exposes local JSON backup and restore through Android's Storage Access Framework. Notes/bookmark backups contain notes, highlights, normalized annotation tags, and bookmarks. The global notes screen supports text, kind, and tag filtering, and it exports human-readable Markdown grouped by book while omitting private file paths and checksums. Library backups contain catalog metadata, favorites, finished state, reading progress, and reading sessions, but never imported book files or cover image files. Restores match items to already-imported books by file checksum. Items for books that are not in the local library are skipped instead of creating orphan records.
 

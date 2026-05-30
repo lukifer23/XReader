@@ -47,15 +47,19 @@ class SettingsRepositoryInstrumentedTest {
         repository.setFontScale(3.0f)
         repository.setLineHeight(0.7f)
         repository.setMarginScale(2.4f)
+        repository.setFontWeight(4.0f)
         repository.setReadAloudRate(3.0f)
         val clampedSettings = repository.settings.first()
         assertEquals(1.65f, clampedSettings.fontScale, 0.001f)
         assertEquals(1.1f, clampedSettings.lineHeight, 0.001f)
         assertEquals(1.8f, clampedSettings.marginScale, 0.001f)
+        assertEquals(MAX_READER_FONT_WEIGHT, clampedSettings.fontWeight, 0.001f)
         assertEquals(1.4f, clampedSettings.readAloudRate, 0.001f)
 
         repository.setSpacingPreset(ReaderSpacingPreset.ACCESSIBLE)
-        repository.setFontFamily(ReaderFontFamily.ACCESSIBLE)
+        repository.setFontFamily(ReaderFontFamily.DYSLEXIC)
+        repository.setFontWeight(1.25f)
+        repository.setHyphenation(true)
         repository.setTapZonesEnabled(false)
         repository.setTapZonePreset(ReaderTapZonePreset.COMPACT)
         repository.setPageTurnAnimations(false)
@@ -81,7 +85,9 @@ class SettingsRepositoryInstrumentedTest {
         assertEquals(ReaderSpacingPreset.ACCESSIBLE.fontScale, readerSettings.fontScale, 0.001f)
         assertEquals(ReaderSpacingPreset.ACCESSIBLE.lineHeight, readerSettings.lineHeight, 0.001f)
         assertEquals(ReaderSpacingPreset.ACCESSIBLE.marginScale, readerSettings.marginScale, 0.001f)
-        assertEquals(ReaderFontFamily.ACCESSIBLE, readerSettings.fontFamily)
+        assertEquals(ReaderFontFamily.DYSLEXIC, readerSettings.fontFamily)
+        assertEquals(1.25f, readerSettings.fontWeight, 0.001f)
+        assertTrue(readerSettings.hyphenation)
         assertFalse(readerSettings.tapZonesEnabled)
         assertEquals(ReaderTapZonePreset.COMPACT, readerSettings.tapZonePreset)
         assertFalse(readerSettings.pageTurnAnimations)
@@ -121,6 +127,8 @@ class SettingsRepositoryInstrumentedTest {
             lineHeight = 1.55f,
             marginScale = 0.9f,
             fontFamily = ReaderFontFamily.HUMANIST,
+            fontWeight = 1.15f,
+            hyphenation = true,
             publisherStyles = true,
             textAlign = ReaderTextAlign.JUSTIFY,
             pdfFit = ReaderPdfFit.CONTAIN,
@@ -133,6 +141,8 @@ class SettingsRepositoryInstrumentedTest {
         repository.setBookMarginScale(bookId = 42L, value = 3.0f)
         repository.setBookSpacingPreset(bookId = 42L, value = ReaderSpacingPreset.COMPACT)
         repository.setBookFontFamily(bookId = 42L, value = ReaderFontFamily.ACCESSIBLE)
+        repository.setBookFontWeight(bookId = 42L, value = 5.0f)
+        repository.setBookHyphenation(bookId = 42L, value = false)
         repository.setBookPublisherStyles(bookId = 42L, value = false)
         repository.setBookTextAlign(bookId = 42L, value = ReaderTextAlign.START)
         repository.setBookPdfFit(bookId = 42L, value = ReaderPdfFit.HEIGHT)
@@ -143,6 +153,8 @@ class SettingsRepositoryInstrumentedTest {
         assertEquals(ReaderSpacingPreset.COMPACT.lineHeight, appearance.lineHeight, 0.001f)
         assertEquals(ReaderSpacingPreset.COMPACT.marginScale, appearance.marginScale, 0.001f)
         assertEquals(ReaderFontFamily.ACCESSIBLE, appearance.fontFamily)
+        assertEquals(MAX_READER_FONT_WEIGHT, appearance.fontWeight, 0.001f)
+        assertFalse(appearance.hyphenation)
         assertFalse(appearance.publisherStyles)
         assertEquals(ReaderTextAlign.START, appearance.textAlign)
         assertEquals(ReaderPdfFit.HEIGHT, appearance.pdfFit)

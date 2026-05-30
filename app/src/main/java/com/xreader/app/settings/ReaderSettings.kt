@@ -69,6 +69,7 @@ enum class ReaderFontFamily(
     SANS_SERIF("Sans", "sans-serif"),
     HUMANIST("Humanist", "Trebuchet MS"),
     ACCESSIBLE("Accessible", "AccessibleDfA"),
+    DYSLEXIC("Dyslexic", "OpenDyslexic"),
     DUOSPACE("Duospace", "IA Writer Duospace"),
     MONOSPACE("Mono", "monospace"),
 }
@@ -90,6 +91,8 @@ enum class ReaderSpacingPreset(
 }
 
 const val MAX_READER_DIM_AMOUNT = 0.45f
+const val MIN_READER_FONT_WEIGHT = 0.5f
+const val MAX_READER_FONT_WEIGHT = 1.75f
 
 data class ReaderSettings(
     val theme: ReaderTheme = ReaderTheme.LIGHT,
@@ -97,6 +100,8 @@ data class ReaderSettings(
     val lineHeight: Float = 1.42f,
     val marginScale: Float = 0.52f,
     val fontFamily: ReaderFontFamily = ReaderFontFamily.DEFAULT,
+    val fontWeight: Float = 1.0f,
+    val hyphenation: Boolean = false,
     val tapZonesEnabled: Boolean = true,
     val tapZonePreset: ReaderTapZonePreset = ReaderTapZonePreset.BALANCED,
     val pageTurnAnimations: Boolean = true,
@@ -130,6 +135,8 @@ data class BookReaderAppearance(
     val lineHeight: Float,
     val marginScale: Float,
     val fontFamily: ReaderFontFamily,
+    val fontWeight: Float,
+    val hyphenation: Boolean,
     val publisherStyles: Boolean,
     val textAlign: ReaderTextAlign,
     val pdfFit: ReaderPdfFit,
@@ -142,6 +149,8 @@ fun ReaderSettings.bookAppearance(): BookReaderAppearance =
         lineHeight = lineHeight,
         marginScale = marginScale,
         fontFamily = fontFamily,
+        fontWeight = fontWeight,
+        hyphenation = hyphenation,
         publisherStyles = publisherStyles,
         textAlign = textAlign,
         pdfFit = pdfFit,
@@ -157,6 +166,8 @@ fun ReaderSettings.withBookAppearance(appearance: BookReaderAppearance?): Reader
             lineHeight = appearance.lineHeight,
             marginScale = appearance.marginScale,
             fontFamily = appearance.fontFamily,
+            fontWeight = appearance.fontWeight,
+            hyphenation = appearance.hyphenation,
             publisherStyles = appearance.publisherStyles,
             textAlign = appearance.textAlign,
             pdfFit = appearance.pdfFit,
@@ -169,3 +180,6 @@ private fun Float.closeTo(other: Float): Boolean =
 
 fun normalizedReaderDimAmount(value: Float): Float =
     value.coerceIn(0f, MAX_READER_DIM_AMOUNT)
+
+fun normalizedReaderFontWeight(value: Float): Float =
+    value.coerceIn(MIN_READER_FONT_WEIGHT, MAX_READER_FONT_WEIGHT)

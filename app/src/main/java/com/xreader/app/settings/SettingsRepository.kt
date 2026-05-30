@@ -26,6 +26,8 @@ class SettingsRepository(
         val lineHeight = floatPreferencesKey("line_height")
         val marginScale = floatPreferencesKey("margin_scale")
         val fontFamily = stringPreferencesKey("font_family")
+        val fontWeight = floatPreferencesKey("font_weight")
+        val hyphenation = booleanPreferencesKey("hyphenation")
         val tapZonesEnabled = booleanPreferencesKey("tap_zones_enabled")
         val tapZonePreset = stringPreferencesKey("tap_zone_preset")
         val pageTurnAnimations = booleanPreferencesKey("page_turn_animations")
@@ -52,6 +54,8 @@ class SettingsRepository(
         val lineHeight: Key<Float>,
         val marginScale: Key<Float>,
         val fontFamily: Key<String>,
+        val fontWeight: Key<Float>,
+        val hyphenation: Key<Boolean>,
         val publisherStyles: Key<Boolean>,
         val textAlign: Key<String>,
         val pdfFit: Key<String>,
@@ -67,6 +71,8 @@ class SettingsRepository(
                 lineHeight = prefs[Keys.lineHeight] ?: 1.42f,
                 marginScale = prefs[Keys.marginScale] ?: 0.52f,
                 fontFamily = readerFontFamily(prefs[Keys.fontFamily]) ?: ReaderFontFamily.DEFAULT,
+                fontWeight = normalizedReaderFontWeight(prefs[Keys.fontWeight] ?: 1.0f),
+                hyphenation = prefs[Keys.hyphenation] ?: false,
                 tapZonesEnabled = prefs[Keys.tapZonesEnabled] ?: true,
                 tapZonePreset = prefs[Keys.tapZonePreset]?.let { runCatching { ReaderTapZonePreset.valueOf(it) }.getOrNull() }
                     ?: ReaderTapZonePreset.BALANCED,
@@ -103,6 +109,8 @@ class SettingsRepository(
                     lineHeight = prefs[keys.lineHeight]?.coerceIn(1.1f, 2.0f) ?: 1.42f,
                     marginScale = prefs[keys.marginScale]?.coerceIn(0.35f, 1.8f) ?: 0.52f,
                     fontFamily = readerFontFamily(prefs[keys.fontFamily]) ?: ReaderFontFamily.DEFAULT,
+                    fontWeight = normalizedReaderFontWeight(prefs[keys.fontWeight] ?: 1.0f),
+                    hyphenation = prefs[keys.hyphenation] ?: false,
                     publisherStyles = prefs[keys.publisherStyles] ?: false,
                     textAlign = prefs[keys.textAlign]?.let { runCatching { ReaderTextAlign.valueOf(it) }.getOrNull() }
                         ?: ReaderTextAlign.START,
@@ -151,6 +159,14 @@ class SettingsRepository(
 
     suspend fun setFontFamily(value: ReaderFontFamily) {
         dataStore.edit { it[Keys.fontFamily] = value.name }
+    }
+
+    suspend fun setFontWeight(value: Float) {
+        dataStore.edit { it[Keys.fontWeight] = normalizedReaderFontWeight(value) }
+    }
+
+    suspend fun setHyphenation(value: Boolean) {
+        dataStore.edit { it[Keys.hyphenation] = value }
     }
 
     suspend fun setTapZonesEnabled(value: Boolean) {
@@ -228,6 +244,8 @@ class SettingsRepository(
                 prefs[keys.lineHeight] = seed.lineHeight.coerceIn(1.1f, 2.0f)
                 prefs[keys.marginScale] = seed.marginScale.coerceIn(0.35f, 1.8f)
                 prefs[keys.fontFamily] = seed.fontFamily.name
+                prefs[keys.fontWeight] = normalizedReaderFontWeight(seed.fontWeight)
+                prefs[keys.hyphenation] = seed.hyphenation
                 prefs[keys.publisherStyles] = seed.publisherStyles
                 prefs[keys.textAlign] = seed.textAlign.name
                 prefs[keys.pdfFit] = seed.pdfFit.name
@@ -238,6 +256,8 @@ class SettingsRepository(
                 prefs.remove(keys.lineHeight)
                 prefs.remove(keys.marginScale)
                 prefs.remove(keys.fontFamily)
+                prefs.remove(keys.fontWeight)
+                prefs.remove(keys.hyphenation)
                 prefs.remove(keys.publisherStyles)
                 prefs.remove(keys.textAlign)
                 prefs.remove(keys.pdfFit)
@@ -269,6 +289,14 @@ class SettingsRepository(
 
     suspend fun setBookFontFamily(bookId: Long, value: ReaderFontFamily) {
         dataStore.edit { it[bookAppearanceKeys(bookId).fontFamily] = value.name }
+    }
+
+    suspend fun setBookFontWeight(bookId: Long, value: Float) {
+        dataStore.edit { it[bookAppearanceKeys(bookId).fontWeight] = normalizedReaderFontWeight(value) }
+    }
+
+    suspend fun setBookHyphenation(bookId: Long, value: Boolean) {
+        dataStore.edit { it[bookAppearanceKeys(bookId).hyphenation] = value }
     }
 
     suspend fun setBookPublisherStyles(bookId: Long, value: Boolean) {
@@ -310,6 +338,8 @@ class SettingsRepository(
             lineHeight = floatPreferencesKey("${prefix}_line_height"),
             marginScale = floatPreferencesKey("${prefix}_margin_scale"),
             fontFamily = stringPreferencesKey("${prefix}_font_family"),
+            fontWeight = floatPreferencesKey("${prefix}_font_weight"),
+            hyphenation = booleanPreferencesKey("${prefix}_hyphenation"),
             publisherStyles = booleanPreferencesKey("${prefix}_publisher_styles"),
             textAlign = stringPreferencesKey("${prefix}_text_align"),
             pdfFit = stringPreferencesKey("${prefix}_pdf_fit"),
