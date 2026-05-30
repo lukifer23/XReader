@@ -77,6 +77,40 @@ class ReadAloudEngineTest {
         )
     }
 
+    @Test
+    fun foregroundNotificationTextReflectsReadAloudState() {
+        val preparing = ReadAloudState(initializing = true, totalChunks = 12)
+        assertEquals("Preparing read aloud", readAloudNotificationStatusText(preparing))
+        assertEquals("1/12", readAloudNotificationProgressText(preparing))
+
+        val playing = ReadAloudState(
+            playing = true,
+            currentChunk = 2,
+            totalChunks = 12,
+            currentHeading = "  Chapter   Seven  "
+        )
+        assertEquals("Chapter Seven", readAloudNotificationStatusText(playing))
+        assertEquals("3/12", readAloudNotificationProgressText(playing))
+
+        val paused = playing.copy(playing = false, paused = true)
+        assertEquals("Paused", readAloudNotificationStatusText(paused))
+    }
+
+    @Test
+    fun foregroundNotificationSkipActionsMatchPlaybackBounds() {
+        val first = ReadAloudState(playing = true, currentChunk = 0, totalChunks = 3)
+        assertEquals(false, readAloudNotificationCanSkipPrevious(first))
+        assertEquals(true, readAloudNotificationCanSkipNext(first))
+
+        val middlePaused = ReadAloudState(paused = true, currentChunk = 1, totalChunks = 3)
+        assertEquals(true, readAloudNotificationCanSkipPrevious(middlePaused))
+        assertEquals(true, readAloudNotificationCanSkipNext(middlePaused))
+
+        val inactive = ReadAloudState(currentChunk = 1, totalChunks = 3)
+        assertEquals(false, readAloudNotificationCanSkipPrevious(inactive))
+        assertEquals(false, readAloudNotificationCanSkipNext(inactive))
+    }
+
     private fun assertHasAction(actions: Long, action: Long) {
         assertTrue(actions and action != 0L)
     }

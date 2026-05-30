@@ -4,6 +4,7 @@ import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
+import android.media.session.MediaSession
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
@@ -32,6 +33,7 @@ data class ReadAloudVoiceOption(
 
 data class ReadAloudState(
     val activeBookId: Long? = null,
+    val bookTitle: String? = null,
     val initializing: Boolean = false,
     val playing: Boolean = false,
     val paused: Boolean = false,
@@ -111,6 +113,9 @@ class ReadAloudEngine(
     private var sleepTimerJob: Job? = null
     private var sleepTimerEndsAtMillis: Long? = null
     private var hasAudioFocus = false
+    private var foregroundServiceRequested = false
+    internal val mediaSessionToken: MediaSession.Token
+        get() = mediaSession.token
 
     suspend fun play(
         bookId: Long,
@@ -131,6 +136,7 @@ class ReadAloudEngine(
             stopInternal()
             _state.value = ReadAloudState(
                 activeBookId = bookId,
+                bookTitle = bookTitle,
                 initializing = true,
                 totalChunks = chunks.size
             )
@@ -251,7 +257,12 @@ class ReadAloudEngine(
     }
 
     fun showMessage(bookId: Long, message: String) {
-        _state.value = ReadAloudState(activeBookId = bookId, sleepTimerEndsAtMillis = sleepTimerEndsAtMillis, message = message)
+        _state.value = ReadAloudState(
+            activeBookId = bookId,
+            bookTitle = activeSpeech?.bookTitle,
+            sleepTimerEndsAtMillis = sleepTimerEndsAtMillis,
+            message = message
+        )
     }
 
     private suspend fun ensureReady(): Boolean {
@@ -505,6 +516,7 @@ class ReadAloudEngine(
         val chunk = current.chunks.getOrNull(current.chunkIndex)
         _state.value = ReadAloudState(
             activeBookId = current.bookId,
+            bookTitle = current.bookTitle,
             playing = playing,
             paused = paused,
             currentChunk = current.chunkIndex,
@@ -515,6 +527,7 @@ class ReadAloudEngine(
             sleepTimerEndsAtMillis = sleepTimerEndsAtMillis,
             message = message
         )
+        if (playing || paused) startForegroundServiceIfNeeded()
         mediaSession.update(
             bookTitle = current.bookTitle,
             heading = chunk?.heading,
@@ -539,8 +552,22 @@ class ReadAloudEngine(
         abandonAudioFocus()
         activeSpeech = null
         pendingUtteranceId = null
+        foregroundServiceRequested = false
         _state.value = ReadAloudState()
         mediaSession.stop()
+    }
+
+    private fun startForegroundServiceIfNeeded() {
+        if (foregroundServiceRequested) return
+        foregroundServiceRequested = true
+        runCatching {
+            ReadAloudForegroundService.start(appContext)
+        }.onFailure {
+            _state.value = _state.value.copy(
+                message = "Read aloud is playing, but Android would not start background playback controls."
+            )
+            foregroundServiceRequested = false
+        }
     }
 
     private fun updateVoiceOptions(engine: TextToSpeech? = tts): List<ReadAloudVoiceOption> {

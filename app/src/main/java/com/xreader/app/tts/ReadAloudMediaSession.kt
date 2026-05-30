@@ -42,6 +42,8 @@ internal class ReadAloudMediaSessionController(
         setPlaybackState(stoppedPlaybackState())
         isActive = false
     }
+    val token: MediaSession.Token
+        get() = session.sessionToken
 
     fun update(
         bookTitle: String,
