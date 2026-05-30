@@ -560,6 +560,42 @@ class ImportServiceInstrumentedTest {
         }
     }
 
+    @Test
+    fun importInfersSameAuthorSeriesFromTitlePatterns() = runBlocking {
+        val service = ImportService(context, db)
+        val firstSource = File(root, "source/Red Rising.txt").apply {
+            parentFile?.mkdirs()
+            writeText(
+                """
+                Red Rising
+
+                The first book establishes the known series name.
+                """.trimIndent()
+            )
+        }
+        val firstId = service.import(Uri.fromFile(firstSource)).bookId
+        val first = requireNotNull(db.books().getBook(firstId))
+        db.books().update(first.copy(series = "Red Rising", seriesIndex = null))
+
+        val secondSource = File(root, "source/Golden Son (Red Rising, Book Two).txt").apply {
+            writeText(
+                """
+                Golden Son (Red Rising, Book Two)
+
+                The second book title carries the series and order.
+                """.trimIndent()
+            )
+        }
+        val secondId = service.import(Uri.fromFile(secondSource)).bookId
+
+        val updatedFirst = requireNotNull(db.books().getBook(firstId))
+        val second = requireNotNull(db.books().getBook(secondId))
+        assertEquals("Red Rising", updatedFirst.series)
+        assertEquals(1.0, updatedFirst.seriesIndex ?: -1.0, 0.001)
+        assertEquals("Red Rising", second.series)
+        assertEquals(2.0, second.seriesIndex ?: -1.0, 0.001)
+    }
+
     private fun ZipOutputStream.writeEntry(name: String, bytes: ByteArray) {
         putNextEntry(ZipEntry(name))
         write(bytes)

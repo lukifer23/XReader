@@ -46,7 +46,7 @@ The research points to several areas that matter more than raw feature count:
 
 - Library correctness beats file scanning breadth. Lithium-style lost-book reports and Play Books upload friction reinforce XReader's app-private library copy model.
 - Reader controls need restraint. Moon+ and KOReader show the ceiling for power, but user pain clusters around too many exposed controls, hidden progress surfaces, and slowdown from heavy customization.
-- Metadata cleanup is not optional for real libraries. Series and genre drift makes browse views feel broken, even when every individual book imported successfully.
+- Metadata cleanup is not optional for real libraries. Series, series-order, and genre drift makes browse views feel broken, even when every individual book imported successfully.
 - OPDS, remaining broad file formats, on-device TTS quality, and PDF comfort tools are the largest remaining parity gaps. They should land only as real optional workflows with device tests, not as visible menu promises.
 - Large-library performance needs continuous evidence. Competitors with folder/file-browser models show lag under thousands of books, so XReader should keep indexed Room queries, private copies, and startup/open baselines.
 
@@ -55,6 +55,7 @@ The research points to several areas that matter more than raw feature count:
 - Opt-in matching-series metadata cleanup. From the metadata editor, changing shared author, genre, or series values can apply them to other books that match the old or new author and series pair. The operation is atomic and keeps per-book fields such as title, year, and series index untouched.
 - Metadata canonicalization. Import and metadata edits collapse author casing/spacing variants against existing library values and normalize known genre aliases such as `sci-fi` into stable groups without adding another management screen.
 - Same-series genre cleanup. The existing Settings repair action can fix obvious genre drift inside one author/series group, promoting weak labels such as Adventure or War to the single strong series genre without adding another library management screen.
+- Same-author title-pattern series inference. When a known series already exists for an author, XReader can infer missing series and order from common titles such as `Series #2 - Title`, `Title (Series, Book Two)`, and `Book 3 of Series` without adding another metadata screen.
 - Reader find bar. After an in-book search, XReader keeps a compact temporary find bar with match count plus previous/next controls, using Readium search positions or the local search index fallback instead of a placeholder overlay.
 - Library search result clarity. Global text matches now show the source book, author, and a query-centered snippet from the local FTS index before jumping into the matched reading unit, with a compact preview that can expand into a bounded result list when the match set is larger.
 - Read-aloud passage controls. Active read-aloud now exposes compact previous/next passage controls in the reader bar and uses the same page-aligned chunks that drive spoken locator persistence.

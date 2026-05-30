@@ -554,12 +554,24 @@ class ImportService(
             .groupBy({ it.first }, { it.second })
             .mapValues { (_, values) -> values.distinctBy { it.lowercase(Locale.US) } }
         books
-            .filter { it.series.isNullOrBlank() }
             .forEach { book ->
-                val series = seriesByAuthor[book.author.trim().lowercase(Locale.US)]
-                    ?.firstOrNull { it.equals(book.title, ignoreCase = true) }
+                val knownSeries = if (book.series.isNullOrBlank()) {
+                    seriesByAuthor[book.author.trim().lowercase(Locale.US)].orEmpty()
+                } else {
+                    listOf(book.series)
+                }
+                val inference = PublicationMetadataTools.inferSeriesFromTitle(book.title, knownSeries)
                     ?: return@forEach
-                bookDao.update(book.copy(series = series, updatedAt = clock.millis()))
+                val series = book.series?.trim()?.takeIf { it.isNotBlank() } ?: inference.series
+                val seriesIndex = book.seriesIndex ?: inference.seriesIndex
+                if (book.series == series && book.seriesIndex == seriesIndex) return@forEach
+                bookDao.update(
+                    book.copy(
+                        series = series,
+                        seriesIndex = seriesIndex,
+                        updatedAt = clock.millis()
+                    )
+                )
                 bookDao.insertSeries(com.xreader.app.data.SeriesEntity(name = series))
             }
     }

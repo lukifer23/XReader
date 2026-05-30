@@ -3,6 +3,11 @@ package com.xreader.app.importer
 import java.util.Locale
 
 object PublicationMetadataTools {
+    data class SeriesTitleInference(
+        val series: String,
+        val seriesIndex: Double?,
+    )
+
     private data class GenreRule(
         val label: String,
         val tokens: Set<String>,
@@ -115,6 +120,30 @@ object PublicationMetadataTools {
     fun cleanSeriesName(value: String?): String? =
         cleanMetadataValue(value)?.takeIf { it.length <= 160 }
 
+    fun inferSeriesFromTitle(title: String?, knownSeries: List<String>): SeriesTitleInference? {
+        val cleanTitle = cleanMetadataValue(title) ?: return null
+        val normalizedTitle = normalizeTitleForSeriesInference(cleanTitle)
+        if (normalizedTitle.isBlank()) return null
+
+        return knownSeries
+            .asSequence()
+            .mapNotNull(::cleanSeriesName)
+            .distinctBy(::normalizeTitleForSeriesInference)
+            .sortedByDescending { normalizeTitleForSeriesInference(it).length }
+            .mapNotNull { series ->
+                val normalizedSeries = normalizeTitleForSeriesInference(series)
+                if (normalizedSeries.length < MIN_TITLE_SERIES_MATCH_LENGTH) return@mapNotNull null
+                val range = phraseRange(normalizedTitle, normalizedSeries) ?: return@mapNotNull null
+                val exactTitle = normalizedTitle == normalizedSeries
+                SeriesTitleInference(
+                    series = series,
+                    seriesIndex = titleSeriesIndex(normalizedTitle, range)
+                        ?: if (exactTitle) 1.0 else null
+                )
+            }
+            .firstOrNull()
+    }
+
     fun seriesFromDescription(value: String?): String? {
         val text = value
             ?.replace(Regex("""<[^>]+>"""), " ")
@@ -206,6 +235,70 @@ object PublicationMetadataTools {
         return initialCaps * 30 + caseScore + lowercase.coerceAtMost(12)
     }
 
+    private fun phraseRange(text: String, phrase: String): IntRange? {
+        var start = text.indexOf(phrase)
+        while (start >= 0) {
+            val endExclusive = start + phrase.length
+            val startsAtBoundary = start == 0 || text[start - 1].isWhitespace()
+            val endsAtBoundary = endExclusive == text.length || text[endExclusive].isWhitespace()
+            if (startsAtBoundary && endsAtBoundary) return start until endExclusive
+            start = text.indexOf(phrase, startIndex = start + 1)
+        }
+        return null
+    }
+
+    private fun titleSeriesIndex(normalizedTitle: String, seriesRange: IntRange): Double? {
+        val after = normalizedTitle.substring(seriesRange.last + 1)
+        parseLeadingSeriesIndex(after)?.let { return it }
+        val before = normalizedTitle.substring(0, seriesRange.first)
+        return parseTrailingSeriesIndex(before)
+    }
+
+    private fun parseLeadingSeriesIndex(value: String): Double? =
+        leadingLabeledSeriesIndexRegex.find(value)?.groupValues?.getOrNull(1)?.toTitleSeriesIndex()
+            ?: leadingBareSeriesIndexRegex.find(value)?.groupValues?.getOrNull(1)?.toTitleSeriesIndex()
+
+    private fun parseTrailingSeriesIndex(value: String): Double? =
+        trailingLabeledSeriesIndexRegex.find(value)?.groupValues?.getOrNull(1)?.toTitleSeriesIndex()
+
+    private fun String.toTitleSeriesIndex(): Double? =
+        (titleIndexWords[this] ?: toDoubleOrNull())
+            ?.takeIf { it > 0.0 && it <= MAX_TITLE_SERIES_INDEX }
+
+    private fun normalizeTitleForSeriesInference(value: String): String =
+        value
+            .trim()
+            .lowercase(Locale.US)
+            .replace("&", " and ")
+            .replace(Regex("""[’']"""), "")
+            .replace(Regex("""[^\p{L}\p{N}#]+"""), " ")
+            .replace(Regex("""\s+"""), " ")
+            .trim()
+
     private fun normalize(value: String): String =
         value.trim().lowercase(Locale.US).replace(Regex("""\s+"""), " ")
+
+    private const val MIN_TITLE_SERIES_MATCH_LENGTH = 3
+    private const val MAX_TITLE_SERIES_INDEX = 200.0
+    private const val TITLE_INDEX_TOKEN = """([0-9]+(?:\.[0-9]+)?|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)"""
+    private val leadingLabeledSeriesIndexRegex =
+        Regex("""^\s*(?:(?:book|volume|vol|part|no|number)\s+|#\s*)$TITLE_INDEX_TOKEN\b""")
+    private val leadingBareSeriesIndexRegex =
+        Regex("""^\s*$TITLE_INDEX_TOKEN\b""")
+    private val trailingLabeledSeriesIndexRegex =
+        Regex("""(?:(?:book|volume|vol|part|no|number)\s+|#\s*)$TITLE_INDEX_TOKEN\s+(?:of|in)\s*$""")
+    private val titleIndexWords = mapOf(
+        "one" to 1.0,
+        "two" to 2.0,
+        "three" to 3.0,
+        "four" to 4.0,
+        "five" to 5.0,
+        "six" to 6.0,
+        "seven" to 7.0,
+        "eight" to 8.0,
+        "nine" to 9.0,
+        "ten" to 10.0,
+        "eleven" to 11.0,
+        "twelve" to 12.0,
+    )
 }

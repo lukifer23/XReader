@@ -63,4 +63,57 @@ class PublicationMetadataToolsTest {
             PublicationMetadataTools.seriesGenreConsensus(listOf("Adventure", "War"))
         )
     }
+
+    @Test
+    fun infersKnownSeriesAndIndexFromCommonTitlePatterns() {
+        assertEquals(
+            PublicationMetadataTools.SeriesTitleInference("Red Rising", 2.0),
+            PublicationMetadataTools.inferSeriesFromTitle(
+                "Red Rising #2 - Golden Son",
+                listOf("Red Rising")
+            )
+        )
+        assertEquals(
+            PublicationMetadataTools.SeriesTitleInference("Red Rising", 2.0),
+            PublicationMetadataTools.inferSeriesFromTitle(
+                "Golden Son (Red Rising, Book Two)",
+                listOf("Red Rising")
+            )
+        )
+        assertEquals(
+            PublicationMetadataTools.SeriesTitleInference("Red Rising", 3.0),
+            PublicationMetadataTools.inferSeriesFromTitle(
+                "Book 3 of Red Rising: Morning Star",
+                listOf("Red Rising")
+            )
+        )
+    }
+
+    @Test
+    fun infersFirstSeriesBookWhenTitleMatchesSeries() {
+        assertEquals(
+            PublicationMetadataTools.SeriesTitleInference("The Expanse", 1.0),
+            PublicationMetadataTools.inferSeriesFromTitle(
+                "The Expanse",
+                listOf("The Expanse")
+            )
+        )
+    }
+
+    @Test
+    fun titleSeriesInferenceUsesLongestKnownSeriesAndAvoidsUnmatchedTitles() {
+        assertEquals(
+            PublicationMetadataTools.SeriesTitleInference("Red Rising Saga", 4.0),
+            PublicationMetadataTools.inferSeriesFromTitle(
+                "Red Rising Saga Book 4 - Iron Gold",
+                listOf("Red Rising", "Red Rising Saga")
+            )
+        )
+        assertNull(
+            PublicationMetadataTools.inferSeriesFromTitle(
+                "Unrelated Orbit",
+                listOf("Red Rising")
+            )
+        )
+    }
 }
