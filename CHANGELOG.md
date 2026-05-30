@@ -28,6 +28,7 @@ Initial public repository snapshot.
 - Library organization, metadata editing, favorites, finished state, and progress display.
 - Predictable grouped-library ordering: years newest-first and missing series/genre/year buckets last.
 - Manual mark-finished and mark-not-finished actions from the compact book action menu, with finished-state-aware progress classification.
+- Undoable book removal from the library action menu; books disappear immediately but the destructive delete is deferred through the snackbar undo window.
 - Compact author, genre, and series suggestions in the metadata editor to prevent accidental duplicate categories.
 - Automatic author, genre, and series canonicalization during import and metadata edits, so variants like `sci-fi` and `Science fiction` collapse into the same library groups.
 - Opt-in bulk genre and series cleanup from the metadata editor for matching series books.

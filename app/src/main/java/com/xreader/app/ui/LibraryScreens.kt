@@ -60,6 +60,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
@@ -202,11 +203,17 @@ internal fun LibraryRoute(
         val result = snackbarHostState.showSnackbar(
             message = message.text,
             actionLabel = message.actionLabel,
-            withDismissAction = message.actionLabel != null
+            withDismissAction = message.actionLabel != null,
+            duration = SnackbarDuration.Long
         )
         viewModel.clearMessage()
-        if (result == SnackbarResult.ActionPerformed && message.openBookId != null) {
-            openReaderAt(message.openBookId, null)
+        when {
+            result == SnackbarResult.ActionPerformed && message.openBookId != null ->
+                openReaderAt(message.openBookId, null)
+            result == SnackbarResult.ActionPerformed && message.undoRemoveBookId != null ->
+                viewModel.undoPendingBookRemoval(message.undoRemoveBookId)
+            message.undoRemoveBookId != null ->
+                viewModel.finalizePendingBookRemoval(message.undoRemoveBookId)
         }
     }
 

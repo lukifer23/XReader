@@ -18,12 +18,15 @@ import com.xreader.app.opds.OpdsLink
 import com.xreader.app.settings.LibraryDensity
 import com.xreader.app.settings.LibrarySort
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.Locale
 
@@ -63,6 +66,7 @@ data class LibraryMessage(
     val text: String,
     val actionLabel: String? = null,
     val openBookId: Long? = null,
+    val undoRemoveBookId: Long? = null,
 )
 
 data class LibraryUiState(
@@ -106,6 +110,9 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     private val bookHealth = MutableStateFlow<Map<Long, BookHealthUiState>>(emptyMap())
     private val repairingBookIds = MutableStateFlow<Set<Long>>(emptySet())
     private val opdsCatalog = MutableStateFlow(OpdsCatalogUiState())
+    private val pendingRemovalIds = MutableStateFlow<Set<Long>>(emptySet())
+    private val pendingRemovalBooks = linkedMapOf<Long, BookEntity>()
+    private val pendingRemovalJobs = mutableMapOf<Long, Job>()
 
     private val queriedBooks = query.flatMapLatest { container.libraryRepository.observeBooks(it) }
     private val allBooks = container.libraryRepository.observeBooks("")
@@ -177,8 +184,9 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         queriedBooks,
         allBooks,
         states,
-        bookCollectionNames
-    ) { currentBooks, currentAllBooks, currentStates, currentBookCollections ->
+        bookCollectionNames,
+        pendingRemovalIds
+    ) { currentBooks, currentAllBooks, currentStates, currentBookCollections, removingIds ->
         val statesByBook = currentStates.associateBy { it.bookId }
         val collectionsByBook = currentBookCollections
             .groupBy { it.bookId }
@@ -187,9 +195,11 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
                     .distinctBy { it.collectionId }
                     .map { CollectionUiItem(id = it.collectionId, name = it.name) }
             }
+        val visibleBooks = currentBooks.withoutPendingRemovalIds(removingIds)
+        val visibleAllBooks = currentAllBooks.withoutPendingRemovalIds(removingIds)
         LibraryBooksState(
-            queriedItems = currentBooks.map { BookListItem(it, statesByBook[it.id], collectionsByBook[it.id].orEmpty()) },
-            allItems = currentAllBooks.map { BookListItem(it, statesByBook[it.id], collectionsByBook[it.id].orEmpty()) }
+            queriedItems = visibleBooks.map { BookListItem(it, statesByBook[it.id], collectionsByBook[it.id].orEmpty()) },
+            allItems = visibleAllBooks.map { BookListItem(it, statesByBook[it.id], collectionsByBook[it.id].orEmpty()) }
         )
     }
 
@@ -268,13 +278,15 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         text: String,
         actionLabel: String? = null,
         openBookId: Long? = null,
+        undoRemoveBookId: Long? = null,
     ) {
         nextMessageId += 1
         message.value = LibraryMessage(
             id = nextMessageId,
             text = text,
             actionLabel = actionLabel,
-            openBookId = openBookId
+            openBookId = openBookId,
+            undoRemoveBookId = undoRemoveBookId
         )
     }
 
@@ -551,10 +563,59 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     fun deleteBook(book: BookEntity) {
-        viewModelScope.launch {
-            container.libraryRepository.deleteBook(book)
-            postMessage("Removed book")
+        if (book.id in pendingRemovalIds.value) return
+        pendingRemovalBooks[book.id] = book
+        pendingRemovalIds.update { it + book.id }
+        searchResults.update { results -> results.filterNot { it.row.bookId == book.id } }
+        pendingRemovalJobs.remove(book.id)?.cancel()
+        pendingRemovalJobs[book.id] = viewModelScope.launch {
+            delay(UNDO_REMOVE_TIMEOUT_MS)
+            commitPendingBookRemoval(book.id, cancelJob = false)
         }
+        postMessage(
+            text = "Removed ${book.title}",
+            actionLabel = "Undo",
+            undoRemoveBookId = book.id
+        )
+    }
+
+    fun undoPendingBookRemoval(bookId: Long) {
+        val book = pendingRemovalBooks.remove(bookId) ?: return
+        pendingRemovalJobs.remove(bookId)?.cancel()
+        pendingRemovalIds.update { it - bookId }
+        postMessage("Restored ${book.title}")
+    }
+
+    fun finalizePendingBookRemoval(bookId: Long) {
+        commitPendingBookRemoval(bookId)
+    }
+
+    private fun commitPendingBookRemoval(bookId: Long, cancelJob: Boolean = true) {
+        val book = pendingRemovalBooks.remove(bookId) ?: return
+        val job = pendingRemovalJobs.remove(bookId)
+        if (cancelJob) job?.cancel()
+        pendingRemovalIds.update { it - bookId }
+        viewModelScope.launch {
+            runCatching { container.libraryRepository.deleteBook(book) }
+                .onFailure { error ->
+                    Log.e("XReader", "Book removal failed for ${book.id}", error)
+                    postMessage(error.message ?: "Could not remove ${book.title}")
+                }
+        }
+    }
+
+    override fun onCleared() {
+        pendingRemovalJobs.values.forEach { it.cancel() }
+        val removals = pendingRemovalBooks.values.toList()
+        pendingRemovalBooks.clear()
+        pendingRemovalIds.value = emptySet()
+        removals.forEach { book ->
+            container.applicationScope.launch {
+                runCatching { container.libraryRepository.deleteBook(book) }
+                    .onFailure { error -> Log.e("XReader", "Book removal failed for ${book.id}", error) }
+            }
+        }
+        super.onCleared()
     }
 
     private fun List<BookListItem>.filteredBy(group: LibraryGroup): List<BookListItem> =
@@ -621,6 +682,8 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         map { CollectionUiItem(id = it.id, name = it.name) }
 
     companion object {
+        private const val UNDO_REMOVE_TIMEOUT_MS = 8_000L
+
         fun factory(container: AppContainer): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
@@ -629,6 +692,9 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
             }
     }
 }
+
+internal fun List<BookEntity>.withoutPendingRemovalIds(pendingIds: Set<Long>): List<BookEntity> =
+    if (pendingIds.isEmpty()) this else filterNot { it.id in pendingIds }
 
 private fun List<OpdsLink>.preferredCatalogDownload(): OpdsLink? =
     minWithOrNull(

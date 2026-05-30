@@ -62,6 +62,7 @@ The research points to several areas that matter more than raw feature count:
 - Filterable in-book navigation. The reader Navigate sheet now filters long tables of contents, bookmarks, notes, highlights, and annotation tags without adding permanent chrome, and uses lazy lists for large books.
 - Series continuation. The Books home now shows a single compact "Up next" recommendation when the library has the next unfinished title after the most recently finished book in a series, using series index with year/title fallback.
 - Save book copy. Each book action menu can export the stored private reader file through SAF, so local-first storage does not trap the user's files or require broad storage permissions.
+- Undoable book removal. Removing a book uses the existing snackbar action path to defer the destructive delete, so accidental removals can be reversed without adding a recycle-bin screen.
 - Range-aware reading stats. The stats screen now supports 7-day, 30-day, 13-week, and all-time ranges, with grouped analytics and activity buckets recalculated for the selected period.
 - Local reading stats export. The stats screen can export all analytics ranges to CSV or JSON through Android's document picker, keeping the workflow local and user-controlled.
 - Per-book reader appearance. Books can keep their own font, font weight, spacing, hyphenation, alignment, publisher-style, and PDF fit choices without changing global reading behavior.
