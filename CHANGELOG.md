@@ -12,6 +12,7 @@ Initial public repository snapshot.
 - CBZ import converted into fixed-layout EPUB packages.
 - FB2 and zipped `.fb2.zip` import converted into EPUB packages with FictionBook metadata and embedded cover support.
 - RTF import converted into EPUB packages with title/author metadata and searchable text extraction.
+- DRM-free legacy MOBI/PalmDOC import converted into EPUB packages with title/author metadata and searchable text extraction.
 - ODT import converted into EPUB packages with OpenDocument metadata, headings, paragraphs, lists, tables, and searchable text extraction.
 - DOCX import converted into EPUB packages with document metadata, headings, paragraphs, lists, tables, and searchable text extraction.
 - HTML, HTM, and XHTML import converted into EPUB packages with page metadata, headings, lists, tables, blockquotes, and searchable text extraction.
@@ -64,7 +65,7 @@ Initial public repository snapshot.
 
 ### Known Limits
 
-- MOBI/AZW3 conversion is not implemented.
+- AZW3/KF8 conversion is not implemented.
 - CBR/DJVU/legacy binary DOC import is not implemented.
 - Release APKs are unsigned.
 - Play Store packaging, dependency shrinking, and APK/AAB size optimization have not had a final pass.

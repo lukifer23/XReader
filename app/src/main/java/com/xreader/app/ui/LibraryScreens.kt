@@ -120,6 +120,8 @@ internal fun LibraryRoute(
             "application/rtf",
             "text/rtf",
             "application/x-rtf",
+            "application/x-mobipocket-ebook",
+            "application/vnd.amazon.ebook",
             "application/vnd.oasis.opendocument.text",
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             "application/zip",

@@ -43,7 +43,7 @@ Search uses a normal table plus an FTS table. Book deletion removes search rows 
 1. Android Storage Access Framework returns one or more document URIs, or a folder tree URI.
 2. `ImportService` copies the selected file to a temporary app cache file.
 3. The file checksum is calculated to prevent duplicate imports. If the checksum already exists but the app-private stored file is missing, import becomes an in-place recovery path for that existing book id rather than a duplicate no-op.
-4. TXT files are converted into a minimal EPUB package, CBZ files are converted into fixed-layout EPUB packages, FB2 / `.fb2.zip` files are converted into EPUB packages, RTF files are converted into EPUB packages with extracted text and basic metadata, ODT/DOCX files are converted into EPUB packages with document metadata and reading-order text, standalone HTML/HTM/XHTML files are converted into EPUB packages with page metadata and readable block structure, and Markdown files are converted into EPUB packages with front matter metadata and readable block structure.
+4. TXT files are converted into a minimal EPUB package, CBZ files are converted into fixed-layout EPUB packages, FB2 / `.fb2.zip` files are converted into EPUB packages, RTF files are converted into EPUB packages with extracted text and basic metadata, DRM-free legacy MOBI/PalmDOC files are converted into EPUB packages with decompressed text and basic metadata, ODT/DOCX files are converted into EPUB packages with document metadata and reading-order text, standalone HTML/HTM/XHTML files are converted into EPUB packages with page metadata and readable block structure, and Markdown files are converted into EPUB packages with front matter metadata and readable block structure.
 5. EPUB/PDF files and converted EPUB outputs are copied into app-owned private library storage.
 6. Metadata, cover art, reading units, word counts, and searchable text are extracted.
 7. Author, genre, and series values are canonicalized against known genre aliases and existing library display values.
@@ -53,11 +53,11 @@ EPUB cover extraction checks explicit OPF cover metadata, EPUB 3 `cover-image` p
 
 The manual Settings repair action and the per-book metadata repair action reuse this parsing/indexing path against stored private-library files. They refresh covers, metadata fields that are empty or safe to improve, word/page counts, and search rows. They preserve user-edited title and author values. Covers manually replaced from local image files are stored as app-private downsampled JPEGs and are not overwritten by repair.
 
-Folder imports walk SAF document trees recursively, filter to EPUB, PDF, TXT, CBZ, FB2, `.fb2.zip`, RTF, ODT, DOCX, HTML, HTM, XHTML, MD, and Markdown documents, and summarize imported, restored, duplicate, unsupported, and failed files. They do not require broad all-files access.
+Folder imports walk SAF document trees recursively, filter to EPUB, PDF, TXT, CBZ, FB2, `.fb2.zip`, RTF, MOBI, PRC, ODT, DOCX, HTML, HTM, XHTML, MD, and Markdown documents, and summarize imported, restored, duplicate, unsupported, and failed files. They do not require broad all-files access.
 
 Single-book imports and duplicate re-imports carry the target book id back to the library UI, where the snackbar exposes a contextual `Open` action. Batch and folder imports keep summary-only feedback unless the completed import set contains exactly one actionable book.
 
-Book rows expose a save-copy action that launches Android's `CreateDocument` picker and streams the app-private stored reader file to the selected URI. Converted imports such as TXT, CBZ, FB2, RTF, ODT, DOCX, HTML, and Markdown export as the actual EPUB file XReader stores for reading.
+Book rows expose a save-copy action that launches Android's `CreateDocument` picker and streams the app-private stored reader file to the selected URI. Converted imports such as TXT, CBZ, FB2, RTF, MOBI, ODT, DOCX, HTML, and Markdown export as the actual EPUB file XReader stores for reading.
 
 Manual metadata edits canonicalize author, genre, and series values before persistence, then can optionally apply shared author, genre, and series metadata to other books that match the same old or new author and series pair. The bulk cleanup runs in a Room transaction and keeps per-book fields such as title, year, and series index isolated to each book.
 
@@ -150,7 +150,7 @@ tools/perf_baseline.sh --iterations 7 --reader-tap 400 780
 
 Device checks should cover:
 
-- importing EPUB/PDF/TXT/CBZ/FB2/RTF/ODT/DOCX/HTML/Markdown
+- importing EPUB/PDF/TXT/CBZ/FB2/RTF/MOBI/ODT/DOCX/HTML/Markdown
 - opening a real EPUB and PDF
 - page navigation by swipe, tap, hardware keyboard/DPAD keys, optional volume buttons, filterable TOC/bookmark/note lists, search result, find-next/find-previous, scrubber, and Back-based return after manual jumps
 - resume after process/app restart

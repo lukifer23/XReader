@@ -155,6 +155,39 @@ class ImportServiceInstrumentedTest {
     }
 
     @Test
+    fun importsMobiAsPrivateEpubAndIndexesText() = runBlocking {
+        val source = File(root, "source/Orbital Legacy.mobi").apply {
+            parentFile?.mkdirs()
+            writeBytes(
+                legacyMobiFixture(
+                    title = "Orbital Legacy",
+                    author = "Mina Patel",
+                    body = """
+                        <html><body>
+                          <h1>Arrival</h1>
+                          <p>The courier crossed the quiet orbit.</p>
+                          <p>Every docking light stayed green.</p>
+                        </body></html>
+                    """.trimIndent()
+                )
+            )
+        }
+
+        val result = ImportService(context, db).import(Uri.fromFile(source))
+
+        assertFalse(result.duplicate)
+        val book = requireNotNull(db.books().getBook(result.bookId))
+        assertEquals(BookFormat.EPUB, book.format)
+        assertEquals("mobi", book.sourceExtension)
+        assertEquals("Orbital Legacy", book.title)
+        assertEquals("Mina Patel", book.author)
+        assertTrue(File(context.filesDir, book.filePath).exists())
+
+        val searchResults = db.search().searchBook(result.bookId, "normalizedBody:courier*")
+        assertTrue(searchResults.any { it.body.contains("courier crossed", ignoreCase = true) })
+    }
+
+    @Test
     fun importsOdtAsPrivateEpubAndIndexesText() = runBlocking {
         val source = File(root, "source/Station Notes.odt").apply {
             parentFile?.mkdirs()

@@ -22,7 +22,7 @@ This is the working product roadmap for the personal APK line. Items should appe
 
 ## Later
 
-- MOBI/AZW3 conversion through a real local conversion pipeline.
+- AZW3/KF8 conversion through a real local conversion pipeline.
 - CBR/DJVU/legacy binary DOC only if each format can land as a real import path without cluttering the reader.
 - Web archive formats such as MHTML only if bundled assets can be imported and converted reliably without pretending standalone HTML support covers them.
 - OPDS catalog import if it can stay optional and low-bloat.

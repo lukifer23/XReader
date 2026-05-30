@@ -75,6 +75,7 @@ class ImportService(
     private val cbzConverter = CbzToEpubConverter()
     private val fb2Converter = Fb2ToEpubConverter()
     private val rtfConverter = RtfToEpubConverter()
+    private val mobiConverter = MobiToEpubConverter()
     private val odtConverter = OdtToEpubConverter()
     private val docxConverter = DocxToEpubConverter()
     private val htmlConverter = HtmlToEpubConverter()
@@ -148,6 +149,10 @@ class ImportService(
                 }
                 "rtf" -> {
                     rtfConverter.convert(tmp, stagedFile, sourceTitle(displayName, effectiveSourceExtension))
+                    null
+                }
+                "mobi", "prc" -> {
+                    mobiConverter.convert(tmp, stagedFile, sourceTitle(displayName, effectiveSourceExtension))
                     null
                 }
                 "odt" -> {
@@ -796,6 +801,7 @@ class ImportService(
             "application/pdf" -> "pdf"
             "text/plain" -> "txt"
             "application/rtf", "text/rtf", "application/x-rtf" -> "rtf"
+            "application/x-mobipocket-ebook", "application/vnd.amazon.ebook" -> "mobi"
             "application/vnd.oasis.opendocument.text" -> "odt"
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document" -> "docx"
             "text/html" -> "html"
@@ -833,6 +839,8 @@ class ImportService(
             "fb2",
             "fb2.zip",
             "rtf",
+            "mobi",
+            "prc",
             "odt",
             "docx",
             "html",
@@ -848,6 +856,8 @@ class ImportService(
             "application/rtf",
             "text/rtf",
             "application/x-rtf",
+            "application/x-mobipocket-ebook",
+            "application/vnd.amazon.ebook",
             "text/html",
             "application/xhtml+xml",
             "text/markdown",
