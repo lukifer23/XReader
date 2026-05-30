@@ -5,6 +5,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.xreader.app.AppContainer
+import com.xreader.app.annotations.AnnotationTagSummary
+import com.xreader.app.annotations.summarizeAnnotationTags
+import com.xreader.app.annotations.tagMatches
 import com.xreader.app.data.AnnotationEntity
 import com.xreader.app.data.AnnotationKind
 import com.xreader.app.data.BookEntity
@@ -25,6 +28,8 @@ data class NoteListItem(
 data class NotesUiState(
     val query: String = "",
     val kind: AnnotationKind? = null,
+    val selectedTag: String? = null,
+    val tagOptions: List<AnnotationTagSummary> = emptyList(),
     val notes: List<NoteListItem> = emptyList(),
     val exporting: Boolean = false,
     val message: String? = null,
@@ -35,6 +40,7 @@ class NotesViewModel(container: AppContainer) : ViewModel() {
     private val annotationBackupService = container.annotationBackupService
     private val query = MutableStateFlow("")
     private val kind = MutableStateFlow<AnnotationKind?>(null)
+    private val selectedTag = MutableStateFlow<String?>(null)
     private val exportState = MutableStateFlow(NotesExportState())
 
     private data class NotesExportState(
@@ -43,35 +49,22 @@ class NotesViewModel(container: AppContainer) : ViewModel() {
     )
 
     val uiState: StateFlow<NotesUiState> =
-        container.annotationRepository.observeAllAnnotations()
-            .combine(container.libraryRepository.observeBooks("")) { annotations, books ->
-                annotations to books.associateBy { it.id }
-            }
-            .combine(query) { (annotations, booksById), currentQuery ->
-                Triple(annotations, booksById, currentQuery.trim())
-            }
-            .combine(kind) { (annotations, booksById, currentQuery), currentKind ->
-                val filtered = annotations
-                    .asSequence()
-                    .filter { currentKind == null || it.kind == currentKind }
-                    .filter { annotation ->
-                        if (currentQuery.isBlank()) {
-                            true
-                        } else {
-                            val haystack = listOf(
-                                annotation.quote,
-                                annotation.note,
-                                annotation.tags,
-                                booksById[annotation.bookId]?.title.orEmpty(),
-                                booksById[annotation.bookId]?.author.orEmpty()
-                            ).joinToString(" ")
-                            haystack.contains(currentQuery, ignoreCase = true)
-                        }
-                    }
-                    .map { NoteListItem(it, booksById[it.bookId]) }
-                    .toList()
-                NotesUiState(query = currentQuery, kind = currentKind, notes = filtered)
-            }
+        combine(
+            container.annotationRepository.observeAllAnnotations(),
+            container.libraryRepository.observeBooks(""),
+            query,
+            kind,
+            selectedTag
+        ) { annotations, books, currentQuery, currentKind, currentTag ->
+            val booksById = books.associateBy { it.id }
+            buildNotesUiState(
+                annotations = annotations,
+                booksById = booksById,
+                currentQuery = currentQuery,
+                currentKind = currentKind,
+                currentTag = currentTag
+            )
+        }
             .combine(exportState) { notes, export ->
                 notes.copy(exporting = export.exporting, message = export.message)
             }
@@ -83,6 +76,10 @@ class NotesViewModel(container: AppContainer) : ViewModel() {
 
     fun setKind(value: AnnotationKind?) {
         kind.value = value
+    }
+
+    fun setSelectedTag(value: String?) {
+        selectedTag.value = value?.trim()?.ifBlank { null }
     }
 
     fun updateNote(annotation: AnnotationEntity, note: String, color: String, tags: String) {
@@ -133,4 +130,48 @@ class NotesViewModel(container: AppContainer) : ViewModel() {
                     NotesViewModel(container) as T
             }
     }
+}
+
+internal fun buildNotesUiState(
+    annotations: List<AnnotationEntity>,
+    booksById: Map<Long, BookEntity>,
+    currentQuery: String,
+    currentKind: AnnotationKind?,
+    currentTag: String?,
+): NotesUiState {
+    val trimmedQuery = currentQuery.trim()
+    val base = annotations
+        .asSequence()
+        .filter { currentKind == null || it.kind == currentKind }
+        .filter { annotation ->
+            if (trimmedQuery.isBlank()) {
+                true
+            } else {
+                val haystack = listOf(
+                    annotation.quote,
+                    annotation.note,
+                    annotation.tags,
+                    booksById[annotation.bookId]?.title.orEmpty(),
+                    booksById[annotation.bookId]?.author.orEmpty()
+                ).joinToString(" ")
+                haystack.contains(trimmedQuery, ignoreCase = true)
+            }
+        }
+        .toList()
+    val tags = summarizeAnnotationTags(base.map { it.tags })
+    val resolvedTag = currentTag?.let { selected ->
+        tags.firstOrNull { it.label.equals(selected, ignoreCase = true) }?.label
+    }
+    val filtered = base
+        .asSequence()
+        .filter { annotation -> tagMatches(annotation.tags, resolvedTag) }
+        .map { NoteListItem(it, booksById[it.bookId]) }
+        .toList()
+    return NotesUiState(
+        query = trimmedQuery,
+        kind = currentKind,
+        selectedTag = resolvedTag,
+        tagOptions = tags,
+        notes = filtered
+    )
 }

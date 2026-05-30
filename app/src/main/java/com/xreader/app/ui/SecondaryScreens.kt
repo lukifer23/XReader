@@ -367,6 +367,7 @@ internal fun NotesRoute(
     }
     var editing by remember { mutableStateOf<AnnotationEntity?>(null) }
     var deleteCandidate by remember { mutableStateOf<AnnotationEntity?>(null) }
+    var tagMenuOpen by remember { mutableStateOf(false) }
     LaunchedEffect(state.message) {
         state.message?.let { message ->
             snackbarHostState.showSnackbar(message)
@@ -439,6 +440,33 @@ internal fun NotesRoute(
                         label = { Text(kind.label()) }
                     )
                 }
+                if (state.tagOptions.isNotEmpty()) {
+                    Box {
+                        FilterChip(
+                            selected = state.selectedTag != null,
+                            onClick = { tagMenuOpen = true },
+                            label = { Text(state.selectedTag?.let { "Tag: $it" } ?: "Tags") }
+                        )
+                        DropdownMenu(expanded = tagMenuOpen, onDismissRequest = { tagMenuOpen = false }) {
+                            DropdownMenuItem(
+                                text = { Text("All tags") },
+                                onClick = {
+                                    viewModel.setSelectedTag(null)
+                                    tagMenuOpen = false
+                                }
+                            )
+                            state.tagOptions.forEach { tag ->
+                                DropdownMenuItem(
+                                    text = { Text("${tag.label} (${tag.count})") },
+                                    onClick = {
+                                        viewModel.setSelectedTag(tag.label)
+                                        tagMenuOpen = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
             }
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -448,7 +476,7 @@ internal fun NotesRoute(
                 if (state.notes.isEmpty()) {
                     item {
                         Text(
-                            if (state.query.isBlank() && state.kind == null) "No notes yet." else "No matching notes.",
+                            if (state.query.isBlank() && state.kind == null && state.selectedTag == null) "No notes yet." else "No matching notes.",
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }

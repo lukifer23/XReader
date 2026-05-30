@@ -17,4 +17,29 @@ class AnnotationTagsTest {
         assertEquals("", annotationTagsLabel(" , # "))
         assertEquals("Tags: theme, Mars", annotationTagsLabel(" theme, #Mars, theme "))
     }
+
+    @Test
+    fun summarizesTagsByFrequency() {
+        assertEquals(
+            listOf(
+                AnnotationTagSummary(label = "Mars", count = 3),
+                AnnotationTagSummary(label = "craft", count = 2),
+                AnnotationTagSummary(label = "theme", count = 1)
+            ),
+            summarizeAnnotationTags(
+                listOf(
+                    "Mars, craft",
+                    "#mars, theme",
+                    "craft, Mars"
+                )
+            )
+        )
+    }
+
+    @Test
+    fun tagMatchingIsCaseInsensitive() {
+        assertEquals(true, tagMatches("Mars, craft", "mars"))
+        assertEquals(false, tagMatches("Mars, craft", "theme"))
+        assertEquals(true, tagMatches("Mars, craft", null))
+    }
 }
