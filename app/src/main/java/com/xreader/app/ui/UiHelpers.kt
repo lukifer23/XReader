@@ -416,6 +416,7 @@ internal fun bookFormatLabel(book: BookEntity): String =
         "rtf" -> "RTF"
         "odt" -> "ODT"
         "docx" -> "DOCX"
+        "html", "htm", "xhtml" -> "HTML"
         else -> book.format.name
     }
 

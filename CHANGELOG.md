@@ -14,6 +14,7 @@ Initial public repository snapshot.
 - RTF import converted into EPUB packages with title/author metadata and searchable text extraction.
 - ODT import converted into EPUB packages with OpenDocument metadata, headings, paragraphs, lists, tables, and searchable text extraction.
 - DOCX import converted into EPUB packages with document metadata, headings, paragraphs, lists, tables, and searchable text extraction.
+- HTML, HTM, and XHTML import converted into EPUB packages with page metadata, headings, lists, tables, blockquotes, and searchable text extraction.
 - SAF-based private library imports.
 - Batch file and folder import through Android's Storage Access Framework.
 - Duplicate detection by checksum.

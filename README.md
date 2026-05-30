@@ -17,6 +17,7 @@ Implemented:
 - RTF import converted into EPUB with title/author metadata and searchable text extraction.
 - ODT import converted into EPUB with OpenDocument metadata, headings, paragraphs, lists, tables, and searchable text extraction.
 - DOCX import converted into EPUB with document metadata, headings, paragraphs, lists, tables, and searchable text extraction.
+- HTML, HTM, and XHTML import converted into EPUB with page metadata, headings, lists, tables, blockquotes, and searchable text extraction.
 - Private app-library imports from selected files or SAF folders, with checksum duplicate detection.
 - Library organization by books, authors, series, genres, years, custom collections, recent, unread, in progress, finished, and favorites, with group-aware ordering.
 - Home-screen series continuation that suggests the next unfinished title after the most recently finished book in a series.

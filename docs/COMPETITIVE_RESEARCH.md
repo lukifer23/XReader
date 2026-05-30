@@ -22,7 +22,7 @@ This is the working competitive map for XReader. It should drive implementation 
 
 | Capability | XReader Current | Major Competitors | Priority |
 | --- | --- | --- | --- |
-| EPUB/PDF/TXT/CBZ/FB2/RTF/ODT/DOCX reading | Implemented through Readium, TXT-to-EPUB import, CBZ-to-fixed-layout-EPUB import, FB2-to-EPUB import, RTF-to-EPUB import, ODT-to-EPUB import, and DOCX-to-EPUB import. | All major readers cover EPUB/PDF/TXT; broad readers often include comics/image archives, FB2, RTF, and office documents. | Keep hardening. |
+| EPUB/PDF/TXT/CBZ/FB2/RTF/ODT/DOCX/HTML reading | Implemented through Readium, TXT-to-EPUB import, CBZ-to-fixed-layout-EPUB import, FB2-to-EPUB import, RTF-to-EPUB import, ODT-to-EPUB import, DOCX-to-EPUB import, and HTML/XHTML-to-EPUB import. | All major readers cover EPUB/PDF/TXT; broad readers often include comics/image archives, FB2, RTF, office documents, and HTML. | Keep hardening. |
 | MOBI/AZW3 | Not implemented in UI. | Common in Moon+, ReadEra, PocketBook, FBReader. | Later, only with real local conversion. |
 | DJVU/CBR/legacy binary DOC | Not implemented. | Broad-format apps cover many of these. | Later; avoid format sprawl before the current reader path is excellent. |
 | No ads/no account | Implemented. | ReadEra and Lithium lead here; Moon+ free has ads; sync apps require accounts. | Preserve. |
@@ -76,6 +76,7 @@ The research points to several areas that matter more than raw feature count:
 - RTF import. Rich Text files convert locally into EPUB with extracted title/author metadata and searchable text, keeping the same private-library and Readium reader path.
 - ODT import. OpenDocument text files convert locally into EPUB with metadata, headings, paragraphs, lists, tables, and searchable text preserved in reading order.
 - DOCX import. WordprocessingML documents convert locally into EPUB with metadata, headings, paragraphs, lists, tables, and searchable text preserved in reading order.
+- HTML import. Standalone HTML, HTM, and XHTML documents convert locally into EPUB with page metadata, headings, lists, tables, blockquotes, and searchable text preserved in reading order.
 - Markdown notes export. Notes, highlights, and bookmarks can leave the app in a readable grouped document, while JSON remains the restore-oriented backup format.
 - Manual finished-state control. The book action menu can mark books finished or not finished, and library filters/counts/progress displays use one finished-state-aware classification.
 - Custom collections. The book action menu can add or remove a book from user-named collections, and the existing library group control can browse those collections without adding another permanent tab or top-level mode.

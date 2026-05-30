@@ -43,7 +43,7 @@ Search uses a normal table plus an FTS table. Book deletion removes search rows 
 1. Android Storage Access Framework returns one or more document URIs, or a folder tree URI.
 2. `ImportService` copies the selected file to a temporary app cache file.
 3. The file checksum is calculated to prevent duplicate imports.
-4. TXT files are converted into a minimal EPUB package, CBZ files are converted into fixed-layout EPUB packages, FB2 / `.fb2.zip` files are converted into EPUB packages, RTF files are converted into EPUB packages with extracted text and basic metadata, and ODT/DOCX files are converted into EPUB packages with document metadata and reading-order text.
+4. TXT files are converted into a minimal EPUB package, CBZ files are converted into fixed-layout EPUB packages, FB2 / `.fb2.zip` files are converted into EPUB packages, RTF files are converted into EPUB packages with extracted text and basic metadata, ODT/DOCX files are converted into EPUB packages with document metadata and reading-order text, and standalone HTML/HTM/XHTML files are converted into EPUB packages with page metadata and readable block structure.
 5. EPUB/PDF files and converted EPUB outputs are copied into app-owned private library storage.
 6. Metadata, cover art, reading units, word counts, and searchable text are extracted.
 7. Book metadata and search rows are persisted in Room.
@@ -52,9 +52,9 @@ EPUB cover extraction checks explicit OPF cover metadata, EPUB 3 `cover-image` p
 
 The manual Settings repair action and the per-book metadata repair action reuse this parsing/indexing path against stored private-library files. They refresh covers, metadata fields that are empty or safe to improve, word/page counts, and search rows. They preserve user-edited title and author values. Covers manually replaced from local image files are stored as app-private downsampled JPEGs and are not overwritten by repair.
 
-Folder imports walk SAF document trees recursively, filter to EPUB, PDF, TXT, CBZ, FB2, `.fb2.zip`, RTF, ODT, and DOCX documents, and summarize imported, duplicate, unsupported, and failed files. They do not require broad all-files access.
+Folder imports walk SAF document trees recursively, filter to EPUB, PDF, TXT, CBZ, FB2, `.fb2.zip`, RTF, ODT, DOCX, HTML, HTM, and XHTML documents, and summarize imported, duplicate, unsupported, and failed files. They do not require broad all-files access.
 
-Book rows expose a save-copy action that launches Android's `CreateDocument` picker and streams the app-private stored reader file to the selected URI. Converted imports such as TXT, CBZ, FB2, RTF, and ODT export as the actual EPUB file XReader stores for reading.
+Book rows expose a save-copy action that launches Android's `CreateDocument` picker and streams the app-private stored reader file to the selected URI. Converted imports such as TXT, CBZ, FB2, RTF, ODT, DOCX, and HTML export as the actual EPUB file XReader stores for reading.
 
 Manual metadata edits can optionally apply shared author, genre, and series metadata to other books that match the same old or new author and series pair. The bulk cleanup runs in a Room transaction and keeps per-book fields such as title, year, and series index isolated to each book.
 
@@ -147,7 +147,7 @@ tools/perf_baseline.sh --iterations 7 --reader-tap 400 780
 
 Device checks should cover:
 
-- importing EPUB/PDF/TXT/CBZ/FB2
+- importing EPUB/PDF/TXT/CBZ/FB2/RTF/ODT/DOCX/HTML
 - opening a real EPUB and PDF
 - page navigation by swipe, tap, hardware keyboard/DPAD keys, optional volume buttons, filterable TOC/bookmark/note lists, search result, find-next/find-previous, scrubber, and Back-based return after manual jumps
 - resume after process/app restart

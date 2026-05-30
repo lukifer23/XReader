@@ -206,6 +206,29 @@ class ImportServiceInstrumentedTest {
     }
 
     @Test
+    fun importsHtmlAsPrivateEpubAndIndexesText() = runBlocking {
+        val source = File(root, "source/Orbital Report.html").apply {
+            parentFile?.mkdirs()
+            writeText(htmlDocument())
+        }
+
+        val result = ImportService(context, db).import(Uri.fromFile(source))
+
+        assertFalse(result.duplicate)
+        val book = requireNotNull(db.books().getBook(result.bookId))
+        assertEquals(BookFormat.EPUB, book.format)
+        assertEquals("html", book.sourceExtension)
+        assertEquals("Orbital Field Report", book.title)
+        assertEquals("Mina Patel", book.author)
+        assertEquals("Science Fiction", book.genre)
+        assertEquals(2026, book.year)
+        assertTrue(File(context.filesDir, book.filePath).exists())
+
+        val searchResults = db.search().searchBook(result.bookId, "normalizedBody:survey*")
+        assertTrue(searchResults.any { it.body.contains("survey ship", ignoreCase = true) })
+    }
+
+    @Test
     fun importsManyBooksAndReportsDuplicatesAndUnsupportedFiles() = runBlocking {
         val first = File(root, "source/batch_one.txt").apply {
             parentFile?.mkdirs()
@@ -351,6 +374,24 @@ class ImportServiceInstrumentedTest {
           </office:meta>
         </office:document-meta>
         """.trimIndent().trimStart()
+
+    private fun htmlDocument(): String =
+        """
+        <!doctype html>
+        <html lang="en-US">
+          <head>
+            <meta name="dc.title" content="Orbital Field Report">
+            <meta name="author" content="Mina Patel">
+            <meta name="keywords" content="Science Fiction">
+            <meta name="date" content="2026-05-30">
+          </head>
+          <body>
+            <h1>Arrival</h1>
+            <p>The survey ship docked quietly at dawn.</p>
+            <blockquote>Keep the lights low during first contact.</blockquote>
+          </body>
+        </html>
+        """.trimIndent()
 
     private fun docxDocumentXml(): String =
         """

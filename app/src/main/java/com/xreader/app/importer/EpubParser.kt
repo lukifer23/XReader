@@ -363,7 +363,7 @@ class EpubParser {
         document.select("script,style,nav").remove()
         document.select("img,svg,image").remove()
         val heading = document.select("h1,h2,h3,title").firstOrNull()?.text()?.trim().orEmpty()
-        val blocks = document.select("h1,h2,h3,h4,p,li,blockquote")
+        val blocks = document.select("h1,h2,h3,h4,p,li,blockquote,pre")
             .map { it.text().trim() }
             .filter { it.length > 1 }
             .ifEmpty {
