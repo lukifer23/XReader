@@ -34,11 +34,13 @@ class ImportService(
     data class ImportResult(
         val bookId: Long,
         val duplicate: Boolean,
+        val recovered: Boolean = false,
     )
 
     data class ImportBatchResult(
         val scanned: Int,
         val imported: Int,
+        val recovered: Int,
         val duplicates: Int,
         val unsupported: Int,
         val failed: Int,
@@ -108,15 +110,17 @@ class ImportService(
         }
 
         val checksum = sha256(tmp)
-        bookDao.getByChecksum(checksum)?.let {
+        val existingBook = bookDao.getByChecksum(checksum)
+        if (existingBook != null && File(context.filesDir, existingBook.filePath).exists()) {
             tmp.delete()
-            return@withContext ImportResult(it.id, duplicate = true)
+            return@withContext ImportResult(existingBook.id, duplicate = true)
         }
 
         val now = clock.millis()
         val libraryDir = File(context.filesDir, "library/books").apply { mkdirs() }
         val stagingDir = File(context.filesDir, "library/tmp").apply { mkdirs() }
-        val storedFormat = when (sourceExtension) {
+        val effectiveSourceExtension = existingBook?.sourceExtension ?: sourceExtension
+        val storedFormat = existingBook?.format ?: when (effectiveSourceExtension) {
             "pdf" -> BookFormat.PDF
             else -> BookFormat.EPUB
         }
@@ -124,40 +128,42 @@ class ImportService(
             BookFormat.PDF -> "pdf"
             BookFormat.EPUB -> "epub"
         }
-        val storedFile = File(libraryDir, "$checksum.$storedExtension")
+        val storedFile = existingBook
+            ?.let { File(context.filesDir, it.filePath) }
+            ?: File(libraryDir, "$checksum.$storedExtension")
         val stagedFile = File(stagingDir, "$checksum-${System.nanoTime()}.$storedExtension")
 
         try {
-            val convertedPageCount = when (sourceExtension) {
+            val convertedPageCount = when (effectiveSourceExtension) {
                 "txt" -> {
-                    txtConverter.convert(tmp, stagedFile, sourceTitle(displayName, sourceExtension))
+                    txtConverter.convert(tmp, stagedFile, sourceTitle(displayName, effectiveSourceExtension))
                     null
                 }
                 "cbz" -> {
-                    cbzConverter.convert(tmp, stagedFile, sourceTitle(displayName, sourceExtension)).pageCount
+                    cbzConverter.convert(tmp, stagedFile, sourceTitle(displayName, effectiveSourceExtension)).pageCount
                 }
                 "fb2", "fb2.zip" -> {
-                    fb2Converter.convert(tmp, stagedFile, sourceTitle(displayName, sourceExtension))
+                    fb2Converter.convert(tmp, stagedFile, sourceTitle(displayName, effectiveSourceExtension))
                     null
                 }
                 "rtf" -> {
-                    rtfConverter.convert(tmp, stagedFile, sourceTitle(displayName, sourceExtension))
+                    rtfConverter.convert(tmp, stagedFile, sourceTitle(displayName, effectiveSourceExtension))
                     null
                 }
                 "odt" -> {
-                    odtConverter.convert(tmp, stagedFile, sourceTitle(displayName, sourceExtension))
+                    odtConverter.convert(tmp, stagedFile, sourceTitle(displayName, effectiveSourceExtension))
                     null
                 }
                 "docx" -> {
-                    docxConverter.convert(tmp, stagedFile, sourceTitle(displayName, sourceExtension))
+                    docxConverter.convert(tmp, stagedFile, sourceTitle(displayName, effectiveSourceExtension))
                     null
                 }
                 "html", "htm", "xhtml" -> {
-                    htmlConverter.convert(tmp, stagedFile, sourceTitle(displayName, sourceExtension))
+                    htmlConverter.convert(tmp, stagedFile, sourceTitle(displayName, effectiveSourceExtension))
                     null
                 }
                 "md", "markdown" -> {
-                    markdownConverter.convert(tmp, stagedFile, sourceTitle(displayName, sourceExtension))
+                    markdownConverter.convert(tmp, stagedFile, sourceTitle(displayName, effectiveSourceExtension))
                     null
                 }
                 else -> {
@@ -170,16 +176,20 @@ class ImportService(
             val parsed = parseStoredBook(
                 file = stagedFile,
                 format = storedFormat,
-                fallbackTitle = sourceTitle(displayName, sourceExtension),
-                fallbackAuthor = "Unknown Author"
+                fallbackTitle = existingBook?.title ?: sourceTitle(displayName, effectiveSourceExtension),
+                fallbackAuthor = existingBook?.author ?: "Unknown Author"
             )
             val metadataOptions = metadataOptions()
 
+            storedFile.parentFile?.mkdirs()
             stagedFile.copyTo(storedFile, overwrite = true)
             stagedFile.delete()
-            val coverFile = parsed.coverImage?.let { cover ->
-                File(context.filesDir, writeCover(checksum, cover))
+            val refreshedCoverPath = if (existingBook?.coverImagePath?.contains("-custom-") == true) {
+                null
+            } else {
+                parsed.coverImage?.let { writeCover(checksum, it) }
             }
+            val coverFile = refreshedCoverPath?.let { File(context.filesDir, it) }
 
             val wordCount = parsed.units.sumOf { it.wordCount }
             val canonicalAuthor = PublicationMetadataTools.canonicalAuthor(
@@ -197,10 +207,10 @@ class ImportService(
                 description = parsed.description,
                 language = parsed.language,
                 format = storedFormat,
-                sourceExtension = sourceExtension,
+                sourceExtension = effectiveSourceExtension,
                 fileName = storedFile.name,
                 filePath = storedFile.relativeTo(context.filesDir).path,
-                coverImagePath = coverFile?.relativeTo(context.filesDir)?.path,
+                coverImagePath = refreshedCoverPath,
                 checksum = checksum,
                 fileSizeBytes = storedFile.length(),
                 wordCount = wordCount,
@@ -211,21 +221,41 @@ class ImportService(
 
             val bookId = try {
                 database.withTransaction {
-                    val insertedId = bookDao.insert(book)
-                    bookDao.insertAuthor(com.xreader.app.data.AuthorEntity(name = book.author))
-                    book.genre?.let { bookDao.insertGenre(com.xreader.app.data.GenreEntity(name = it)) }
-                    book.series?.let { bookDao.insertSeries(com.xreader.app.data.SeriesEntity(name = it)) }
-                    searchDao.replaceForBook(insertedId, parsed.units.toSearchRows(insertedId))
-                    insertedId
+                    val storedBook = if (existingBook == null) {
+                        val insertedId = bookDao.insert(book)
+                        book.copy(id = insertedId)
+                    } else {
+                        val repaired = existingBook.repairedCopy(
+                            parsed = parsed,
+                            refreshedCoverPath = refreshedCoverPath,
+                            fileSizeBytes = storedFile.length(),
+                            metadataOptions = metadataOptions
+                        )
+                        val updated = repaired.copy(
+                            fileName = storedFile.name,
+                            filePath = storedFile.relativeTo(context.filesDir).path,
+                            format = storedFormat,
+                            sourceExtension = effectiveSourceExtension
+                        )
+                        bookDao.update(updated)
+                        updated
+                    }
+                    bookDao.insertAuthor(com.xreader.app.data.AuthorEntity(name = storedBook.author))
+                    storedBook.genre?.let { bookDao.insertGenre(com.xreader.app.data.GenreEntity(name = it)) }
+                    storedBook.series?.let { bookDao.insertSeries(com.xreader.app.data.SeriesEntity(name = it)) }
+                    searchDao.replaceForBook(storedBook.id, parsed.units.toSearchRows(storedBook.id))
+                    storedBook.id
                 }
             } catch (error: Throwable) {
-                storedFile.delete()
-                coverFile?.delete()
+                if (existingBook == null) storedFile.delete()
+                coverFile
+                    ?.takeIf { existingBook == null || refreshedCoverPath != existingBook.coverImagePath }
+                    ?.delete()
                 throw error
             }
             inferMissingSeriesFromTitlesInternal()
             normalizeSeriesOrderInternal()
-            ImportResult(bookId, duplicate = false)
+            ImportResult(bookId, duplicate = false, recovered = existingBook != null)
         } catch (error: Throwable) {
             tmp.delete()
             stagedFile.delete()
@@ -235,6 +265,7 @@ class ImportService(
 
     private suspend fun importUris(uris: List<Uri>): ImportBatchResult {
         var imported = 0
+        var recovered = 0
         var duplicates = 0
         var unsupported = 0
         var failed = 0
@@ -245,6 +276,8 @@ class ImportService(
                     importedOrDuplicateBookIds += result.bookId
                     if (result.duplicate) {
                         duplicates += 1
+                    } else if (result.recovered) {
+                        recovered += 1
                     } else {
                         imported += 1
                     }
@@ -260,11 +293,12 @@ class ImportService(
         return ImportBatchResult(
             scanned = uris.size,
             imported = imported,
+            recovered = recovered,
             duplicates = duplicates,
             unsupported = unsupported,
             failed = failed,
             primaryBookId = importedOrDuplicateBookIds.singleOrNull()
-                ?.takeIf { imported + duplicates == 1 && unsupported == 0 && failed == 0 }
+                ?.takeIf { imported + recovered + duplicates == 1 && unsupported == 0 && failed == 0 }
         )
     }
 

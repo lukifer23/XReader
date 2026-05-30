@@ -42,7 +42,7 @@ Search uses a normal table plus an FTS table. Book deletion removes search rows 
 
 1. Android Storage Access Framework returns one or more document URIs, or a folder tree URI.
 2. `ImportService` copies the selected file to a temporary app cache file.
-3. The file checksum is calculated to prevent duplicate imports.
+3. The file checksum is calculated to prevent duplicate imports. If the checksum already exists but the app-private stored file is missing, import becomes an in-place recovery path for that existing book id rather than a duplicate no-op.
 4. TXT files are converted into a minimal EPUB package, CBZ files are converted into fixed-layout EPUB packages, FB2 / `.fb2.zip` files are converted into EPUB packages, RTF files are converted into EPUB packages with extracted text and basic metadata, ODT/DOCX files are converted into EPUB packages with document metadata and reading-order text, standalone HTML/HTM/XHTML files are converted into EPUB packages with page metadata and readable block structure, and Markdown files are converted into EPUB packages with front matter metadata and readable block structure.
 5. EPUB/PDF files and converted EPUB outputs are copied into app-owned private library storage.
 6. Metadata, cover art, reading units, word counts, and searchable text are extracted.
@@ -53,7 +53,7 @@ EPUB cover extraction checks explicit OPF cover metadata, EPUB 3 `cover-image` p
 
 The manual Settings repair action and the per-book metadata repair action reuse this parsing/indexing path against stored private-library files. They refresh covers, metadata fields that are empty or safe to improve, word/page counts, and search rows. They preserve user-edited title and author values. Covers manually replaced from local image files are stored as app-private downsampled JPEGs and are not overwritten by repair.
 
-Folder imports walk SAF document trees recursively, filter to EPUB, PDF, TXT, CBZ, FB2, `.fb2.zip`, RTF, ODT, DOCX, HTML, HTM, XHTML, MD, and Markdown documents, and summarize imported, duplicate, unsupported, and failed files. They do not require broad all-files access.
+Folder imports walk SAF document trees recursively, filter to EPUB, PDF, TXT, CBZ, FB2, `.fb2.zip`, RTF, ODT, DOCX, HTML, HTM, XHTML, MD, and Markdown documents, and summarize imported, restored, duplicate, unsupported, and failed files. They do not require broad all-files access.
 
 Single-book imports and duplicate re-imports carry the target book id back to the library UI, where the snackbar exposes a contextual `Open` action. Batch and folder imports keep summary-only feedback unless the completed import set contains exactly one actionable book.
 

@@ -19,6 +19,7 @@ Initial public repository snapshot.
 - SAF-based private library imports.
 - Batch file and folder import through Android's Storage Access Framework.
 - Duplicate detection by checksum.
+- Re-importing a checksum-matched book whose private app-library file is missing restores the stored file and search index without changing the book id.
 - Single-book import and duplicate re-import snackbars can open the imported or already-existing title directly.
 - Local Room database for books, reading state, sessions, notes, bookmarks, search, and dictionary entries.
 - Library organization, metadata editing, favorites, finished state, and progress display.

@@ -498,9 +498,15 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     private fun com.xreader.app.importer.ImportService.ImportBatchResult.summaryMessage(): String {
         if (scanned == 0) return "No supported book files found"
         if (imported == 1 && duplicates == 0 && unsupported == 0 && failed == 0) return "Imported book"
-        if (imported == 0 && duplicates == 1 && unsupported == 0 && failed == 0) return "Already in library"
+        if (recovered == 1 && imported == 0 && duplicates == 0 && unsupported == 0 && failed == 0) {
+            return "Restored book file"
+        }
+        if (imported == 0 && recovered == 0 && duplicates == 1 && unsupported == 0 && failed == 0) {
+            return "Already in library"
+        }
         val parts = buildList {
             if (imported > 0) add("Imported ${bookCount(imported)}")
+            if (recovered > 0) add("Restored ${bookCount(recovered)}")
             if (duplicates > 0) add("${bookCount(duplicates)} already in library")
             if (unsupported > 0) add("$unsupported unsupported")
             if (failed > 0) add("$failed failed")

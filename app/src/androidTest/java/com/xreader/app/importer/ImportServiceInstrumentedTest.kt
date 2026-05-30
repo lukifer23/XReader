@@ -302,6 +302,7 @@ class ImportServiceInstrumentedTest {
 
         assertEquals(2, imported.scanned)
         assertEquals(2, imported.imported)
+        assertEquals(0, imported.recovered)
         assertEquals(0, imported.duplicates)
         assertEquals(0, imported.unsupported)
         assertEquals(0, imported.failed)
@@ -311,6 +312,7 @@ class ImportServiceInstrumentedTest {
 
         assertEquals(2, repeated.scanned)
         assertEquals(0, repeated.imported)
+        assertEquals(0, repeated.recovered)
         assertEquals(1, repeated.duplicates)
         assertEquals(1, repeated.unsupported)
         assertEquals(0, repeated.failed)
@@ -330,6 +332,7 @@ class ImportServiceInstrumentedTest {
 
         assertEquals(1, imported.scanned)
         assertEquals(1, imported.imported)
+        assertEquals(0, imported.recovered)
         assertEquals(0, imported.duplicates)
         assertEquals(0, imported.unsupported)
         assertEquals(0, imported.failed)
@@ -338,10 +341,50 @@ class ImportServiceInstrumentedTest {
 
         assertEquals(1, duplicate.scanned)
         assertEquals(0, duplicate.imported)
+        assertEquals(0, duplicate.recovered)
         assertEquals(1, duplicate.duplicates)
         assertEquals(0, duplicate.unsupported)
         assertEquals(0, duplicate.failed)
         assertEquals(bookId, duplicate.primaryBookId)
+    }
+
+    @Test
+    fun reimportRestoresMissingPrivateFileAndSearchRowsWithoutChangingBookId() = runBlocking {
+        val source = File(root, "source/recoverable.txt").apply {
+            parentFile?.mkdirs()
+            writeText("Recoverable title\n\nThe private copy can be rebuilt from the original import.")
+        }
+        val service = ImportService(context, db)
+        val first = service.importMany(listOf(Uri.fromFile(source)))
+        val bookId = requireNotNull(first.primaryBookId)
+        val original = requireNotNull(db.books().getBook(bookId))
+        val edited = original.copy(
+            title = "Edited Recoverable Title",
+            sortTitle = "edited recoverable title",
+            author = "Edited Author"
+        )
+        db.books().update(edited)
+        File(context.filesDir, original.filePath).delete()
+        db.search().deleteFtsForBook(bookId.toString())
+        db.search().deleteForBook(bookId)
+        assertFalse(File(context.filesDir, original.filePath).exists())
+        assertEquals(0, db.search().indexedRowCountForBook(bookId))
+
+        val recovered = service.importMany(listOf(Uri.fromFile(source)))
+
+        val restored = requireNotNull(db.books().getBook(bookId))
+        assertEquals(1, recovered.scanned)
+        assertEquals(0, recovered.imported)
+        assertEquals(1, recovered.recovered)
+        assertEquals(0, recovered.duplicates)
+        assertEquals(0, recovered.unsupported)
+        assertEquals(0, recovered.failed)
+        assertEquals(bookId, recovered.primaryBookId)
+        assertEquals(1, db.books().observeBooks("").first().size)
+        assertEquals("Edited Recoverable Title", restored.title)
+        assertEquals("Edited Author", restored.author)
+        assertTrue(File(context.filesDir, restored.filePath).exists())
+        assertTrue(db.search().indexedRowCountForBook(bookId) > 0)
     }
 
     @Test
