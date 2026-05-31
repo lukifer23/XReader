@@ -99,6 +99,7 @@ import kotlin.math.roundToInt
 @Composable
 internal fun LibraryRoute(
     container: AppContainer,
+    viewModel: LibraryViewModel = viewModel(factory = LibraryViewModel.factory(container)),
     openReaderAt: (Long, String?) -> Unit,
     openAnalytics: () -> Unit,
     openNotes: () -> Unit,
@@ -106,7 +107,6 @@ internal fun LibraryRoute(
     currentTheme: ReaderTheme,
     onToggleTheme: () -> Unit,
 ) {
-    val viewModel: LibraryViewModel = viewModel(factory = LibraryViewModel.factory(container))
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current

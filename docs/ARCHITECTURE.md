@@ -53,7 +53,7 @@ EPUB cover extraction checks explicit OPF cover metadata, EPUB 3 `cover-image` p
 
 The manual Settings repair action and the per-book metadata repair action reuse this parsing/indexing path against stored private-library files. They refresh covers, metadata fields that are empty or safe to improve, word/page counts, and search rows. The Settings repair action also canonicalizes existing metadata and harmonizes obvious same-author/same-series genre drift when one strong genre is mixed with weak labels such as general fiction, adventure, or war. They preserve user-edited title and author values. Covers manually replaced from local image files are stored as app-private downsampled JPEGs and are not overwritten by repair.
 
-Folder imports walk SAF document trees recursively, filter to EPUB, PDF, TXT, CBZ, FB2, `.fb2.zip`, RTF, MOBI, PRC, ODT, DOCX, HTML, HTM, XHTML, MHTML, MHT, MD, and Markdown documents, and summarize imported, restored, duplicate, unsupported, and failed files. They do not require broad all-files access.
+Folder imports walk SAF document trees recursively, filter to EPUB, PDF, TXT, CBZ, FB2, `.fb2.zip`, RTF, MOBI, PRC, ODT, DOCX, HTML, HTM, XHTML, MHTML, MHT, MD, and Markdown documents, and summarize imported, restored, duplicate, unsupported, and failed files. Android Open with and Share intents for supported book MIME types route into the same private-copy import flow instead of a separate reader path. They do not require broad all-files access.
 
 Single-book imports and duplicate re-imports carry the target book id back to the library UI, where the snackbar exposes a contextual `Open` action. Batch and folder imports keep summary-only feedback unless the completed import set contains exactly one actionable book.
 

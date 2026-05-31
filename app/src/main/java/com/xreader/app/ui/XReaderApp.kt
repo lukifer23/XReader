@@ -4,6 +4,7 @@ package com.xreader.app.ui
 
 import android.app.Activity
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.filled.Settings
@@ -25,11 +26,17 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.xreader.app.AppContainer
 import com.xreader.app.data.ReaderTheme
+import com.xreader.app.importer.toIncomingBookImport
 import kotlinx.coroutines.delay
 
 @Composable
-fun XReaderApp(container: AppContainer) {
+fun XReaderApp(
+    container: AppContainer,
+    incomingIntent: Intent? = null,
+    onIncomingIntentConsumed: (Intent) -> Unit = {},
+) {
     val settingsViewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.factory(container))
+    val libraryViewModel: LibraryViewModel = viewModel(factory = LibraryViewModel.factory(container))
     val settings by settingsViewModel.settings.collectAsStateWithLifecycle()
     val navController = rememberNavController()
     val activity = LocalContext.current.findActivity()
@@ -38,6 +45,18 @@ fun XReaderApp(container: AppContainer) {
         container.warmReaderServices()
         delay(READER_WEBVIEW_WARMUP_DELAY_MS - READER_SERVICE_WARMUP_DELAY_MS)
         container.warmReaderWebView()
+    }
+    LaunchedEffect(incomingIntent) {
+        val intent = incomingIntent ?: return@LaunchedEffect
+        val incomingImport = intent.toIncomingBookImport()
+        if (incomingImport != null) {
+            navController.navigate("library") {
+                launchSingleTop = true
+                restoreState = true
+            }
+            libraryViewModel.importFiles(incomingImport.uris)
+        }
+        onIncomingIntentConsumed(intent)
     }
     XReaderTheme(readerTheme = settings.theme) {
         AppSystemBars(activity = activity, theme = settings.theme)
@@ -49,6 +68,7 @@ fun XReaderApp(container: AppContainer) {
             composable("library") {
                 LibraryRoute(
                     container = container,
+                    viewModel = libraryViewModel,
                     openReaderAt = { bookId, locator ->
                         if (locator == null) {
                             navController.navigate("reader/$bookId")
