@@ -42,11 +42,34 @@ data class OpdsLink(
         get() = title?.takeIf { it.isNotBlank() } ?: href.substringAfterLast('/').ifBlank { href }
 }
 
-class OpdsCatalogService(
-    private val importService: ImportService?,
+sealed interface OpdsCatalogLoadResult {
+    data class Feed(val feed: OpdsFeed) : OpdsCatalogLoadResult
+    data class Imported(val result: ImportService.ImportResult) : OpdsCatalogLoadResult
+}
+
+internal fun interface RemoteBookImporter {
+    suspend fun importFile(file: File, displayName: String, mimeType: String): ImportService.ImportResult
+}
+
+class OpdsCatalogService internal constructor(
+    private val bookImporter: RemoteBookImporter?,
     private val cacheDir: File,
     private val clock: Clock = Clock.systemUTC(),
 ) {
+    constructor(
+        importService: ImportService?,
+        cacheDir: File,
+        clock: Clock = Clock.systemUTC(),
+    ) : this(
+        bookImporter = importService?.let { importer ->
+            RemoteBookImporter { file, displayName, mimeType ->
+                importer.importFile(file, displayName, mimeType)
+            }
+        },
+        cacheDir = cacheDir,
+        clock = clock
+    )
+
     suspend fun load(url: String): OpdsFeed = withContext(Dispatchers.IO) {
         val normalizedUrl = normalizeCatalogUrl(url)
         openConnection(normalizedUrl).useResponse { connection ->
@@ -58,25 +81,47 @@ class OpdsCatalogService(
         }
     }
 
+    suspend fun loadOrImport(url: String): OpdsCatalogLoadResult = withContext(Dispatchers.IO) {
+        val normalizedUrl = normalizeCatalogUrl(url)
+        openConnection(normalizedUrl).useResponse { connection ->
+            val responseType = connection.contentType.mediaType()
+            if (connection.isSupportedDirectDownload(responseType)) {
+                OpdsCatalogLoadResult.Imported(downloadAndImport(connection, responseType))
+            } else {
+                val charset = connection.contentType.charsetFromContentType() ?: Charsets.UTF_8
+                val bytes = connection.inputStream.buffered().use { input ->
+                    input.readBounded(MAX_FEED_BYTES)
+                }
+                OpdsCatalogLoadResult.Feed(OpdsFeedParser.parse(bytes.toString(charset), connection.url.toString()))
+            }
+        }
+    }
+
     suspend fun importLink(link: OpdsLink): ImportService.ImportResult = withContext(Dispatchers.IO) {
         require(link.isSupportedAcquisition()) { "This catalog item is not a supported book download." }
-        val importer = requireNotNull(importService) { "Book import is unavailable." }
         val url = normalizeCatalogUrl(link.href)
+        openConnection(url).useResponse { connection ->
+            val responseType = connection.contentType.mediaType().ifBlank { link.type.mediaType() }
+            require(connection.isSupportedDirectDownload(responseType) || link.isSupportedAcquisition()) {
+                "This catalog item is not a supported book download."
+            }
+            downloadAndImport(connection, responseType)
+        }
+    }
+
+    private suspend fun downloadAndImport(connection: HttpURLConnection, mediaType: String): ImportService.ImportResult {
+        val importer = requireNotNull(bookImporter) { "Book import is unavailable." }
         var target: File? = null
         try {
-            openConnection(url).useResponse { connection ->
-                val responseType = connection.contentType?.substringBefore(';')?.trim().orEmpty()
-                val importType = responseType.ifBlank { link.type.orEmpty() }
-                val download = File(cacheDir, "opds-${clock.millis()}-${connection.url.safeDownloadName(importType)}")
-                target = download
-                download.parentFile?.mkdirs()
-                connection.inputStream.buffered().use { input ->
-                    download.outputStream().buffered().use { output ->
-                        input.copyBoundedTo(output, MAX_BOOK_BYTES)
-                    }
+            val download = File(cacheDir, "opds-${clock.millis()}-${connection.url.safeDownloadName(mediaType)}")
+            target = download
+            download.parentFile?.mkdirs()
+            connection.inputStream.buffered().use { input ->
+                download.outputStream().buffered().use { output ->
+                    input.copyBoundedTo(output, MAX_BOOK_BYTES)
                 }
-                importer.importFile(download, download.name, importType)
             }
+            return importer.importFile(download, download.name, mediaType)
         } finally {
             target?.delete()
         }
@@ -101,7 +146,7 @@ class OpdsCatalogService(
             setRequestProperty("User-Agent", "XReader/0.1")
         }
 
-    private inline fun <T> HttpURLConnection.useResponse(block: (HttpURLConnection) -> T): T {
+    private suspend inline fun <T> HttpURLConnection.useResponse(block: suspend (HttpURLConnection) -> T): T {
         try {
             val code = responseCode
             require(code in 200..299) { "Catalog request failed with HTTP $code." }
@@ -337,6 +382,17 @@ private fun String.supportedBookExtension(): String? =
         .substringAfterLast('.', "")
         .lowercase(Locale.US)
         .takeIf { it in SUPPORTED_ACQUISITION_EXTENSIONS }
+
+private fun HttpURLConnection.isSupportedDirectDownload(mediaType: String): Boolean =
+    mediaType in SUPPORTED_ACQUISITION_TYPES ||
+        url.toString().supportedBookExtension() != null
+
+private fun String?.mediaType(): String =
+    this
+        ?.substringBefore(';')
+        ?.trim()
+        ?.lowercase(Locale.US)
+        .orEmpty()
 
 private fun String?.charsetFromContentType(): Charset? {
     val charset = this

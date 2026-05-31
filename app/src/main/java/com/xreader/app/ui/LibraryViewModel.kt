@@ -14,6 +14,7 @@ import com.xreader.app.data.ReadingStateEntity
 import com.xreader.app.importer.ImportService
 import com.xreader.app.opds.OpdsEntry
 import com.xreader.app.opds.OpdsFeed
+import com.xreader.app.opds.OpdsCatalogLoadResult
 import com.xreader.app.opds.OpdsLink
 import com.xreader.app.settings.LibraryDensity
 import com.xreader.app.settings.LibrarySort
@@ -351,20 +352,36 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         }
         viewModelScope.launch {
             opdsCatalog.value = opdsCatalog.value.copy(url = trimmed, loading = true, error = null)
-            runCatching { container.opdsCatalogService.load(trimmed) }
-                .onSuccess { feed ->
-                    opdsCatalog.value = opdsCatalog.value.copy(
-                        url = feed.url,
-                        loading = false,
-                        feed = feed,
-                        error = null
-                    )
+            runCatching { container.opdsCatalogService.loadOrImport(trimmed) }
+                .onSuccess { result ->
+                    when (result) {
+                        is OpdsCatalogLoadResult.Feed -> {
+                            opdsCatalog.value = opdsCatalog.value.copy(
+                                url = result.feed.url,
+                                loading = false,
+                                feed = result.feed,
+                                error = null
+                            )
+                        }
+                        is OpdsCatalogLoadResult.Imported -> {
+                            opdsCatalog.value = opdsCatalog.value.copy(
+                                loading = false,
+                                feed = null,
+                                error = null
+                            )
+                            postMessage(
+                                text = result.result.summaryMessage(),
+                                actionLabel = "Open",
+                                openBookId = result.result.bookId
+                            )
+                        }
+                    }
                 }
                 .onFailure { error ->
-                    Log.e("XReader", "OPDS catalog load failed for $trimmed", error)
+                    Log.e("XReader", "Catalog URL load failed for $trimmed", error)
                     opdsCatalog.value = opdsCatalog.value.copy(
                         loading = false,
-                        error = error.message ?: "Catalog load failed"
+                        error = error.message ?: "Catalog URL failed"
                     )
                 }
         }

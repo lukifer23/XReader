@@ -62,7 +62,7 @@ internal fun OpdsCatalogDialog(
                     OutlinedTextField(
                         value = state.url,
                         onValueChange = onUrlChange,
-                        label = { Text("OPDS URL") },
+                        label = { Text("Catalog or book URL") },
                         singleLine = true,
                         modifier = Modifier.weight(1f),
                         keyboardOptions = KeyboardOptions(
