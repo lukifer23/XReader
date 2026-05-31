@@ -136,7 +136,7 @@ class MhtmlToEpubConverter {
     }
 
     private fun parseContentType(value: String): ParsedContentType {
-        val segments = value.split(';')
+        val segments = value.splitMimeParameters()
         val mediaType = segments.firstOrNull()
             ?.trim()
             ?.lowercase(Locale.US)
@@ -146,10 +146,60 @@ class MhtmlToEpubConverter {
             val separator = segment.indexOf('=')
             if (separator <= 0) return@mapNotNull null
             val name = segment.substring(0, separator).trim().lowercase(Locale.US)
-            val paramValue = segment.substring(separator + 1).trim().trim('"')
+            val paramValue = segment.substring(separator + 1).trim().unquoteMimeParameter()
             name.takeIf { it.isNotBlank() }?.let { it to paramValue }
         }.toMap()
         return ParsedContentType(mediaType = mediaType, params = params)
+    }
+
+    private fun String.splitMimeParameters(): List<String> {
+        val segments = mutableListOf<String>()
+        val current = StringBuilder()
+        var quoted = false
+        var escaped = false
+        forEach { char ->
+            when {
+                escaped -> {
+                    current.append(char)
+                    escaped = false
+                }
+                quoted && char == '\\' -> {
+                    current.append(char)
+                    escaped = true
+                }
+                char == '"' -> {
+                    current.append(char)
+                    quoted = !quoted
+                }
+                char == ';' && !quoted -> {
+                    segments += current.toString()
+                    current.clear()
+                }
+                else -> current.append(char)
+            }
+        }
+        segments += current.toString()
+        return segments
+    }
+
+    private fun String.unquoteMimeParameter(): String {
+        val trimmed = trim()
+        if (trimmed.length < 2 || trimmed.first() != '"' || trimmed.last() != '"') return trimmed
+        val content = trimmed.substring(1, trimmed.lastIndex)
+        val output = StringBuilder(content.length)
+        var escaped = false
+        content.forEach { char ->
+            if (escaped) {
+                output.append(char)
+                escaped = false
+            } else if (char == '\\') {
+                escaped = true
+            } else {
+                output.append(char)
+            }
+        }
+        if (escaped) output.append('\\')
+        return output.toString()
     }
 
     private fun decodeBody(part: MhtmlPart): ByteArray =
@@ -189,7 +239,10 @@ class MhtmlToEpubConverter {
 
     private fun MhtmlPart.toAsset(index: Int): MhtmlAsset? {
         val extension = assetExtension(mediaType, contentLocation) ?: return null
-        val bytes = decodeBody(this).takeIf { it.isNotEmpty() && it.size <= MAX_ASSET_BYTES } ?: return null
+        val bytes = runCatching { decodeBody(this) }
+            .getOrNull()
+            ?.takeIf { it.isNotEmpty() && it.size <= MAX_ASSET_BYTES }
+            ?: return null
         return MhtmlAsset(
             id = "asset-${index + 1}",
             href = "assets/asset-${index + 1}.$extension",

@@ -76,6 +76,37 @@ class MhtmlToEpubConverterTest {
     }
 
     @Test
+    fun parsesQuotedContentTypeParametersWithSemicolons() {
+        val dir = Files.createTempDirectory("xreader-mhtml-quoted-boundary-test").toFile()
+        val source = File(dir, "Quoted Boundary.mhtml")
+        val output = File(dir, "Quoted Boundary.epub")
+        source.writeText(quotedBoundaryMhtml(), Charsets.ISO_8859_1)
+
+        MhtmlToEpubConverter().convert(source, output, "Fallback")
+
+        val parsed = EpubParser().parse(output)
+        assertEquals("Quoted Boundary", parsed.metadata.title)
+        assertTrue(parsed.units.any { it.body.contains("semicolon boundary survived") })
+    }
+
+    @Test
+    fun skipsCorruptImageAssetWithoutRejectingReadableArchive() {
+        val dir = Files.createTempDirectory("xreader-mhtml-corrupt-image-test").toFile()
+        val source = File(dir, "Corrupt Image.mhtml")
+        val output = File(dir, "Corrupt Image.epub")
+        source.writeText(corruptImageMhtml(), Charsets.ISO_8859_1)
+
+        MhtmlToEpubConverter().convert(source, output, "Fallback")
+
+        val parsed = EpubParser().parse(output)
+        assertEquals("Corrupt Image", parsed.metadata.title)
+        assertTrue(parsed.units.any { it.body.contains("text remains readable") })
+        ZipFile(output).use { zip ->
+            assertFalse(zip.entries().asSequence().any { it.name.startsWith("OEBPS/assets/") })
+        }
+    }
+
+    @Test
     fun rejectsArchiveWithoutHtmlRoot() {
         val dir = Files.createTempDirectory("xreader-empty-mhtml-test").toFile()
         val source = File(dir, "No Html.mhtml")
@@ -184,6 +215,37 @@ class MhtmlToEpubConverterTest {
 
         ${Base64.getEncoder().encodeToString(PNG_BYTES)}
         --responsive-boundary--
+        """.trimIndent()
+
+    private fun quotedBoundaryMhtml(): String =
+        """
+        MIME-Version: 1.0
+        Content-Type: multipart/related; boundary="xreader;quoted-boundary"; type="text/html"
+
+        --xreader;quoted-boundary
+        Content-Type: text/html; charset="utf-8"
+
+        <html><head><title>Quoted Boundary</title></head><body><h1>Archive</h1><p>The semicolon boundary survived.</p></body></html>
+        --xreader;quoted-boundary--
+        """.trimIndent()
+
+    private fun corruptImageMhtml(): String =
+        """
+        MIME-Version: 1.0
+        Content-Type: multipart/related; boundary="corrupt-image-boundary"; type="text/html"
+
+        --corrupt-image-boundary
+        Content-Type: text/html; charset="utf-8"
+        Content-Location: https://example.test/corrupt.html
+
+        <html><head><title>Corrupt Image</title></head><body><h1>Archive</h1><p>The text remains readable.</p><img src="images/broken.png" alt="Broken capture"></body></html>
+        --corrupt-image-boundary
+        Content-Type: image/png
+        Content-Location: https://example.test/images/broken.png
+        Content-Transfer-Encoding: base64
+
+        !!!!
+        --corrupt-image-boundary--
         """.trimIndent()
 
     private companion object {
