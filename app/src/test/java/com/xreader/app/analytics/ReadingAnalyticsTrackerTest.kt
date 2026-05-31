@@ -91,6 +91,50 @@ class ReadingAnalyticsTrackerTest {
         assertEquals(0, state.estimatedWpm)
     }
 
+    @Test
+    fun largeNavigationJumpsDoNotInflateWordsRead() {
+        val clock = MutableClock()
+        val tracker = ReadingAnalyticsTracker(
+            bookId = 7L,
+            totalUnits = 20,
+            wordsForUnit = { 100 },
+            idleTimeoutMillis = 90_000L,
+            clock = clock
+        )
+
+        tracker.record(0)
+        clock.advance(10_000L)
+        tracker.record(12)
+        clock.advance(50_000L)
+        val flush = requireNotNull(tracker.flush())
+
+        assertEquals(100, flush.session?.wordsRead)
+        assertEquals(100, flush.state.estimatedWpm)
+        assertEquals(12, flush.state.currentUnit)
+    }
+
+    @Test
+    fun smallBackwardMovementCountsAsRereadingWithoutCountingSkippedPages() {
+        val clock = MutableClock()
+        val tracker = ReadingAnalyticsTracker(
+            bookId = 7L,
+            totalUnits = 10,
+            wordsForUnit = { 100 },
+            idleTimeoutMillis = 90_000L,
+            clock = clock
+        )
+
+        tracker.record(4)
+        clock.advance(30_000L)
+        tracker.record(3)
+        clock.advance(30_000L)
+        tracker.record(4)
+        val flush = requireNotNull(tracker.flush())
+
+        assertEquals(300, flush.session?.wordsRead)
+        assertEquals(300, flush.state.estimatedWpm)
+    }
+
     private class MutableClock : Clock() {
         private var now = Instant.parse("2026-05-27T12:00:00Z")
 
