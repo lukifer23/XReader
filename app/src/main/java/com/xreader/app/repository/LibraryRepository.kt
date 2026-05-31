@@ -190,17 +190,7 @@ class LibraryRepository(
     suspend fun searchLibrary(query: String): List<LibrarySearchRow> =
         ftsQuery(query)?.let { searchDao.searchLibraryWithBooks(it) }.orEmpty()
 
-    private fun ftsQuery(query: String): String? {
-        val terms = com.xreader.app.core.TextTools.words(
-            com.xreader.app.core.TextTools.normalizeForSearch(query)
-        )
-            .map { it.filter(Char::isLetterOrDigit) }
-            .filter { it.isNotBlank() }
-            .distinct()
-            .take(8)
-        if (terms.isEmpty()) return null
-        return terms.joinToString(" ") { "normalizedBody:${it}*" }
-    }
+    private fun ftsQuery(query: String): String? = SearchFtsQuery.build(query)
 
     private fun String?.cleanMetadataValue(): String? =
         this?.replace(Regex("\\s+"), " ")?.trim()?.ifBlank { null }

@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.xreader.app.repository.SearchFtsQuery
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -137,5 +138,52 @@ class SearchDaoInstrumentedTest {
         assertEquals(listOf("Mars Reader", "Ocean Manual"), results.map { it.bookTitle })
         assertEquals(listOf("Ada Lovelace", "Grace Hopper"), results.map { it.bookAuthor })
         assertEquals(listOf(firstBook, secondBook), results.map { it.row.bookId })
+    }
+
+    @Test
+    fun ftsSearchHandlesPunctuationHeavyUserQueries() = runBlocking {
+        val bookId = db.books().insert(
+            BookEntity(
+                title = "Punctuation",
+                author = "Test",
+                sortTitle = "punctuation",
+                format = BookFormat.EPUB,
+                sourceExtension = "epub",
+                fileName = "punctuation.epub",
+                filePath = "library/books/punctuation.epub",
+                checksum = "punctuation",
+                fileSizeBytes = 1,
+                wordCount = 12,
+                importedAt = 1,
+                updatedAt = 1
+            )
+        )
+        db.search().replaceForBook(
+            bookId,
+            listOf(
+                SearchIndexEntity(
+                    bookId = bookId,
+                    locator = "epub:hyphen:0",
+                    heading = "Hyphen",
+                    body = "Science fiction readers debated well-being in deep space.",
+                    normalizedBody = "science fiction readers debated well being in deep space",
+                    unitIndex = 0
+                ),
+                SearchIndexEntity(
+                    bookId = bookId,
+                    locator = "epub:possessive:0",
+                    heading = "Possessive",
+                    body = "Darrow's ship crossed the field.",
+                    normalizedBody = "darrow's ship crossed the field",
+                    unitIndex = 1
+                )
+            )
+        )
+
+        val hyphenResults = db.search().searchBook(bookId, requireNotNull(SearchFtsQuery.build("\"sci-fi\"")))
+        val possessiveResults = db.search().searchBook(bookId, requireNotNull(SearchFtsQuery.build("Darrow's ship")))
+
+        assertEquals(listOf("Hyphen"), hyphenResults.map { it.heading })
+        assertEquals(listOf("Possessive"), possessiveResults.map { it.heading })
     }
 }
