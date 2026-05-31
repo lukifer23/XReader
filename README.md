@@ -21,7 +21,7 @@ Implemented:
 - HTML, HTM, and XHTML import converted into EPUB with page metadata, headings, lists, tables, blockquotes, and searchable text extraction.
 - MHTML and MHT web-archive import converted into EPUB with page metadata, embedded image assets including lazy/responsive image references, headings, lists, tables, blockquotes, and searchable text extraction.
 - Markdown import converted into EPUB with front matter metadata, headings, lists, blockquotes, code blocks, and searchable text extraction.
-- Private app-library imports from selected files, SAF folders, or optional redirect-aware OPDS catalog URLs, with checksum duplicate detection, missing private-file recovery on re-import, and an `Open` action after single-book imports or duplicate re-imports.
+- Private app-library imports from selected files, SAF folders, or optional redirect-aware OPDS Atom/JSON catalog URLs, with checksum duplicate detection, missing private-file recovery on re-import, and an `Open` action after single-book imports or duplicate re-imports.
 - Library organization by books, authors, series, genres, years, custom collections, recent, unread, in progress, finished, and favorites, with group-aware ordering.
 - Home-screen series continuation that suggests the next unfinished title after the most recently finished book in a series.
 - Persisted library sort and comfortable/compact density controls that apply in grouped and ungrouped views.
@@ -104,7 +104,7 @@ XReader is local-first:
 
 - Books are imported through Android's file picker and copied into app-owned private storage.
 - The app does not request broad all-files access.
-- The app does not intentionally use network access.
+- Network access is only used when you explicitly open a Catalog URL import; there is no background sync, telemetry, account service, or automatic network scan.
 - Reading analytics, notes, bookmarks, dictionary lookup, and search indexes stay local.
 
 ## Documentation

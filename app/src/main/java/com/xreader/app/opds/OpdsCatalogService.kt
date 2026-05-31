@@ -3,6 +3,8 @@ package com.xreader.app.opds
 import com.xreader.app.importer.ImportService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import org.jsoup.parser.Parser
@@ -114,13 +116,16 @@ class OpdsCatalogService(
         internal const val MAX_BOOK_BYTES = 512L * 1024L * 1024L
         private const val HTTP_TIMEOUT_MS = 15_000
         private const val OPDS_ACCEPT_HEADER =
-            "application/atom+xml;profile=opds-catalog, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.1"
+            "application/opds+json, application/atom+xml;profile=opds-catalog, application/atom+xml, application/json;q=0.9, application/xml;q=0.8, text/xml;q=0.8, */*;q=0.1"
     }
 }
 
 object OpdsFeedParser {
-    fun parse(xml: String, baseUrl: String): OpdsFeed {
-        val document = Jsoup.parse(xml, baseUrl, Parser.xmlParser())
+    fun parse(documentText: String, baseUrl: String): OpdsFeed {
+        val trimmed = documentText.trimStart()
+        if (trimmed.startsWith("{")) return parseJson(trimmed, baseUrl)
+
+        val document = Jsoup.parse(documentText, baseUrl, Parser.xmlParser())
         val feed = document.selectFirst("feed") ?: document
         val feedBaseUrl = feed.effectiveBaseUrl(baseUrl)
         val feedTitle = document.selectFirst("feed > title")?.cleanText()
@@ -136,6 +141,32 @@ object OpdsFeedParser {
         return OpdsFeed(
             title = feedTitle,
             url = feedBaseUrl,
+            entries = entries,
+            navigationLinks = navigationLinks
+        )
+    }
+
+    private fun parseJson(json: String, baseUrl: String): OpdsFeed {
+        val root = JSONObject(json)
+        val feedTitle = root.optJSONObject("metadata")?.optCleanString("title")
+            ?: root.optCleanString("title")
+            ?: "Catalog"
+        val topLevelLinks = root.optJSONArray("links")
+            .toJsonObjects()
+            .mapNotNull { it.toLink(baseUrl) }
+            .filter { it.isNavigationLink() }
+        val navigationLinks = root.optJSONArray("navigation")
+            .toJsonObjects()
+            .mapNotNull { it.toLink(baseUrl) }
+            .filterNot { it.isSupportedAcquisition() }
+            .plus(topLevelLinks)
+            .distinctBy { "${it.rel.orEmpty()}\u0000${it.href}" }
+        val entries = root.collectPublicationObjects()
+            .mapNotNull { it.toJsonEntry(baseUrl) }
+            .distinctBy { it.id }
+        return OpdsFeed(
+            title = feedTitle,
+            url = baseUrl,
             entries = entries,
             navigationLinks = navigationLinks
         )
@@ -180,12 +211,94 @@ object OpdsFeedParser {
         return resolveUrl(baseUrl, xmlBase)
     }
 
-    private fun resolveUrl(baseUrl: String, value: String): String {
-        return runCatching { URI(baseUrl).resolve(value).toString() }.getOrDefault(value)
-    }
-
     private fun Element.cleanText(): String =
         text().replace(Regex("\\s+"), " ").trim()
+
+    private fun JSONObject.toJsonEntry(baseUrl: String): OpdsEntry? {
+        val metadata = optJSONObject("metadata") ?: this
+        val title = metadata.optCleanString("title") ?: return null
+        val links = optJSONArray("links")
+            .toJsonObjects()
+            .mapNotNull { it.toLink(baseUrl) }
+            .filter { it.isSupportedAcquisition() }
+            .distinctBy { it.href }
+        val id = metadata.optCleanString("identifier")
+            ?: metadata.optCleanString("@id")
+            ?: metadata.optCleanString("id")
+            ?: links.firstOrNull()?.href
+            ?: title
+        return OpdsEntry(
+            id = id,
+            title = title,
+            author = metadata.optContributorName("author") ?: metadata.optContributorName("creator"),
+            summary = metadata.optCleanString("description") ?: metadata.optCleanString("subtitle"),
+            acquisitionLinks = links
+        )
+    }
+
+    private fun JSONObject.toLink(baseUrl: String): OpdsLink? {
+        val href = optCleanString("href") ?: return null
+        return OpdsLink(
+            href = resolveUrl(baseUrl, href),
+            rel = optRelString(),
+            type = optCleanString("type"),
+            title = optCleanString("title")
+        )
+    }
+
+    private fun JSONObject.collectPublicationObjects(): List<JSONObject> =
+        buildList {
+            addAll(optJSONArray("publications").toJsonObjects())
+            optJSONArray("groups").toJsonObjects().forEach { group ->
+                addAll(group.collectPublicationObjects())
+            }
+        }
+
+    private fun JSONArray?.toJsonObjects(): List<JSONObject> {
+        if (this == null) return emptyList()
+        return buildList {
+            for (index in 0 until length()) {
+                optJSONObject(index)?.let(::add)
+            }
+        }
+    }
+
+    private fun JSONObject.optCleanString(name: String): String? =
+        optString(name, "")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+            .takeIf { it.isNotBlank() }
+
+    private fun JSONObject.optRelString(): String? {
+        val value = opt("rel") ?: return null
+        return when (value) {
+            is JSONArray -> buildList {
+                for (index in 0 until value.length()) {
+                    value.optString(index, "").trim().takeIf { it.isNotBlank() }?.let(::add)
+                }
+            }.joinToString(" ")
+            else -> value.toString().trim()
+        }.takeIf { it.isNotBlank() }
+    }
+
+    private fun JSONObject.optContributorName(name: String): String? {
+        val value = opt(name) ?: return null
+        return when (value) {
+            is JSONArray -> {
+                for (index in 0 until value.length()) {
+                    val candidate = value.optContributorValue(index)
+                    if (!candidate.isNullOrBlank()) return candidate
+                }
+                null
+            }
+            is JSONObject -> value.optCleanString("name") ?: value.optCleanString("sortAs")
+            else -> value.toString().replace(Regex("\\s+"), " ").trim().takeIf { it.isNotBlank() }
+        }
+    }
+
+    private fun JSONArray.optContributorValue(index: Int): String? =
+        optJSONObject(index)?.let { it.optCleanString("name") ?: it.optCleanString("sortAs") }
+            ?: optString(index, "").replace(Regex("\\s+"), " ").trim().takeIf { it.isNotBlank() }
 }
 
 fun OpdsLink.isSupportedAcquisition(): Boolean {
@@ -198,13 +311,23 @@ fun OpdsLink.isSupportedAcquisition(): Boolean {
 
 private fun OpdsLink.isNavigationLink(): Boolean {
     val relation = rel.orEmpty().lowercase(Locale.US)
+    val relationTokens = relation.relationTokens()
     val mediaType = type?.substringBefore(';')?.trim()?.lowercase(Locale.US).orEmpty()
-    if (relation == "self" || relation.contains("acquisition")) return false
+    if ("self" in relationTokens || relation.contains("acquisition")) return false
     return mediaType.contains("atom") || mediaType.contains("opds") ||
-        relation in NAVIGATION_RELATIONS ||
+        relationTokens.any { it in NAVIGATION_RELATIONS } ||
         relation.startsWith("http://opds-spec.org/sort/") ||
         relation.startsWith("https://opds-spec.org/sort/")
 }
+
+private fun resolveUrl(baseUrl: String, value: String): String =
+    runCatching { URI(baseUrl).resolve(value).toString() }.getOrDefault(value)
+
+private fun String.relationTokens(): Set<String> =
+    split(Regex("\\s+"))
+        .map { it.trim() }
+        .filter { it.isNotBlank() }
+        .toSet()
 
 private fun String.supportedBookExtension(): String? =
     substringBefore('#')

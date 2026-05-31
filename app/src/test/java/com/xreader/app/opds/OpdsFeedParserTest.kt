@@ -68,6 +68,84 @@ class OpdsFeedParserTest {
     }
 
     @Test
+    fun parsesOpdsJsonNavigationAndPublications() {
+        val feed = OpdsFeedParser.parse(
+            """
+            {
+              "metadata": { "title": "Modern Catalog" },
+              "links": [
+                { "rel": "self", "href": "https://example.test/opds/root.json", "type": "application/opds+json" },
+                { "rel": ["subsection", "collection"], "href": "new.json", "type": "application/opds+json", "title": "New books" }
+              ],
+              "navigation": [
+                { "href": "science-fiction.json", "title": "Science fiction" }
+              ],
+              "publications": [
+                {
+                  "metadata": {
+                    "identifier": "urn:book:3",
+                    "title": "Station Twelve",
+                    "author": [{ "name": "Iris Chen" }],
+                    "description": "Orbital maintenance logs."
+                  },
+                  "links": [
+                    { "rel": "http://opds-spec.org/acquisition/open-access", "href": "../books/station-twelve.epub", "type": "application/epub+zip" },
+                    { "rel": "preview", "href": "../samples/station-twelve.html", "type": "text/html" }
+                  ]
+                }
+              ]
+            }
+            """.trimIndent(),
+            "https://example.test/opds/root.json"
+        )
+
+        assertEquals("Modern Catalog", feed.title)
+        assertEquals(2, feed.navigationLinks.size)
+        assertEquals("https://example.test/opds/science-fiction.json", feed.navigationLinks[0].href)
+        assertEquals("https://example.test/opds/new.json", feed.navigationLinks[1].href)
+        assertEquals(1, feed.entries.size)
+        assertEquals("Station Twelve", feed.entries.single().title)
+        assertEquals("Iris Chen", feed.entries.single().author)
+        assertEquals("Orbital maintenance logs.", feed.entries.single().summary)
+        assertEquals("https://example.test/books/station-twelve.epub", feed.entries.single().acquisitionLinks.single().href)
+    }
+
+    @Test
+    fun parsesGroupedOpdsJsonPublicationsAndStringContributors() {
+        val feed = OpdsFeedParser.parse(
+            """
+            {
+              "metadata": { "title": "Grouped Catalog" },
+              "groups": [
+                {
+                  "metadata": { "title": "Featured" },
+                  "publications": [
+                    {
+                      "metadata": {
+                        "title": "Plain Old Mars",
+                        "author": "Nia Okafor",
+                        "subtitle": "A field report"
+                      },
+                      "links": [
+                        { "rel": "http://opds-spec.org/acquisition/open-access", "href": "plain-old-mars.pdf", "type": "application/pdf" }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+            """.trimIndent(),
+            "https://example.test/catalogs/root.json"
+        )
+
+        assertEquals("Grouped Catalog", feed.title)
+        assertEquals("Plain Old Mars", feed.entries.single().title)
+        assertEquals("Nia Okafor", feed.entries.single().author)
+        assertEquals("A field report", feed.entries.single().summary)
+        assertEquals("https://example.test/catalogs/plain-old-mars.pdf", feed.entries.single().acquisitionLinks.single().href)
+    }
+
+    @Test
     fun acquisitionSupportRequiresBookTypeOrExtension() {
         assertTrue(
             OpdsLink(

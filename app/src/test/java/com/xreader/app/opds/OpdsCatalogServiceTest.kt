@@ -48,4 +48,45 @@ class OpdsCatalogServiceTest {
             cacheDir.deleteRecursively()
         }
     }
+
+    @Test
+    fun loadParsesOpdsJsonCatalogs() = runBlocking {
+        val cacheDir = Files.createTempDirectory("xreader-opds-json-test").toFile()
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/opds/root.json") { exchange ->
+            val body = """
+                {
+                  "metadata": { "title": "JSON Catalog" },
+                  "navigation": [
+                    { "href": "sections/scifi.json", "title": "Science fiction" }
+                  ],
+                  "publications": [
+                    {
+                      "metadata": { "title": "Europa Packet", "author": "Rae Kim" },
+                      "links": [
+                        { "rel": "http://opds-spec.org/acquisition/open-access", "href": "../books/europa-packet.epub", "type": "application/epub+zip" }
+                      ]
+                    }
+                  ]
+                }
+            """.trimIndent().toByteArray(StandardCharsets.UTF_8)
+            exchange.responseHeaders.add("Content-Type", "application/opds+json; charset=utf-8")
+            exchange.sendResponseHeaders(200, body.size.toLong())
+            exchange.responseBody.use { it.write(body) }
+        }
+        server.start()
+
+        try {
+            val base = "http://127.0.0.1:${server.address.port}"
+            val feed = OpdsCatalogService(importService = null, cacheDir = cacheDir).load("$base/opds/root.json")
+
+            assertEquals("JSON Catalog", feed.title)
+            assertEquals("$base/opds/sections/scifi.json", feed.navigationLinks.single().href)
+            assertEquals("Europa Packet", feed.entries.single().title)
+            assertEquals("$base/books/europa-packet.epub", feed.entries.single().acquisitionLinks.single().href)
+        } finally {
+            server.stop(0)
+            cacheDir.deleteRecursively()
+        }
+    }
 }
