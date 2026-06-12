@@ -163,6 +163,30 @@ class OpdsFeedParserTest {
                 title = null
             ).isSupportedAcquisition()
         )
+        assertTrue(
+            OpdsLink(
+                href = "https://example.test/book.fb2.zip?download=1",
+                rel = "http://opds-spec.org/acquisition/open-access",
+                type = null,
+                title = null
+            ).isSupportedAcquisition()
+        )
+        assertTrue(
+            OpdsLink(
+                href = "https://example.test/download",
+                rel = "http://opds-spec.org/acquisition/open-access",
+                type = "application/x-prc",
+                title = null
+            ).isSupportedAcquisition()
+        )
+        assertTrue(
+            OpdsLink(
+                href = "https://example.test/download",
+                rel = "http://opds-spec.org/acquisition/open-access",
+                type = "text/fb2; charset=utf-8",
+                title = null
+            ).isSupportedAcquisition()
+        )
         assertFalse(
             OpdsLink(
                 href = "https://example.test/page.html",

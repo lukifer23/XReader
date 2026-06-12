@@ -294,6 +294,7 @@ internal fun BookHealthPanel(
                 HealthPill("Cover", health?.let { if (it.coverAvailable) "Ready" else "Missing" } ?: "Checking")
                 HealthPill("Search", health?.let { "${it.searchRows} chunks" } ?: "Checking")
                 HealthPill("Words", wordCountLabel(book.wordCount))
+                readabilityCompactLabel(book)?.let { HealthPill("Readability", it) }
                 HealthPill("Size", fileSizeLabel(book.fileSizeBytes))
                 book.pageCount?.let { HealthPill("Pages", it.toString()) }
             }

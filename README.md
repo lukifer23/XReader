@@ -15,7 +15,7 @@ Implemented:
 - CBZ import converted into fixed-layout EPUB so comic/image archives use the same private-library and reader path.
 - FB2 and zipped `.fb2.zip` import converted into EPUB with FictionBook metadata, chapters, series, and embedded cover support.
 - RTF import converted into EPUB with title/author metadata and searchable text extraction.
-- DRM-free legacy MOBI/PalmDOC import converted into EPUB with title/author metadata and searchable text extraction.
+- DRM-free legacy MOBI/PRC/PalmDOC import converted into EPUB with title/author metadata and searchable text extraction.
 - ODT import converted into EPUB with OpenDocument metadata, headings, paragraphs, lists, tables, and searchable text extraction.
 - DOCX import converted into EPUB with document metadata, headings, paragraphs, lists, tables, and searchable text extraction.
 - HTML, HTM, and XHTML import converted into EPUB with page metadata, headings, lists, tables, blockquotes, and searchable text extraction.

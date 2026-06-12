@@ -12,6 +12,7 @@ import androidx.datastore.preferences.core.Preferences.Key
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.xreader.app.data.ReaderTheme
+import com.xreader.app.tts.NeuralTtsModelCatalog
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -36,8 +37,15 @@ class SettingsRepository(
         val volumeKeysTurnPages = booleanPreferencesKey("volume_keys_turn_pages")
         val screenDim = floatPreferencesKey("screen_dim")
         val readAloudRate = floatPreferencesKey("read_aloud_rate")
+        val readAloudEngineName = stringPreferencesKey("read_aloud_engine_name")
         val readAloudVoiceName = stringPreferencesKey("read_aloud_voice_name")
         val readAloudSleepTimer = stringPreferencesKey("read_aloud_sleep_timer")
+        val readAloudPlaybackMode = stringPreferencesKey("read_aloud_playback_mode")
+        val neuralTtsModelId = stringPreferencesKey("neural_tts_model_id")
+        val neuralTtsSpeakerId = longPreferencesKey("neural_tts_speaker_id")
+        val neuralTtsGender = stringPreferencesKey("neural_tts_gender")
+        val neuralTtsTone = stringPreferencesKey("neural_tts_tone")
+        val neuralTtsPace = stringPreferencesKey("neural_tts_pace")
         val fullScreen = booleanPreferencesKey("full_screen")
         val publisherStyles = booleanPreferencesKey("publisher_styles")
         val textAlign = stringPreferencesKey("text_align")
@@ -85,16 +93,36 @@ class SettingsRepository(
                 volumeKeysTurnPages = prefs[Keys.volumeKeysTurnPages] ?: false,
                 screenDim = normalizedReaderDimAmount(prefs[Keys.screenDim] ?: 0f),
                 readAloudRate = (prefs[Keys.readAloudRate] ?: 1.0f).coerceIn(0.7f, 1.4f),
+                readAloudEngineName = prefs[Keys.readAloudEngineName]?.takeIf { it.isNotBlank() },
                 readAloudVoiceName = prefs[Keys.readAloudVoiceName]?.takeIf { it.isNotBlank() },
                 readAloudSleepTimer = prefs[Keys.readAloudSleepTimer]?.let {
                     runCatching { ReadAloudSleepTimer.valueOf(it) }.getOrNull()
                 } ?: ReadAloudSleepTimer.OFF,
+                readAloudPlaybackMode = prefs[Keys.readAloudPlaybackMode]?.let {
+                    runCatching { ReadAloudPlaybackMode.valueOf(it) }.getOrNull()
+                } ?: ReadAloudPlaybackMode.DEVICE_TTS,
+                neuralTtsModelId = prefs[Keys.neuralTtsModelId]
+                    ?.takeIf { id -> NeuralTtsModelCatalog.models.any { it.modelId == id } }
+                    ?: NeuralTtsModelCatalog.DEFAULT_MODEL_ID,
+                neuralTtsSpeakerId = normalizedNeuralTtsSpeakerId(
+                    modelId = prefs[Keys.neuralTtsModelId],
+                    speakerId = prefs[Keys.neuralTtsSpeakerId]?.toInt() ?: 0
+                ),
+                neuralTtsGender = prefs[Keys.neuralTtsGender]?.let {
+                    runCatching { NeuralTtsGender.valueOf(it) }.getOrNull()
+                } ?: NeuralTtsGender.ANY,
+                neuralTtsTone = prefs[Keys.neuralTtsTone]?.let {
+                    runCatching { NeuralTtsTone.valueOf(it) }.getOrNull()
+                } ?: NeuralTtsTone.NATURAL,
+                neuralTtsPace = prefs[Keys.neuralTtsPace]?.let {
+                    runCatching { NeuralTtsPace.valueOf(it) }.getOrNull()
+                } ?: NeuralTtsPace.STANDARD,
                 fullScreen = prefs[Keys.fullScreen] ?: false,
                 publisherStyles = prefs[Keys.publisherStyles] ?: false,
                 textAlign = prefs[Keys.textAlign]?.let { runCatching { ReaderTextAlign.valueOf(it) }.getOrNull() }
                     ?: ReaderTextAlign.START,
                 pdfFit = prefs[Keys.pdfFit]?.let { runCatching { ReaderPdfFit.valueOf(it) }.getOrNull() }
-                    ?: ReaderPdfFit.WIDTH,
+                    ?: ReaderPdfFit.AUTO,
                 pdfScrollAxis = prefs[Keys.pdfScrollAxis]?.let { runCatching { ReaderPdfScrollAxis.valueOf(it) }.getOrNull() }
                     ?: ReaderPdfScrollAxis.HORIZONTAL,
                 pageDirection = prefs[Keys.pageDirection]?.let { runCatching { ReaderPageDirection.valueOf(it) }.getOrNull() }
@@ -123,7 +151,7 @@ class SettingsRepository(
                     textAlign = prefs[keys.textAlign]?.let { runCatching { ReaderTextAlign.valueOf(it) }.getOrNull() }
                         ?: ReaderTextAlign.START,
                     pdfFit = prefs[keys.pdfFit]?.let { runCatching { ReaderPdfFit.valueOf(it) }.getOrNull() }
-                        ?: ReaderPdfFit.WIDTH,
+                        ?: ReaderPdfFit.AUTO,
                     pdfScrollAxis = prefs[keys.pdfScrollAxis]?.let { runCatching { ReaderPdfScrollAxis.valueOf(it) }.getOrNull() }
                         ?: ReaderPdfScrollAxis.HORIZONTAL,
                     pageDirection = prefs[keys.pageDirection]?.let { runCatching { ReaderPageDirection.valueOf(it) }.getOrNull() }
@@ -163,12 +191,28 @@ class SettingsRepository(
             prefs[Keys.volumeKeysTurnPages] = value.volumeKeysTurnPages
             prefs[Keys.screenDim] = normalizedReaderDimAmount(value.screenDim)
             prefs[Keys.readAloudRate] = value.readAloudRate.coerceIn(0.7f, 1.4f)
+            if (value.readAloudEngineName.isNullOrBlank()) {
+                prefs.remove(Keys.readAloudEngineName)
+            } else {
+                prefs[Keys.readAloudEngineName] = value.readAloudEngineName
+            }
             if (value.readAloudVoiceName.isNullOrBlank()) {
                 prefs.remove(Keys.readAloudVoiceName)
             } else {
                 prefs[Keys.readAloudVoiceName] = value.readAloudVoiceName
             }
             prefs[Keys.readAloudSleepTimer] = value.readAloudSleepTimer.name
+            prefs[Keys.readAloudPlaybackMode] = value.readAloudPlaybackMode.name
+            prefs[Keys.neuralTtsModelId] = value.neuralTtsModelId
+                .takeIf { id -> NeuralTtsModelCatalog.models.any { it.modelId == id } }
+                ?: NeuralTtsModelCatalog.DEFAULT_MODEL_ID
+            prefs[Keys.neuralTtsSpeakerId] = normalizedNeuralTtsSpeakerId(
+                modelId = value.neuralTtsModelId,
+                speakerId = value.neuralTtsSpeakerId
+            ).toLong()
+            prefs[Keys.neuralTtsGender] = value.neuralTtsGender.name
+            prefs[Keys.neuralTtsTone] = value.neuralTtsTone.name
+            prefs[Keys.neuralTtsPace] = value.neuralTtsPace.name
             prefs[Keys.fullScreen] = value.fullScreen
             prefs[Keys.publisherStyles] = value.publisherStyles
             prefs[Keys.textAlign] = value.textAlign.name
@@ -241,6 +285,17 @@ class SettingsRepository(
         dataStore.edit { it[Keys.readAloudRate] = value.coerceIn(0.7f, 1.4f) }
     }
 
+    suspend fun setReadAloudEngineName(value: String?) {
+        dataStore.edit { prefs ->
+            if (value.isNullOrBlank()) {
+                prefs.remove(Keys.readAloudEngineName)
+            } else {
+                prefs[Keys.readAloudEngineName] = value
+            }
+            prefs.remove(Keys.readAloudVoiceName)
+        }
+    }
+
     suspend fun setReadAloudVoiceName(value: String?) {
         dataStore.edit { prefs ->
             if (value.isNullOrBlank()) {
@@ -253,6 +308,44 @@ class SettingsRepository(
 
     suspend fun setReadAloudSleepTimer(value: ReadAloudSleepTimer) {
         dataStore.edit { it[Keys.readAloudSleepTimer] = value.name }
+    }
+
+    suspend fun setReadAloudPlaybackMode(value: ReadAloudPlaybackMode) {
+        dataStore.edit { it[Keys.readAloudPlaybackMode] = value.name }
+    }
+
+    suspend fun setNeuralTtsModelId(value: String) {
+        dataStore.edit {
+            val modelId = value
+                .takeIf { id -> NeuralTtsModelCatalog.models.any { model -> model.modelId == id } }
+                ?: NeuralTtsModelCatalog.DEFAULT_MODEL_ID
+            it[Keys.neuralTtsModelId] = modelId
+            it[Keys.neuralTtsSpeakerId] = normalizedNeuralTtsSpeakerId(
+                modelId = modelId,
+                speakerId = it[Keys.neuralTtsSpeakerId]?.toInt() ?: 0
+            ).toLong()
+        }
+    }
+
+    suspend fun setNeuralTtsSpeakerId(value: Int) {
+        dataStore.edit { prefs ->
+            prefs[Keys.neuralTtsSpeakerId] = normalizedNeuralTtsSpeakerId(
+                modelId = prefs[Keys.neuralTtsModelId],
+                speakerId = value
+            ).toLong()
+        }
+    }
+
+    suspend fun setNeuralTtsGender(value: NeuralTtsGender) {
+        dataStore.edit { it[Keys.neuralTtsGender] = value.name }
+    }
+
+    suspend fun setNeuralTtsTone(value: NeuralTtsTone) {
+        dataStore.edit { it[Keys.neuralTtsTone] = value.name }
+    }
+
+    suspend fun setNeuralTtsPace(value: NeuralTtsPace) {
+        dataStore.edit { it[Keys.neuralTtsPace] = value.name }
     }
 
     suspend fun setFullScreen(value: Boolean) {
@@ -426,4 +519,10 @@ class SettingsRepository(
         this[keys.pdfScrollAxis] = appearance.pdfScrollAxis.name
         this[keys.pageDirection] = appearance.pageDirection.name
     }
+}
+
+private fun normalizedNeuralTtsSpeakerId(modelId: String?, speakerId: Int): Int {
+    val spec = NeuralTtsModelCatalog.models.firstOrNull { it.modelId == modelId }
+        ?: NeuralTtsModelCatalog.requireModel(NeuralTtsModelCatalog.DEFAULT_MODEL_ID)
+    return spec.normalizedSpeakerId(speakerId)
 }

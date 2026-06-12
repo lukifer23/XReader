@@ -16,6 +16,9 @@ import com.xreader.app.data.XReaderDatabase
 import com.xreader.app.settings.LibraryDensity
 import com.xreader.app.settings.LibrarySettings
 import com.xreader.app.settings.LibrarySort
+import com.xreader.app.settings.NeuralTtsGender
+import com.xreader.app.settings.NeuralTtsPace
+import com.xreader.app.settings.NeuralTtsTone
 import com.xreader.app.settings.ReadAloudSleepTimer
 import com.xreader.app.settings.ReaderFontFamily
 import com.xreader.app.settings.ReaderHighlightColor
@@ -134,6 +137,10 @@ class LibraryBackupRepositoryInstrumentedTest {
                 readAloudRate = 1.2f,
                 readAloudVoiceName = "local-test-voice",
                 readAloudSleepTimer = ReadAloudSleepTimer.THIRTY_MINUTES,
+                neuralTtsModelId = "vits-piper-en_US-lessac-medium",
+                neuralTtsGender = NeuralTtsGender.MALE,
+                neuralTtsTone = NeuralTtsTone.WARM,
+                neuralTtsPace = NeuralTtsPace.RELAXED,
                 fullScreen = true,
                 publisherStyles = true,
                 textAlign = ReaderTextAlign.JUSTIFY,
@@ -243,6 +250,10 @@ class LibraryBackupRepositoryInstrumentedTest {
         assertEquals(true, restoredSettings.keepScreenAwake)
         assertEquals("local-test-voice", restoredSettings.readAloudVoiceName)
         assertEquals(ReadAloudSleepTimer.THIRTY_MINUTES, restoredSettings.readAloudSleepTimer)
+        assertEquals("vits-piper-en_US-lessac-medium", restoredSettings.neuralTtsModelId)
+        assertEquals(NeuralTtsGender.MALE, restoredSettings.neuralTtsGender)
+        assertEquals(NeuralTtsTone.WARM, restoredSettings.neuralTtsTone)
+        assertEquals(NeuralTtsPace.RELAXED, restoredSettings.neuralTtsPace)
         assertEquals(ReaderOrientation.LANDSCAPE, restoredSettings.orientation)
         assertEquals(ReaderHighlightColor.BLUE.hex, restoredSettings.highlightColor)
         assertEquals(120_000L, restoredSettings.idleTimeoutMillis)

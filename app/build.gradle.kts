@@ -67,6 +67,7 @@ dependencies {
 
     implementation("org.jsoup:jsoup:1.22.2")
     implementation("com.tom-roush:pdfbox-android:2.0.27.0")
+    implementation("org.apache.commons:commons-compress:1.28.0")
 
     implementation("org.readium.kotlin-toolkit:readium-shared:3.2.0")
     implementation("org.readium.kotlin-toolkit:readium-streamer:3.2.0")

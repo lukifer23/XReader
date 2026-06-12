@@ -78,13 +78,19 @@ import com.xreader.app.data.ReaderTheme
 import com.xreader.app.analytics.ActivityBucketAnalytics
 import com.xreader.app.analytics.ActivityBucketGranularity
 import com.xreader.app.analytics.AnalyticsRange
+import com.xreader.app.analytics.AnalyticsSummary
 import com.xreader.app.analytics.BookAnalytics
 import com.xreader.app.analytics.GroupAnalytics
+import com.xreader.app.data.NeuralTtsModelEntity
+import com.xreader.app.data.NeuralTtsModelStatus
 import com.xreader.app.settings.LibraryDensity
 import com.xreader.app.settings.LibrarySort
 import com.xreader.app.settings.MAX_READER_DIM_AMOUNT
 import com.xreader.app.settings.MAX_READER_FONT_WEIGHT
 import com.xreader.app.settings.MIN_READER_FONT_WEIGHT
+import com.xreader.app.settings.NeuralTtsGender
+import com.xreader.app.settings.NeuralTtsPace
+import com.xreader.app.settings.NeuralTtsTone
 import com.xreader.app.settings.ReadAloudSleepTimer
 import com.xreader.app.settings.ReaderFontFamily
 import com.xreader.app.settings.ReaderHighlightColor
@@ -96,14 +102,20 @@ import com.xreader.app.settings.ReaderSpacingPreset
 import com.xreader.app.settings.ReaderTapZonePreset
 import com.xreader.app.settings.ReaderTextAlign
 import com.xreader.app.settings.spacingPresetOrNull
+import com.xreader.app.tts.ReadAloudEngineOption
 import com.xreader.app.tts.ReadAloudVoiceOption
+import com.xreader.app.tts.NeuralTtsModelCatalog
 import java.text.DateFormat
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 @Composable
-internal fun AnalyticsRoute(container: AppContainer, onBack: () -> Unit) {
+internal fun AnalyticsRoute(
+    container: AppContainer,
+    onBack: (() -> Unit)? = null,
+    bottomBar: @Composable () -> Unit = {},
+) {
     val viewModel: AnalyticsViewModel = viewModel(factory = AnalyticsViewModel.factory(container))
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -122,12 +134,15 @@ internal fun AnalyticsRoute(container: AppContainer, onBack: () -> Unit) {
     }
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
+        bottomBar = bottomBar,
         topBar = {
             TopAppBar(
                 title = { Text("Reading stats") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    if (onBack != null) {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
                     }
                 },
                 actions = {
@@ -185,17 +200,7 @@ internal fun AnalyticsRoute(container: AppContainer, onBack: () -> Unit) {
                         onRangeSelected = viewModel::setRange
                     )
                 }
-                item {
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        StatPill("Books", summary.totalBooks.toString())
-                        StatPill("Finished", summary.finishedBooks.toString())
-                        StatPill("Sessions", summary.sessions.toString())
-                        StatPill("Streak", "${summary.currentStreakDays}d")
-                        StatPill("WPM", summary.averageWpm.toString())
-                        StatPill("Time", formatDuration(summary.activeMillis))
-                        StatPill("Words", summary.wordsRead.toString())
-                    }
-                }
+                item { AnalyticsSnapshotCard(summary) }
                 item {
                     ReadingActivityChart(
                         buckets = summary.activityBuckets,
@@ -212,6 +217,12 @@ internal fun AnalyticsRoute(container: AppContainer, onBack: () -> Unit) {
                 if (summary.byGenre.isNotEmpty()) {
                     item { AnalyticsSectionTitle("Genres") }
                     items(summary.byGenre, key = { it.label }) { row ->
+                        GroupAnalyticsRow(row)
+                    }
+                }
+                if (summary.byReadability.isNotEmpty()) {
+                    item { AnalyticsSectionTitle("Reading level") }
+                    items(summary.byReadability, key = { it.label }) { row ->
                         GroupAnalyticsRow(row)
                     }
                 }
@@ -243,6 +254,86 @@ private fun AnalyticsRangeSelector(
                 onClick = { onRangeSelected(range) },
                 label = { Text(range.label) }
             )
+        }
+    }
+}
+
+@Composable
+private fun AnalyticsSnapshotCard(summary: AnalyticsSummary) {
+    Card(shape = RoundedCornerShape(8.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                AnalyticsMetric(
+                    label = "Time",
+                    value = formatDuration(summary.activeMillis),
+                    modifier = Modifier.weight(1f)
+                )
+                AnalyticsMetric(
+                    label = "Words",
+                    value = analyticsCountLabel(summary.wordsRead),
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                AnalyticsMetric(
+                    label = "Pace",
+                    value = analyticsPaceValue(summary.averageWpm),
+                    supporting = if (summary.averageWpm > 0) "WPM" else "Pending",
+                    modifier = Modifier.weight(1f)
+                )
+                AnalyticsMetric(
+                    label = "Streak",
+                    value = "${summary.currentStreakDays}d",
+                    supporting = "Best ${summary.bestStreakDays}d",
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            HorizontalDivider()
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    "${analyticsCountLabel(summary.sessions)} ${if (summary.sessions == 1) "session" else "sessions"}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    "${analyticsCountLabel(summary.finishedBooks)} of ${analyticsCountLabel(summary.totalBooks)} finished",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    analyticsPaceDetail(summary.paceSampleSessions),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AnalyticsMetric(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    supporting: String? = null,
+) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            value,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        supporting?.let {
+            Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
         }
     }
 }
@@ -337,7 +428,7 @@ private fun GroupAnalyticsRow(row: GroupAnalytics) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Text(row.label, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
-                "${row.sessions} sessions, ${formatDuration(row.activeMillis)}, ${row.wordsRead} words, ${row.averageWpm} WPM",
+                analyticsRowDetail(row.sessions, row.activeMillis, row.wordsRead, row.averageWpm),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodyMedium
             )
@@ -351,10 +442,17 @@ private fun BookAnalyticsRow(row: BookAnalytics) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Text(row.book.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
-                "${row.sessions} sessions, ${formatDuration(row.activeMillis)}, ${row.wordsRead} words, ${row.averageWpm} WPM",
+                analyticsRowDetail(row.sessions, row.activeMillis, row.wordsRead, row.averageWpm),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodyMedium
             )
+            readabilityDetailLabel(row.book)?.let { readability ->
+                Text(
+                    readability,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
         }
     }
 }
@@ -362,8 +460,9 @@ private fun BookAnalyticsRow(row: BookAnalytics) {
 @Composable
 internal fun NotesRoute(
     container: AppContainer,
-    onBack: () -> Unit,
+    onBack: (() -> Unit)? = null,
     openReaderAt: (Long, String) -> Unit,
+    bottomBar: @Composable () -> Unit = {},
 ) {
     val viewModel: NotesViewModel = viewModel(factory = NotesViewModel.factory(container))
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -382,12 +481,15 @@ internal fun NotesRoute(
     }
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
+        bottomBar = bottomBar,
         topBar = {
             TopAppBar(
                 title = { Text("Notes and highlights") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    if (onBack != null) {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
                     }
                 },
                 actions = {
@@ -634,10 +736,16 @@ internal fun EditAnnotationDialog(
 }
 
 @Composable
-internal fun SettingsRoute(viewModel: SettingsViewModel, onBack: () -> Unit) {
+internal fun SettingsRoute(
+    viewModel: SettingsViewModel,
+    onBack: (() -> Unit)? = null,
+    bottomBar: @Composable () -> Unit = {},
+) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val librarySettings by viewModel.librarySettings.collectAsStateWithLifecycle()
+    val readAloudEngines by viewModel.readAloudEngines.collectAsStateWithLifecycle()
     val readAloudVoices by viewModel.readAloudVoices.collectAsStateWithLifecycle()
+    val neuralTtsModels by viewModel.neuralTtsModels.collectAsStateWithLifecycle()
     val maintenance by viewModel.maintenance.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val backupMimeTypes = remember {
@@ -668,12 +776,15 @@ internal fun SettingsRoute(viewModel: SettingsViewModel, onBack: () -> Unit) {
     }
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
+        bottomBar = bottomBar,
         topBar = {
             TopAppBar(
                 title = { Text("Settings") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    if (onBack != null) {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
                     }
                 }
             )
@@ -815,10 +926,31 @@ internal fun SettingsRoute(viewModel: SettingsViewModel, onBack: () -> Unit) {
                         label = { it.label },
                         onSelected = viewModel::setReadAloudSleepTimer
                     )
+                    ReadAloudEngineSettings(
+                        engines = readAloudEngines,
+                        selectedEngineName = settings.readAloudEngineName,
+                        onSelected = viewModel::setReadAloudEngineName
+                    )
                     ReadAloudVoiceSettings(
                         voices = readAloudVoices,
                         selectedVoiceName = settings.readAloudVoiceName,
                         onSelected = viewModel::setReadAloudVoiceName
+                    )
+                    NeuralTtsModelSettings(
+                        models = neuralTtsModels,
+                        selectedModelId = settings.neuralTtsModelId,
+                        selectedSpeakerId = settings.neuralTtsSpeakerId,
+                        gender = settings.neuralTtsGender,
+                        tone = settings.neuralTtsTone,
+                        pace = settings.neuralTtsPace,
+                        onSelected = viewModel::setNeuralTtsModelId,
+                        onSpeakerSelected = viewModel::setNeuralTtsSpeakerId,
+                        onGenderSelected = viewModel::setNeuralTtsGender,
+                        onToneSelected = viewModel::setNeuralTtsTone,
+                        onPaceSelected = viewModel::setNeuralTtsPace,
+                        onDownload = viewModel::downloadNeuralTtsModel,
+                        onDelete = viewModel::deleteNeuralTtsModel,
+                        onPreview = viewModel::previewNeuralTtsModel
                     )
                 }
             }
@@ -985,6 +1117,300 @@ private fun <T> SettingsChipGroup(
 }
 
 @Composable
+private fun ReadAloudEngineSettings(
+    engines: List<ReadAloudEngineOption>,
+    selectedEngineName: String?,
+    onSelected: (String?) -> Unit,
+) {
+    var pickerOpen by remember { mutableStateOf(false) }
+    val selectedEngineAvailable = selectedEngineName == null || engines.any { it.name == selectedEngineName }
+    val selectedLabel = selectedEngineLabel(engines, selectedEngineName)
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("Read aloud engine", style = MaterialTheme.typography.titleSmall)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = selectedLabel,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (!selectedEngineAvailable) {
+                    Text(
+                        text = "Unavailable on this device",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+            TextButton(onClick = { pickerOpen = true }) {
+                Text("Choose")
+            }
+        }
+    }
+
+    if (pickerOpen) {
+        AlertDialog(
+            onDismissRequest = { pickerOpen = false },
+            title = { Text("Read aloud engine") },
+            text = {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 360.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    item(key = "default") {
+                        ReadAloudVoiceChoiceRow(
+                            label = "Device default",
+                            selected = selectedEngineName == null,
+                            onClick = {
+                                onSelected(null)
+                                pickerOpen = false
+                            }
+                        )
+                    }
+                    items(engines.filter { it.name != null }, key = { it.name ?: it.label }) { engine ->
+                        ReadAloudVoiceChoiceRow(
+                            label = if (engine.isDefault) "${engine.label} (default)" else engine.label,
+                            selected = selectedEngineName == engine.name,
+                            onClick = {
+                                onSelected(engine.name)
+                                pickerOpen = false
+                            }
+                        )
+                    }
+                    if (engines.none { it.name != null }) {
+                        item {
+                            PickerEmptyRow("No additional TTS engines found.")
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { pickerOpen = false }) {
+                    Text("Close")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun NeuralTtsModelSettings(
+    models: List<NeuralTtsModelEntity>,
+    selectedModelId: String,
+    selectedSpeakerId: Int,
+    gender: NeuralTtsGender,
+    tone: NeuralTtsTone,
+    pace: NeuralTtsPace,
+    onSelected: (String) -> Unit,
+    onSpeakerSelected: (Int) -> Unit,
+    onGenderSelected: (NeuralTtsGender) -> Unit,
+    onToneSelected: (NeuralTtsTone) -> Unit,
+    onPaceSelected: (NeuralTtsPace) -> Unit,
+    onDownload: (String) -> Unit,
+    onDelete: (String) -> Unit,
+    onPreview: (String) -> Unit,
+) {
+    var pickerOpen by remember { mutableStateOf(false) }
+    val spec = NeuralTtsModelCatalog.models.firstOrNull { it.modelId == selectedModelId }
+        ?: NeuralTtsModelCatalog.models.first()
+    val model = models.firstOrNull { it.modelId == spec.modelId }
+    val status = model?.status ?: NeuralTtsModelStatus.NOT_DOWNLOADED
+    val downloaded = model?.downloadedBytes ?: 0L
+    val total = model?.totalBytes?.takeIf { it > 0L } ?: spec.archiveBytes
+    val statusText = neuralTtsStatusText(status, downloaded, total, spec.archiveBytes, model?.error)
+    val selectedSpeaker = spec.speaker(selectedSpeakerId)
+    val narratorOptions = remember(spec, gender, selectedSpeaker) {
+        spec.speakers
+            .filter { gender == NeuralTtsGender.ANY || it.gender == gender }
+            .let { filtered ->
+                if (selectedSpeaker in filtered) filtered else listOf(selectedSpeaker) + filtered
+            }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("Local neural voice", style = MaterialTheme.typography.titleSmall)
+        SettingsChipGroup(
+            title = "Voice",
+            options = NeuralTtsGender.entries,
+            selected = gender,
+            label = { it.label },
+            onSelected = onGenderSelected
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = "${spec.displayName} · ${selectedSpeaker.label}",
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = listOf(statusText, spec.voiceDescription).joinToString(" - "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (status == NeuralTtsModelStatus.FAILED) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            when (status) {
+                NeuralTtsModelStatus.DOWNLOADING,
+                NeuralTtsModelStatus.EXTRACTING -> CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    strokeWidth = 2.dp
+                )
+                else -> TextButton(onClick = { pickerOpen = true }) {
+                    Text("Manage")
+                }
+            }
+        }
+        if (spec.speakers.size > 1) {
+            SettingsChipGroup(
+                title = "Narrator",
+                options = narratorOptions,
+                selected = selectedSpeaker,
+                label = { "${it.label} (${it.gender.label})" },
+                onSelected = { onSpeakerSelected(it.id) }
+            )
+        }
+        SettingsChipGroup(
+            title = "Tone",
+            options = NeuralTtsTone.entries,
+            selected = tone,
+            label = { it.label },
+            onSelected = onToneSelected
+        )
+        SettingsChipGroup(
+            title = "Pacing",
+            options = NeuralTtsPace.entries,
+            selected = pace,
+            label = { it.label },
+            onSelected = onPaceSelected
+        )
+    }
+    if (pickerOpen) {
+        val visibleVoices = NeuralTtsModelCatalog.models
+        AlertDialog(
+            onDismissRequest = { pickerOpen = false },
+            title = { Text("Local neural voices") },
+            text = {
+                LazyColumn(
+                    modifier = Modifier.heightIn(max = 460.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    items(visibleVoices, key = { it.modelId }) { voice ->
+                        val rowModel = models.firstOrNull { it.modelId == voice.modelId }
+                        val rowStatus = rowModel?.status ?: NeuralTtsModelStatus.NOT_DOWNLOADED
+                        val rowDownloaded = rowModel?.downloadedBytes ?: 0L
+                        val rowTotal = rowModel?.totalBytes?.takeIf { it > 0L } ?: voice.archiveBytes
+                        NeuralTtsVoiceRow(
+                            spec = voice,
+                            status = rowStatus,
+                            selected = voice.modelId == selectedModelId,
+                            statusText = neuralTtsStatusText(rowStatus, rowDownloaded, rowTotal, voice.archiveBytes, rowModel?.error),
+                            onSelected = {
+                                onSelected(voice.modelId)
+                                pickerOpen = false
+                            },
+                            onDownload = { onDownload(voice.modelId) },
+                            onDelete = { onDelete(voice.modelId) },
+                            onPreview = { onPreview(voice.modelId) }
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { pickerOpen = false }) {
+                    Text("Close")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun NeuralTtsVoiceRow(
+    spec: com.xreader.app.tts.NeuralTtsModelSpec,
+    status: NeuralTtsModelStatus,
+    selected: Boolean,
+    statusText: String,
+    onSelected: () -> Unit,
+    onDownload: () -> Unit,
+    onDelete: () -> Unit,
+    onPreview: () -> Unit,
+) {
+    Surface(
+        tonalElevation = if (selected) 2.dp else 0.dp,
+        shape = RoundedCornerShape(8.dp),
+        color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface
+    ) {
+        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(spec.displayName, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(spec.voiceDescription, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(statusText, style = MaterialTheme.typography.bodySmall, color = if (status == NeuralTtsModelStatus.FAILED) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                if (selected) {
+                    Text("Selected", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                }
+            }
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                when (status) {
+                    NeuralTtsModelStatus.DOWNLOADING,
+                    NeuralTtsModelStatus.EXTRACTING -> CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                    NeuralTtsModelStatus.INSTALLED -> {
+                        TextButton(onClick = onPreview) { Text("Preview") }
+                        TextButton(onClick = onSelected, enabled = !selected) { Text("Use") }
+                        TextButton(onClick = onDownload) { Text("Reinstall") }
+                        TextButton(onClick = onDelete) { Text("Delete") }
+                    }
+                    else -> TextButton(onClick = onDownload) { Text("Download") }
+                }
+            }
+        }
+    }
+}
+
+private fun neuralTtsStatusText(
+    status: NeuralTtsModelStatus,
+    downloaded: Long,
+    total: Long,
+    archiveBytes: Long,
+    error: String?,
+): String =
+    when (status) {
+        NeuralTtsModelStatus.INSTALLED -> "Installed"
+        NeuralTtsModelStatus.DOWNLOADING -> "Downloading ${downloaded.compactBytes()} of ${total.compactBytes()}"
+        NeuralTtsModelStatus.EXTRACTING -> "Installing ${archiveBytes.compactBytes()} voice"
+        NeuralTtsModelStatus.FAILED -> error ?: "Download failed"
+        NeuralTtsModelStatus.NOT_DOWNLOADED -> "Not installed - ${archiveBytes.compactBytes()} download"
+    }
+
+@Composable
 private fun ReadAloudVoiceSettings(
     voices: List<ReadAloudVoiceOption>,
     selectedVoiceName: String?,
@@ -1037,6 +1463,24 @@ private fun ReadAloudVoiceSettings(
         )
     }
 }
+
+private fun selectedEngineLabel(
+    engines: List<ReadAloudEngineOption>,
+    selected: String?,
+): String =
+    if (selected == null) {
+        "Device default"
+    } else {
+        engines.firstOrNull { it.name == selected }?.label ?: "Selected engine unavailable"
+    }
+
+private fun Long.compactBytes(): String =
+    when {
+        this >= 1024L * 1024L * 1024L -> String.format(Locale.US, "%.1f GB", this / 1024.0 / 1024.0 / 1024.0)
+        this >= 1024L * 1024L -> String.format(Locale.US, "%.1f MB", this / 1024.0 / 1024.0)
+        this >= 1024L -> String.format(Locale.US, "%.1f KB", this / 1024.0)
+        else -> "$this B"
+    }
 
 @Composable
 private fun ReadAloudVoicePickerDialog(

@@ -3,6 +3,7 @@ package com.xreader.app.analytics
 import com.xreader.app.data.BookDao
 import com.xreader.app.data.BookEntity
 import com.xreader.app.data.ReadingSessionEntity
+import com.xreader.app.data.ReadingStateEntity
 import com.xreader.app.repository.ReadingRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -36,6 +37,7 @@ data class AnalyticsSummary(
     val activeMillis: Long,
     val wordsRead: Int,
     val averageWpm: Int,
+    val paceSampleSessions: Int,
     val sessions: Int,
     val currentStreakDays: Int,
     val bestStreakDays: Int,
@@ -43,6 +45,7 @@ data class AnalyticsSummary(
     val byBook: List<BookAnalytics>,
     val byAuthor: List<GroupAnalytics>,
     val byGenre: List<GroupAnalytics>,
+    val byReadability: List<GroupAnalytics>,
 )
 
 data class BookAnalytics(
@@ -50,6 +53,9 @@ data class BookAnalytics(
     val activeMillis: Long,
     val wordsRead: Int,
     val averageWpm: Int,
+    val paceSampleSessions: Int,
+    val paceActiveMillis: Long,
+    val paceWordsRead: Int,
     val sessions: Int,
 )
 
@@ -58,6 +64,7 @@ data class GroupAnalytics(
     val activeMillis: Long,
     val wordsRead: Int,
     val averageWpm: Int,
+    val paceSampleSessions: Int,
     val sessions: Int,
 )
 
@@ -87,15 +94,20 @@ class AnalyticsRepository(
     private val clock: Clock = Clock.systemDefaultZone(),
 ) {
     fun observeSummary(range: AnalyticsRange): Flow<AnalyticsSummary> =
-        combine(bookDao.observeBooks(""), readingRepository.observeSessions()) { books, sessions ->
-            AnalyticsCalculator.summarize(books, sessions, clock, range)
+        combine(
+            bookDao.observeBooks(""),
+            readingRepository.observeSessions(),
+            readingRepository.observeStates()
+        ) { books, sessions, states ->
+            AnalyticsCalculator.summarize(books, sessions, clock, range, states)
         }
 
     suspend fun exportSummariesJson(): AnalyticsExportResult {
         val books = bookDao.booksForBackup()
         val sessions = readingRepository.allSessions()
+        val states = readingRepository.allStates()
         val summaries = AnalyticsRange.entries.map { range ->
-            AnalyticsCalculator.summarize(books, sessions, clock, range)
+            AnalyticsCalculator.summarize(books, sessions, clock, range, states)
         }
         return AnalyticsExportResult(
             json = AnalyticsExportJson.build(
@@ -110,8 +122,9 @@ class AnalyticsRepository(
     suspend fun exportSummariesCsv(): AnalyticsCsvExportResult {
         val books = bookDao.booksForBackup()
         val sessions = readingRepository.allSessions()
+        val states = readingRepository.allStates()
         val summaries = AnalyticsRange.entries.map { range ->
-            AnalyticsCalculator.summarize(books, sessions, clock, range)
+            AnalyticsCalculator.summarize(books, sessions, clock, range, states)
         }
         return AnalyticsCsvExportResult(
             csv = AnalyticsExportCsv.build(
@@ -131,7 +144,7 @@ internal object AnalyticsExportJson {
     ): JSONObject =
         JSONObject()
             .put("format", EXPORT_FORMAT)
-            .put("version", 1)
+            .put("version", 4)
             .put("exportedAt", exportedAt)
             .put(
                 "ranges",
@@ -149,6 +162,7 @@ internal object AnalyticsExportJson {
             .put("activeMillis", activeMillis)
             .put("wordsRead", wordsRead)
             .put("averageWpm", averageWpm)
+            .put("paceSampleSessions", paceSampleSessions)
             .put("sessions", sessions)
             .put("currentStreakDays", currentStreakDays)
             .put("bestStreakDays", bestStreakDays)
@@ -170,6 +184,7 @@ internal object AnalyticsExportJson {
             .put("books", JSONArray().also { array -> byBook.forEach { array.put(it.toJson()) } })
             .put("authors", JSONArray().also { array -> byAuthor.forEach { array.put(it.toJson()) } })
             .put("genres", JSONArray().also { array -> byGenre.forEach { array.put(it.toJson()) } })
+            .put("readabilityLevels", JSONArray().also { array -> byReadability.forEach { array.put(it.toJson()) } })
 
     private fun BookAnalytics.toJson(): JSONObject =
         JSONObject()
@@ -178,9 +193,12 @@ internal object AnalyticsExportJson {
             .putNullable("series", book.series)
             .putNullable("genre", book.genre)
             .putNullable("year", book.year)
+            .putNullable("readabilityScore", book.readabilityScore)
+            .putNullable("readabilityGradeLevel", book.readabilityGradeLevel)
             .put("activeMillis", activeMillis)
             .put("wordsRead", wordsRead)
             .put("averageWpm", averageWpm)
+            .put("paceSampleSessions", paceSampleSessions)
             .put("sessions", sessions)
 
     private fun GroupAnalytics.toJson(): JSONObject =
@@ -189,6 +207,7 @@ internal object AnalyticsExportJson {
             .put("activeMillis", activeMillis)
             .put("wordsRead", wordsRead)
             .put("averageWpm", averageWpm)
+            .put("paceSampleSessions", paceSampleSessions)
             .put("sessions", sessions)
 
     private fun JSONObject.putNullable(name: String, value: Any?): JSONObject =
@@ -217,11 +236,14 @@ internal object AnalyticsExportCsv {
                 null,
                 null,
                 null,
+                null,
+                null,
                 summary.totalBooks,
                 summary.finishedBooks,
                 summary.activeMillis,
                 summary.wordsRead,
                 summary.averageWpm,
+                summary.paceSampleSessions,
                 summary.sessions,
                 summary.currentStreakDays,
                 summary.bestStreakDays
@@ -241,8 +263,11 @@ internal object AnalyticsExportCsv {
                     null,
                     null,
                     null,
+                    null,
+                    null,
                     bucket.activeMillis,
                     bucket.wordsRead,
+                    null,
                     null,
                     bucket.sessions,
                     null,
@@ -262,11 +287,14 @@ internal object AnalyticsExportCsv {
                     row.book.series,
                     row.book.genre,
                     row.book.year,
+                    row.book.readabilityScore,
+                    row.book.readabilityGradeLevel,
                     null,
                     null,
                     row.activeMillis,
                     row.wordsRead,
                     row.averageWpm,
+                    row.paceSampleSessions,
                     row.sessions,
                     null,
                     null
@@ -277,6 +305,9 @@ internal object AnalyticsExportCsv {
             }
             summary.byGenre.forEach { row ->
                 rows += groupRow("genre", exportedAt, summary, row)
+            }
+            summary.byReadability.forEach { row ->
+                rows += groupRow("readability", exportedAt, summary, row)
             }
         }
         return rows.joinToString("\n") { row -> row.joinToString(",") { it.csvCell() } } + "\n"
@@ -302,9 +333,12 @@ internal object AnalyticsExportCsv {
             null,
             null,
             null,
+            null,
+            null,
             row.activeMillis,
             row.wordsRead,
             row.averageWpm,
+            row.paceSampleSessions,
             row.sessions,
             null,
             null
@@ -332,11 +366,14 @@ internal object AnalyticsExportCsv {
         "series",
         "genre",
         "year",
+        "readability_score",
+        "readability_grade_level",
         "total_books",
         "finished_books",
         "active_millis",
         "words_read",
         "average_wpm",
+        "pace_sample_sessions",
         "sessions",
         "current_streak_days",
         "best_streak_days"
@@ -349,17 +386,24 @@ internal object AnalyticsCalculator {
         sessions: List<ReadingSessionEntity>,
         clock: Clock,
         range: AnalyticsRange = AnalyticsRange.MONTH,
+        states: List<ReadingStateEntity> = emptyList(),
     ): AnalyticsSummary {
         val periodSessions = sessions.filterForRange(range, clock)
+        val periodPaceSessions = periodSessions.reliablePaceSamples()
         val sessionsByBook = periodSessions.groupBy { it.bookId }
+        val statesByBook = states.associateBy { it.bookId }
         val byBook = books.mapNotNull { book ->
             val bookSessions = sessionsByBook[book.id].orEmpty()
             if (bookSessions.isEmpty()) return@mapNotNull null
+            val bookPaceSessions = bookSessions.reliablePaceSamples()
             BookAnalytics(
                 book = book,
                 activeMillis = bookSessions.sumOf { it.activeMillis },
                 wordsRead = bookSessions.sumOf { it.wordsRead },
-                averageWpm = weightedWpm(bookSessions),
+                averageWpm = weightedWpm(bookPaceSessions),
+                paceSampleSessions = bookPaceSessions.size,
+                paceActiveMillis = bookPaceSessions.sumOf { it.activeMillis },
+                paceWordsRead = bookPaceSessions.sumOf { it.wordsRead },
                 sessions = bookSessions.size
             )
         }.sortedWith(
@@ -370,18 +414,26 @@ internal object AnalyticsCalculator {
         return AnalyticsSummary(
             range = range,
             totalBooks = books.size,
-            finishedBooks = books.count { it.finished },
+            finishedBooks = books.count { it.isAnalyticsFinished(statesByBook[it.id]) },
             activeMillis = periodSessions.sumOf { it.activeMillis },
             wordsRead = periodSessions.sumOf { it.wordsRead },
-            averageWpm = weightedWpm(periodSessions),
+            averageWpm = weightedWpm(periodPaceSessions),
+            paceSampleSessions = periodPaceSessions.size,
             sessions = periodSessions.size,
             currentStreakDays = currentStreakDays(sessions, clock),
             bestStreakDays = bestStreakDays(sessions, clock),
             activityBuckets = activityBuckets(sessions, clock, range),
             byBook = byBook,
             byAuthor = grouped(byBook) { it.book.author.ifBlank { "Unknown Author" } },
-            byGenre = grouped(byBook) { it.book.genre?.takeIf(String::isNotBlank) ?: "No genre" }
+            byGenre = grouped(byBook) { it.book.genre?.takeIf(String::isNotBlank) ?: "No genre" },
+            byReadability = groupedByReadability(byBook)
         )
+    }
+
+    private fun groupedByReadability(rows: List<BookAnalytics>): List<GroupAnalytics> {
+        val hasMeasuredReadability = rows.any { it.book.readabilityScore != null || it.book.readabilityGradeLevel != null }
+        if (!hasMeasuredReadability) return emptyList()
+        return grouped(rows) { it.book.readabilityStatsLabel() }
     }
 
     private fun grouped(
@@ -395,13 +447,29 @@ internal object AnalyticsCalculator {
                     activeMillis = groupRows.sumOf { it.activeMillis },
                     wordsRead = groupRows.sumOf { it.wordsRead },
                     averageWpm = weightedWpm(
-                        activeMillis = groupRows.sumOf { it.activeMillis },
-                        wordsRead = groupRows.sumOf { it.wordsRead }
+                        activeMillis = groupRows.sumOf { it.paceActiveMillis },
+                        wordsRead = groupRows.sumOf { it.paceWordsRead }
                     ),
+                    paceSampleSessions = groupRows.sumOf { it.paceSampleSessions },
                     sessions = groupRows.sumOf { it.sessions }
                 )
             }
             .sortedWith(compareByDescending<GroupAnalytics> { it.activeMillis }.thenBy { it.label.lowercase() })
+
+    private fun BookEntity.readabilityStatsLabel(): String {
+        val score = readabilityScore
+        val grade = readabilityGradeLevel
+        return when {
+            score == null && grade == null -> "Not measured"
+            score != null && score >= 80.0 -> "Easy"
+            score != null && score >= 60.0 -> "Clear"
+            score != null && score >= 40.0 -> "Dense"
+            grade != null && grade <= 6.0 -> "Easy"
+            grade != null && grade <= 9.0 -> "Clear"
+            grade != null && grade <= 12.0 -> "Dense"
+            else -> "Very dense"
+        }
+    }
 
     private fun activityBuckets(
         sessions: List<ReadingSessionEntity>,
@@ -576,6 +644,9 @@ internal object AnalyticsCalculator {
             .map { it.startedDate(clock) }
             .toSet()
 
+    private fun BookEntity.isAnalyticsFinished(state: ReadingStateEntity?): Boolean =
+        finished || state?.finishedAt != null || (state?.progress ?: 0.0) >= FINISHED_PROGRESS_THRESHOLD
+
     private fun ReadingSessionEntity.startedDate(clock: Clock): LocalDate =
         Instant.ofEpochMilli(startedAt).atZone(clock.zone).toLocalDate()
 
@@ -586,14 +657,15 @@ internal object AnalyticsCalculator {
         )
 
     private fun weightedWpm(activeMillis: Long, wordsRead: Int): Int {
-        val active = activeMillis
-        val words = wordsRead
-        if (active <= 0L || words <= 0) return 0
-        return (words / (active / 60_000.0)).toInt().coerceIn(0, 1200)
+        return estimatedReadingWpm(wordsRead = wordsRead, activeMillis = activeMillis)
     }
+
+    private fun List<ReadingSessionEntity>.reliablePaceSamples(): List<ReadingSessionEntity> =
+        filter { it.isReliablePaceSample() }
 
     private const val DAYS_PER_WEEK = 7L
     private const val WEEK_CHART_COUNT = 13L
     private const val DEFAULT_EMPTY_MONTHS = 12L
     private const val MAX_MONTH_BUCKETS = 18L
+    private const val FINISHED_PROGRESS_THRESHOLD = 0.995
 }

@@ -7,6 +7,7 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
+import com.xreader.app.analytics.ReadabilityAnalyzer
 import com.xreader.app.core.TextTools
 import com.xreader.app.data.BookDao
 import com.xreader.app.data.BookEntity
@@ -119,8 +120,8 @@ class ImportService(
     }
 
     private suspend fun importCachedFile(tmp: File, displayName: String, mimeType: String): ImportResult {
-        val sourceExtension = sourceExtension(displayName, mimeType)
-        require(sourceExtension in SUPPORTED_BOOK_EXTENSIONS) {
+        val sourceExtension = resolveSourceExtension(tmp, sourceExtension(displayName, mimeType))
+        require(sourceExtension in SupportedBookTypes.extensions) {
             "Unsupported file type: .$sourceExtension"
         }
 
@@ -215,6 +216,7 @@ class ImportService(
             val coverFile = refreshedCoverPath?.let { File(context.filesDir, it) }
 
             val wordCount = parsed.units.sumOf { it.wordCount }
+            val readability = ReadabilityAnalyzer.analyze(parsed.units.map { it.body })
             val canonicalAuthor = PublicationMetadataTools.canonicalAuthor(
                 parsed.author.ifBlank { "Unknown Author" },
                 metadataOptions.authors
@@ -238,6 +240,8 @@ class ImportService(
                 fileSizeBytes = storedFile.length(),
                 wordCount = wordCount,
                 pageCount = parsed.pageCount ?: convertedPageCount,
+                readabilityScore = readability?.readingEase,
+                readabilityGradeLevel = readability?.gradeLevel,
                 importedAt = now,
                 updatedAt = now
             )
@@ -630,6 +634,7 @@ class ImportService(
     ): BookEntity {
         val repairedGenre = if (PublicationMetadataTools.shouldReplaceGenre(genre, parsed.genre)) parsed.genre else genre
         val repairedSeries = series ?: parsed.series
+        val readability = ReadabilityAnalyzer.analyze(parsed.units.map { it.body })
         val repaired = copy(
             genre = PublicationMetadataTools.canonicalGenre(repairedGenre, metadataOptions.genres),
             year = year ?: parsed.year,
@@ -641,6 +646,8 @@ class ImportService(
             fileSizeBytes = fileSizeBytes,
             wordCount = parsed.units.sumOf { it.wordCount },
             pageCount = parsed.pageCount ?: pageCount,
+            readabilityScore = readability?.readingEase,
+            readabilityGradeLevel = readability?.gradeLevel,
         )
         return if (repaired == this) this else repaired.copy(updatedAt = clock.millis())
     }
@@ -862,8 +869,8 @@ class ImportService(
     }
 
     private fun isSupportedBook(displayName: String, mimeType: String): Boolean =
-        sourceExtension(displayName, mimeType) in SUPPORTED_BOOK_EXTENSIONS ||
-            mimeType in SUPPORTED_BOOK_MIME_TYPES
+        sourceExtension(displayName, mimeType) in SupportedBookTypes.extensions ||
+            mimeType.normalizedMimeType() in SupportedBookTypes.mimeTypes
 
     private fun Throwable.isUnsupportedImport(): Boolean =
         message?.startsWith("Unsupported file type:") == true
@@ -872,31 +879,25 @@ class ImportService(
         val lower = displayName.lowercase(Locale.US)
         return when {
             lower.endsWith(".fb2.zip") -> "fb2.zip"
-            else -> TextTools.extension(displayName).ifBlank { extensionForMimeType(mimeType) }
+            else -> TextTools.extension(displayName).ifBlank { SupportedBookTypes.extensionForMimeType(mimeType) }
         }
     }
 
-    private fun extensionForMimeType(mimeType: String): String =
-        when (mimeType.lowercase(Locale.US)) {
-            "application/epub+zip" -> "epub"
-            "application/pdf" -> "pdf"
-            "text/plain" -> "txt"
-            "application/rtf", "text/rtf", "application/x-rtf" -> "rtf"
-            "application/x-mobipocket-ebook", "application/vnd.amazon.ebook" -> "mobi"
-            "application/vnd.oasis.opendocument.text" -> "odt"
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document" -> "docx"
-            "text/html" -> "html"
-            "application/xhtml+xml" -> "xhtml"
-            "multipart/related", "application/x-mimearchive", "application/mhtml", "message/rfc822" -> "mhtml"
-            "text/markdown", "text/x-markdown", "application/markdown", "application/x-markdown" -> "md"
-            "application/x-fictionbook+xml", "application/fb2+xml", "text/fb2+xml" -> "fb2"
-            else -> ""
+    private fun resolveSourceExtension(file: File, sourceExtension: String): String =
+        if (sourceExtension == "zip") {
+            ZipBackedBookDetector.detect(file) ?: sourceExtension
+        } else {
+            sourceExtension
         }
 
+    private fun String.normalizedMimeType(): String =
+        substringBefore(';').trim().lowercase(Locale.US)
+
     private fun sourceTitle(displayName: String, sourceExtension: String): String =
-        when (sourceExtension) {
-            "fb2.zip" -> displayName.dropLast(".fb2.zip".length)
-            else -> displayName.substringBeforeLast('.')
+        if (displayName.endsWith(".$sourceExtension", ignoreCase = true)) {
+            displayName.dropLast(sourceExtension.length + 1)
+        } else {
+            displayName.substringBeforeLast('.')
         }.ifBlank { displayName }
 
     private fun sha256(file: File): String {
@@ -913,54 +914,6 @@ class ImportService(
     }
 
     private companion object {
-        val SUPPORTED_BOOK_EXTENSIONS = setOf(
-            "epub",
-            "pdf",
-            "txt",
-            "cbz",
-            "fb2",
-            "fb2.zip",
-            "rtf",
-            "mobi",
-            "prc",
-            "odt",
-            "docx",
-            "html",
-            "htm",
-            "xhtml",
-            "mhtml",
-            "mht",
-            "md",
-            "markdown"
-        )
-        val SUPPORTED_BOOK_MIME_TYPES = setOf(
-            "application/epub+zip",
-            "application/pdf",
-            "text/plain",
-            "application/rtf",
-            "text/rtf",
-            "application/x-rtf",
-            "application/x-mobipocket-ebook",
-            "application/vnd.amazon.ebook",
-            "text/html",
-            "application/xhtml+xml",
-            "multipart/related",
-            "application/x-mimearchive",
-            "application/mhtml",
-            "message/rfc822",
-            "text/markdown",
-            "text/x-markdown",
-            "application/markdown",
-            "application/x-markdown",
-            "application/vnd.oasis.opendocument.text",
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            "application/zip",
-            "application/x-cbz",
-            "application/vnd.comicbook+zip",
-            "application/x-fictionbook+xml",
-            "application/fb2+xml",
-            "text/fb2+xml"
-        )
         const val CUSTOM_COVER_MAX_EDGE = 1400
         const val CUSTOM_COVER_JPEG_QUALITY = 90
     }

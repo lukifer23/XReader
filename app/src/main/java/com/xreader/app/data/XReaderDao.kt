@@ -237,6 +237,99 @@ interface ReadingDao {
 }
 
 @Dao
+interface NeuralTtsDao {
+    @Query("SELECT * FROM neural_tts_models ORDER BY displayName COLLATE NOCASE ASC")
+    fun observeModels(): Flow<List<NeuralTtsModelEntity>>
+
+    @Query("SELECT * FROM neural_tts_models WHERE modelId = :modelId LIMIT 1")
+    suspend fun model(modelId: String): NeuralTtsModelEntity?
+
+    @Query("SELECT * FROM neural_tts_models")
+    suspend fun allModels(): List<NeuralTtsModelEntity>
+
+    @Upsert
+    suspend fun upsertModel(model: NeuralTtsModelEntity)
+
+    @Query("DELETE FROM neural_tts_models WHERE modelId = :modelId")
+    suspend fun deleteModel(modelId: String)
+
+    @Query("SELECT * FROM book_audio WHERE bookId = :bookId ORDER BY updatedAt DESC")
+    fun observeBookAudio(bookId: Long): Flow<List<BookAudioEntity>>
+
+    @Query("SELECT * FROM book_audio WHERE bookId = :bookId")
+    suspend fun bookAudioForBook(bookId: Long): List<BookAudioEntity>
+
+    @Query("SELECT * FROM book_audio")
+    suspend fun allBookAudio(): List<BookAudioEntity>
+
+    @Query("SELECT * FROM book_audio WHERE modelId = :modelId")
+    suspend fun bookAudioForModel(modelId: String): List<BookAudioEntity>
+
+    @Query("SELECT * FROM book_audio WHERE status = 'GENERATING'")
+    suspend fun generatingBookAudio(): List<BookAudioEntity>
+
+    @Query("SELECT * FROM book_audio WHERE id = :id LIMIT 1")
+    suspend fun bookAudioById(id: Long): BookAudioEntity?
+
+    @Query(
+        """
+        SELECT * FROM book_audio
+        WHERE bookId = :bookId AND modelId = :modelId AND speakerId = :speakerId AND speed = :speed AND tone = :tone
+        LIMIT 1
+        """
+    )
+    suspend fun bookAudio(bookId: Long, modelId: String, speakerId: Int, speed: Float, tone: String): BookAudioEntity?
+
+    @Query(
+        """
+        SELECT * FROM book_audio
+        WHERE bookId = :bookId AND modelId = :modelId AND speakerId = :speakerId AND speed = :speed AND tone = :tone
+            AND status = 'GENERATED'
+        LIMIT 1
+        """
+    )
+    suspend fun generatedBookAudio(bookId: Long, modelId: String, speakerId: Int, speed: Float, tone: String): BookAudioEntity?
+
+    @Upsert
+    suspend fun upsertBookAudio(audio: BookAudioEntity)
+
+    @Query(
+        """
+        UPDATE book_audio
+        SET completedSegments = :completedSegments, updatedAt = :updatedAt
+        WHERE bookId = :bookId AND modelId = :modelId AND speakerId = :speakerId AND speed = :speed AND tone = :tone
+        """
+    )
+    suspend fun updateBookAudioProgress(
+        bookId: Long,
+        modelId: String,
+        speakerId: Int,
+        speed: Float,
+        tone: String,
+        completedSegments: Int,
+        updatedAt: Long,
+    )
+
+    @Query(
+        """
+        UPDATE book_audio
+        SET playbackSegmentIndex = :segmentIndex, playbackPositionMs = :positionMs
+        WHERE id = :id
+        """
+    )
+    suspend fun updateBookAudioPlayback(id: Long, segmentIndex: Int, positionMs: Int)
+
+    @Query("DELETE FROM book_audio WHERE id = :id")
+    suspend fun deleteBookAudio(id: Long)
+
+    @Query("DELETE FROM book_audio WHERE bookId = :bookId")
+    suspend fun deleteBookAudioForBook(bookId: Long)
+
+    @Query("DELETE FROM book_audio WHERE modelId = :modelId")
+    suspend fun deleteBookAudioForModel(modelId: String)
+}
+
+@Dao
 interface AnnotationDao {
     @Query("SELECT * FROM annotations ORDER BY updatedAt DESC")
     fun observeAllAnnotations(): Flow<List<AnnotationEntity>>

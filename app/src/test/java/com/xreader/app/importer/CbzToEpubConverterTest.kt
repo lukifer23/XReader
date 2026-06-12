@@ -62,6 +62,24 @@ class CbzToEpubConverterTest {
         assertEquals("CBZ archive contains no supported image pages.", error?.message)
     }
 
+    @Test
+    fun preservesGifPagesWithGifMediaType() {
+        val dir = Files.createTempDirectory("xreader-gif-cbz-test").toFile()
+        val source = File(dir, "animated.cbz")
+        val output = File(dir, "animated.epub")
+        val gif = "GIF89a".toByteArray(Charsets.US_ASCII)
+        writeZip(source, "page001.gif" to gif)
+
+        val result = CbzToEpubConverter().convert(source, output, "Animated")
+
+        assertEquals(1, result.pageCount)
+        ZipFile(output).use { epub ->
+            assertArrayEquals(gif, epub.readEntry("OEBPS/images/page-0001.gif"))
+            val opf = epub.readEntry("OEBPS/package.opf").toString(Charsets.UTF_8)
+            assertTrue(opf.contains("media-type=\"image/gif\""))
+        }
+    }
+
     private fun writeZip(file: File, vararg entries: Pair<String, ByteArray>) {
         file.parentFile?.mkdirs()
         ZipOutputStream(file.outputStream().buffered()).use { zip ->

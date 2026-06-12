@@ -95,6 +95,34 @@ class ImportServiceInstrumentedTest {
     }
 
     @Test
+    fun importsExtensionlessDownloadedTextWithMimeParameters() = runBlocking {
+        val source = File(root, "downloaded/remote-download").apply {
+            parentFile?.mkdirs()
+            writeText(
+                """
+                Mime Parameter Book
+
+                Shared downloads can arrive without an extension and with Content-Type parameters.
+                """.trimIndent()
+            )
+        }
+
+        val result = ImportService(context, db).importFile(
+            file = source,
+            displayName = "remote-download",
+            mimeType = "TEXT/PLAIN; charset=utf-8"
+        )
+
+        val book = requireNotNull(db.books().getBook(result.bookId))
+        assertFalse(result.duplicate)
+        assertEquals(BookFormat.EPUB, book.format)
+        assertEquals("txt", book.sourceExtension)
+        assertEquals("Mime Parameter Book", book.title)
+        assertTrue(File(context.filesDir, book.filePath).exists())
+        assertTrue(db.search().searchBook(result.bookId, "normalizedBody:downloads*").isNotEmpty())
+    }
+
+    @Test
     fun importsPdfAsPrivatePdfAndIndexesCleanText() = runBlocking {
         val source = File(root, "source/Station Manual.pdf").apply {
             parentFile?.mkdirs()
@@ -137,6 +165,27 @@ class ImportServiceInstrumentedTest {
     }
 
     @Test
+    fun importsEpubFromGenericZipMimeWhenDisplayNameHasNoExtension() = runBlocking {
+        val source = fixtures.aliceEpub()
+
+        val result = ImportService(context, db).importFile(
+            file = source,
+            displayName = "download",
+            mimeType = "application/zip"
+        )
+
+        assertFalse(result.duplicate)
+        val book = requireNotNull(db.books().getBook(result.bookId))
+        assertEquals(BookFormat.EPUB, book.format)
+        assertEquals("epub", book.sourceExtension)
+        assertEquals("Alice Public Domain Excerpt", book.title)
+        assertTrue(File(context.filesDir, book.filePath).exists())
+
+        val searchResults = db.search().searchBook(result.bookId, "normalizedBody:alice*")
+        assertTrue(searchResults.any { it.body.contains("Alice", ignoreCase = true) })
+    }
+
+    @Test
     fun importsCbzAsPrivateFixedLayoutEpub() = runBlocking {
         val source = File(root, "source/Space Comic.cbz").apply {
             parentFile?.mkdirs()
@@ -158,6 +207,56 @@ class ImportServiceInstrumentedTest {
         assertTrue(File(context.filesDir, book.filePath).exists())
         assertTrue(book.coverImagePath?.let { File(context.filesDir, it).exists() } == true)
         assertEquals(0, db.search().indexedRowCountForBook(result.bookId))
+    }
+
+    @Test
+    fun importsCbzFromMimeTypeWhenDisplayNameHasNoExtension() = runBlocking {
+        val source = File(root, "source/mime-only-download").apply {
+            parentFile?.mkdirs()
+        }
+        ZipOutputStream(source.outputStream().buffered()).use { zip ->
+            zip.writeEntry("page1.png", pngBytes(Color.CYAN))
+        }
+
+        val result = ImportService(context, db).importFile(
+            file = source,
+            displayName = "download",
+            mimeType = "application/x-cbz"
+        )
+
+        assertFalse(result.duplicate)
+        val book = requireNotNull(db.books().getBook(result.bookId))
+        assertEquals(BookFormat.EPUB, book.format)
+        assertEquals("cbz", book.sourceExtension)
+        assertEquals("download", book.title)
+        assertEquals(1, book.pageCount)
+        assertTrue(File(context.filesDir, book.filePath).exists())
+    }
+
+    @Test
+    fun importsCbzFromGenericZipWhenArchiveContainsImagePages() = runBlocking {
+        val source = File(root, "source/comic-download.zip").apply {
+            parentFile?.mkdirs()
+        }
+        ZipOutputStream(source.outputStream().buffered()).use { zip ->
+            zip.writeEntry("page2.png", pngBytes(Color.GREEN))
+            zip.writeEntry("page1.png", pngBytes(Color.BLUE))
+        }
+
+        val result = ImportService(context, db).importFile(
+            file = source,
+            displayName = "comic-download.zip",
+            mimeType = "application/zip"
+        )
+
+        assertFalse(result.duplicate)
+        val book = requireNotNull(db.books().getBook(result.bookId))
+        assertEquals(BookFormat.EPUB, book.format)
+        assertEquals("cbz", book.sourceExtension)
+        assertEquals("comic-download", book.title)
+        assertEquals(2, book.pageCount)
+        assertEquals(0, book.wordCount)
+        assertTrue(File(context.filesDir, book.filePath).exists())
     }
 
     @Test
@@ -184,6 +283,55 @@ class ImportServiceInstrumentedTest {
 
         val searchResults = db.search().searchBook(result.bookId, "normalizedBody:terraforming*")
         assertTrue(searchResults.any { it.body.contains("terraforming", ignoreCase = true) })
+    }
+
+    @Test
+    fun importsFb2FromGenericZipWhenArchiveContainsFictionBookDocument() = runBlocking {
+        val source = File(root, "source/orbital-download.zip").apply {
+            parentFile?.mkdirs()
+        }
+        ZipOutputStream(source.outputStream().buffered()).use { zip ->
+            zip.writeEntry("book.fb2", fictionBookXml().toByteArray(Charsets.UTF_8))
+        }
+
+        val result = ImportService(context, db).importFile(
+            file = source,
+            displayName = "orbital-download.zip",
+            mimeType = "application/x-zip-compressed"
+        )
+
+        assertFalse(result.duplicate)
+        val book = requireNotNull(db.books().getBook(result.bookId))
+        assertEquals(BookFormat.EPUB, book.format)
+        assertEquals("fb2.zip", book.sourceExtension)
+        assertEquals("Orbital Dawn", book.title)
+        assertEquals("Octavia Butler", book.author)
+        assertEquals("Science Fiction", book.genre)
+        assertTrue(File(context.filesDir, book.filePath).exists())
+
+        val searchResults = db.search().searchBook(result.bookId, "normalizedBody:terraforming*")
+        assertTrue(searchResults.any { it.body.contains("terraforming", ignoreCase = true) })
+    }
+
+    @Test
+    fun genericFb2ZipFallsBackToReadableDownloadTitleWhenMetadataTitleIsMissing() = runBlocking {
+        val source = File(root, "source/field-notes-download.zip").apply {
+            parentFile?.mkdirs()
+        }
+        ZipOutputStream(source.outputStream().buffered()).use { zip ->
+            zip.writeEntry("book.fb2", fictionBookXmlWithoutTitle().toByteArray(Charsets.UTF_8))
+        }
+
+        val result = ImportService(context, db).importFile(
+            file = source,
+            displayName = "field-notes-download.zip",
+            mimeType = "application/zip"
+        )
+
+        val book = requireNotNull(db.books().getBook(result.bookId))
+        assertEquals("field-notes-download", book.title)
+        assertEquals("fb2.zip", book.sourceExtension)
+        assertTrue(File(context.filesDir, book.filePath).exists())
     }
 
     @Test
@@ -267,6 +415,32 @@ class ImportServiceInstrumentedTest {
     }
 
     @Test
+    fun importsOdtFromGenericZipMimeWhenDisplayNameHasNoExtension() = runBlocking {
+        val source = File(root, "source/odt-download").apply {
+            parentFile?.mkdirs()
+        }
+        ZipOutputStream(source.outputStream().buffered()).use { zip ->
+            zip.writeEntry("mimetype", "application/vnd.oasis.opendocument.text".toByteArray(Charsets.US_ASCII))
+            zip.writeEntry("content.xml", odtContentXml().toByteArray(Charsets.UTF_8))
+            zip.writeEntry("meta.xml", odtMetaXml().toByteArray(Charsets.UTF_8))
+        }
+
+        val result = ImportService(context, db).importFile(
+            file = source,
+            displayName = "download",
+            mimeType = "application/x-zip-compressed"
+        )
+
+        assertFalse(result.duplicate)
+        val book = requireNotNull(db.books().getBook(result.bookId))
+        assertEquals(BookFormat.EPUB, book.format)
+        assertEquals("odt", book.sourceExtension)
+        assertEquals("Station Notes", book.title)
+        assertEquals("Mina Patel", book.author)
+        assertTrue(File(context.filesDir, book.filePath).exists())
+    }
+
+    @Test
     fun importsDocxAsPrivateEpubAndIndexesText() = runBlocking {
         val source = File(root, "source/Station Briefing.docx").apply {
             parentFile?.mkdirs()
@@ -291,6 +465,33 @@ class ImportServiceInstrumentedTest {
 
         val searchResults = db.search().searchBook(result.bookId, "normalizedBody:airlock*")
         assertTrue(searchResults.any { it.body.contains("airlock", ignoreCase = true) })
+    }
+
+    @Test
+    fun importsDocxFromGenericZipMimeWhenDisplayNameHasNoExtension() = runBlocking {
+        val source = File(root, "source/docx-download").apply {
+            parentFile?.mkdirs()
+        }
+        ZipOutputStream(source.outputStream().buffered()).use { zip ->
+            zip.writeEntry("[Content_Types].xml", docxContentTypesXml().toByteArray(Charsets.UTF_8))
+            zip.writeEntry("_rels/.rels", docxRelsXml().toByteArray(Charsets.UTF_8))
+            zip.writeEntry("docProps/core.xml", docxCoreXml().toByteArray(Charsets.UTF_8))
+            zip.writeEntry("word/document.xml", docxDocumentXml().toByteArray(Charsets.UTF_8))
+        }
+
+        val result = ImportService(context, db).importFile(
+            file = source,
+            displayName = "download",
+            mimeType = "application/zip"
+        )
+
+        assertFalse(result.duplicate)
+        val book = requireNotNull(db.books().getBook(result.bookId))
+        assertEquals(BookFormat.EPUB, book.format)
+        assertEquals("docx", book.sourceExtension)
+        assertEquals("Station Briefing", book.title)
+        assertEquals("Mina Patel", book.author)
+        assertTrue(File(context.filesDir, book.filePath).exists())
     }
 
     @Test
@@ -656,6 +857,27 @@ class ImportServiceInstrumentedTest {
               <title><p>First Light</p></title>
               <p>The terraforming crew watched the alien sunrise.</p>
               <p>Every instrument reported a breathable morning.</p>
+            </section>
+          </body>
+        </FictionBook>
+        """.trimIndent().trimStart()
+
+    private fun fictionBookXmlWithoutTitle(): String =
+        """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <FictionBook xmlns="http://www.gribuser.ru/xml/fictionbook/2.0">
+          <description>
+            <title-info>
+              <author>
+                <first-name>Mina</first-name>
+                <last-name>Patel</last-name>
+              </author>
+              <lang>en</lang>
+            </title-info>
+          </description>
+          <body>
+            <section>
+              <p>A fallback title keeps generic downloads readable in the library.</p>
             </section>
           </body>
         </FictionBook>

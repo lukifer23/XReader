@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.xreader.app.AppContainer
 import com.xreader.app.analytics.ReadingAnalyticsTracker
 import com.xreader.app.data.AnnotationEntity
+import com.xreader.app.data.BookAudioStatus
 import com.xreader.app.data.BookEntity
 import com.xreader.app.data.BookmarkEntity
 import com.xreader.app.data.DictionaryEntryEntity
@@ -17,6 +18,7 @@ import com.xreader.app.reader.ReaderNavigationItem
 import com.xreader.app.reader.ReaderSearchResult
 import com.xreader.app.reader.ReadingUnit
 import com.xreader.app.settings.ReadAloudSleepTimer
+import com.xreader.app.settings.ReadAloudPlaybackMode
 import com.xreader.app.settings.ReaderFontFamily
 import com.xreader.app.settings.ReaderHighlightColor
 import com.xreader.app.settings.ReaderOrientation
@@ -31,6 +33,7 @@ import com.xreader.app.settings.withBookAppearance
 import com.xreader.app.tts.ReadAloudChunk
 import com.xreader.app.tts.ReadAloudPlanner
 import com.xreader.app.tts.ReadAloudState
+import com.xreader.app.tts.readAloudNoReadableTextMessage
 import kotlin.math.roundToInt
 import kotlinx.coroutines.async
 import kotlinx.coroutines.Job
@@ -68,6 +71,7 @@ data class ReaderUiState(
     val pendingNoteLocator: String? = null,
     val pendingNoteQuote: String? = null,
     val readAloud: ReadAloudState = ReadAloudState(),
+    val readAloudMessage: String? = null,
 )
 
 class ReaderViewModel(
@@ -103,6 +107,7 @@ class ReaderViewModel(
                 }
                 val readAloud = container.readAloudEngine.state.value
                 if (readAloud.activeBookId == bookId && (readAloud.playing || readAloud.paused || readAloud.initializing)) {
+                    container.readAloudEngine.setEngine(settings.readAloudEngineName)
                     container.readAloudEngine.setSpeechRate(settings.readAloudRate)
                     container.readAloudEngine.setVoice(settings.readAloudVoiceName)
                 }
@@ -110,6 +115,7 @@ class ReaderViewModel(
         }
         viewModelScope.launch {
             container.readAloudEngine.state.collect { readAloud ->
+                if (_uiState.value.settings.readAloudPlaybackMode == ReadAloudPlaybackMode.GENERATED_AUDIO) return@collect
                 val relevantReadAloud = if (readAloud.activeBookId == null || readAloud.activeBookId == bookId) {
                     readAloud
                 } else {
@@ -130,6 +136,27 @@ class ReaderViewModel(
                 } else if (!relevantReadAloud.initializing && !relevantReadAloud.paused) {
                     lastReadAloudLocator = null
                 }
+            }
+        }
+        viewModelScope.launch {
+            container.generatedAudiobookPlayback.state.collect { playback ->
+                if (_uiState.value.settings.readAloudPlaybackMode != ReadAloudPlaybackMode.GENERATED_AUDIO) return@collect
+                val relevant = playback.bookId == bookId
+                val mapped = if (relevant && playback.active) {
+                    ReadAloudState(
+                        activeBookId = bookId,
+                        bookTitle = playback.bookTitle,
+                        playing = playback.playing,
+                        paused = playback.paused,
+                        currentChunk = playback.segmentIndex,
+                        totalChunks = playback.segmentCount,
+                        currentHeading = playback.profileLabel,
+                        message = playback.error
+                    )
+                } else {
+                    ReadAloudState()
+                }
+                _uiState.update { it.copy(readAloud = mapped) }
             }
         }
         viewModelScope.launch {
@@ -154,19 +181,25 @@ class ReaderViewModel(
                 )
                 val activeTracker = createTracker(publication)
                 tracker = activeTracker
-                val jumpState = if (initialPosition.fromInitialOverride && initialPosition.locatorJson != null) {
-                    activeTracker.record(
+                val seededState = if ((initialPosition.fromInitialOverride || saved != null) && initialPosition.locatorJson != null) {
+                    activeTracker.seed(
                         unit = initialPosition.unitIndex,
                         locator = initialPosition.locatorJson,
-                        progressOverride = if (units.size <= 1) {
-                            1.0
-                        } else {
-                            initialPosition.unitIndex.toDouble() / (units.size - 1).toDouble()
-                        }
+                        progressOverride = initialPosition.locatorJson.toReadiumLocatorOrNull()
+                            ?.locations
+                            ?.totalProgression
+                            ?: saved?.progress
+                            ?: if (units.size <= 1) {
+                                1.0
+                            } else {
+                                initialPosition.unitIndex.toDouble() / (units.size - 1).toDouble()
+                            },
+                        retainedEstimatedWpm = saved?.estimatedWpm ?: 0
                     )
                 } else {
-                    saved
+                    null
                 }
+                val jumpState = if (initialPosition.fromInitialOverride) seededState else saved
                 lastReadingState = jumpState
                 _uiState.update {
                     it.copy(
@@ -359,6 +392,16 @@ class ReaderViewModel(
         container.readAloudEngine.setSleepTimer(value.durationMillis)
     }
 
+    fun setReadAloudPlaybackMode(value: ReadAloudPlaybackMode) {
+        viewModelScope.launch { container.settingsRepository.setReadAloudPlaybackMode(value) }
+        if (value == ReadAloudPlaybackMode.DEVICE_TTS) {
+            container.generatedAudiobookPlayback.pause()
+        } else {
+            container.readAloudEngine.stop(bookId)
+        }
+        _uiState.update { it.copy(readAloud = ReadAloudState(), readAloudMessage = null) }
+    }
+
     fun setTextAlign(value: ReaderTextAlign) {
         viewModelScope.launch {
             if (_uiState.value.bookAppearanceEnabled) {
@@ -424,6 +467,10 @@ class ReaderViewModel(
         visibleLocator: String? = null,
     ) {
         val readAloud = _uiState.value.readAloud
+        if (_uiState.value.settings.readAloudPlaybackMode == ReadAloudPlaybackMode.GENERATED_AUDIO) {
+            toggleGeneratedReadAloud()
+            return
+        }
         if (readAloud.initializing) {
             container.readAloudEngine.stop(bookId)
             return
@@ -456,25 +503,76 @@ class ReaderViewModel(
                 bookTitle = _uiState.value.book?.title ?: "XReader",
                 speechRate = _uiState.value.settings.readAloudRate,
                 voiceName = _uiState.value.settings.readAloudVoiceName,
-                sleepTimerDurationMillis = _uiState.value.settings.readAloudSleepTimer.durationMillis
+                engineName = _uiState.value.settings.readAloudEngineName,
+                sleepTimerDurationMillis = _uiState.value.settings.readAloudSleepTimer.durationMillis,
+                emptyChunksMessage = readAloudNoReadableTextMessage(_uiState.value.book?.wordCount)
             )
         }
     }
 
     fun clearReadAloudMessage() {
         container.readAloudEngine.clearMessage(bookId)
+        _uiState.update { it.copy(readAloudMessage = null) }
     }
 
     fun stopReadAloud() {
-        container.readAloudEngine.stop(bookId)
+        if (_uiState.value.settings.readAloudPlaybackMode == ReadAloudPlaybackMode.GENERATED_AUDIO) {
+            container.generatedAudiobookPlayback.stop()
+        } else {
+            container.readAloudEngine.stop(bookId)
+        }
     }
 
     fun skipReadAloudPrevious() {
-        container.readAloudEngine.skipToPrevious(bookId)
+        if (_uiState.value.settings.readAloudPlaybackMode == ReadAloudPlaybackMode.GENERATED_AUDIO) {
+            container.generatedAudiobookPlayback.skipPrevious()
+        } else {
+            container.readAloudEngine.skipToPrevious(bookId)
+        }
     }
 
     fun skipReadAloudNext() {
-        container.readAloudEngine.skipToNext(bookId)
+        if (_uiState.value.settings.readAloudPlaybackMode == ReadAloudPlaybackMode.GENERATED_AUDIO) {
+            container.generatedAudiobookPlayback.skipNext()
+        } else {
+            container.readAloudEngine.skipToNext(bookId)
+        }
+    }
+
+    private fun toggleGeneratedReadAloud() {
+        val playback = container.generatedAudiobookPlayback.state.value
+        if (playback.bookId == bookId && playback.playing) {
+            container.generatedAudiobookPlayback.pause()
+            return
+        }
+        if (playback.bookId == bookId && playback.paused) {
+            container.generatedAudiobookPlayback.resume()
+            return
+        }
+        viewModelScope.launch {
+            val settings = _uiState.value.settings
+            val audio = container.neuralTtsRepository.generatedBookAudio(
+                bookId = bookId,
+                modelId = settings.neuralTtsModelId,
+                speakerId = settings.neuralTtsSpeakerId,
+                pace = settings.neuralTtsPace,
+                tone = settings.neuralTtsTone
+            )
+            if (audio == null || audio.status != BookAudioStatus.GENERATED) {
+                val model = com.xreader.app.tts.NeuralTtsModelCatalog.models
+                    .firstOrNull { it.modelId == settings.neuralTtsModelId }
+                    ?.displayName
+                    ?: "selected neural voice"
+                _uiState.update {
+                    it.copy(
+                        readAloudMessage = "Generate saved audio for this book with $model, ${settings.neuralTtsTone.label}, ${settings.neuralTtsPace.label} before using generated read aloud."
+                    )
+                }
+                return@launch
+            }
+            container.readAloudEngine.stop(bookId)
+            container.generatedAudiobookPlayback.play(_uiState.value.book?.title ?: "Generated audiobook", audio)
+        }
     }
 
     fun setSearchQuery(value: String) {

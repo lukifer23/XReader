@@ -34,6 +34,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
@@ -50,6 +51,7 @@ import com.xreader.app.settings.ReaderPdfFit
 import com.xreader.app.settings.ReaderPdfScrollAxis
 import com.xreader.app.settings.ReaderSettings
 import com.xreader.app.settings.ReaderTextAlign
+import com.xreader.app.settings.resolvedForViewport
 import org.json.JSONObject
 import org.readium.adapter.pdfium.navigator.PdfiumEngineProvider
 import org.readium.adapter.pdfium.navigator.PdfiumPreferences
@@ -91,6 +93,7 @@ internal fun ReadiumPublicationView(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val configuration = LocalConfiguration.current
     val activity = remember(context) { context.findFragmentActivity() }
     val containerId = remember(publication.book.id) { View.generateViewId() }
     val tag = remember(publication.book.id) { "readium-reader-${publication.book.id}" }
@@ -238,6 +241,8 @@ internal fun ReadiumPublicationView(
         val factory = publication.fragmentFactory(
             initialLocator = initialLocator,
             settings = settings,
+            viewportWidthDp = configuration.screenWidthDp,
+            viewportHeightDp = configuration.screenHeightDp,
             onLocator = ::publishLocator,
             context = context,
             selectionActionModeCallback = selectionActionModeCallback
@@ -315,14 +320,19 @@ internal fun ReadiumPublicationView(
         }
     }
 
-    LaunchedEffect(navigator, settings) {
+    LaunchedEffect(navigator, settings, configuration.screenWidthDp, configuration.screenHeightDp) {
         traced("XReader:readerPreferences") {
             when (val active = navigator) {
                 is EpubNavigatorFragment -> active.submitPreferences(settings.toEpubPreferences())
                 is PdfNavigatorFragment<*, *> -> {
                     @Suppress("UNCHECKED_CAST")
                     (active as PdfNavigatorFragment<PdfiumSettings, PdfiumPreferences>)
-                        .submitPreferences(settings.toPdfiumPreferences())
+                        .submitPreferences(
+                            settings.toPdfiumPreferences(
+                                viewportWidthDp = configuration.screenWidthDp,
+                                viewportHeightDp = configuration.screenHeightDp
+                            )
+                        )
                 }
             }
         }
@@ -338,6 +348,8 @@ internal fun ReadiumPublicationView(
 private fun OpenPublication.Readium.fragmentFactory(
     initialLocator: Locator?,
     settings: ReaderSettings,
+    viewportWidthDp: Int,
+    viewportHeightDp: Int,
     onLocator: (Locator) -> Unit,
     context: Context,
     selectionActionModeCallback: ActionMode.Callback,
@@ -362,7 +374,7 @@ private fun OpenPublication.Readium.fragmentFactory(
         BookFormat.PDF -> PdfNavigatorFactory(publication, PdfiumEngineProvider())
             .createFragmentFactory(
                 initialLocator,
-                settings.toPdfiumPreferences(),
+                settings.toPdfiumPreferences(viewportWidthDp, viewportHeightDp),
                 object : PdfNavigatorFragment.Listener {}
             )
     }
@@ -393,9 +405,10 @@ private fun ReaderSettings.toEpubPreferences(): EpubPreferences =
         textColor = if (theme == ReaderTheme.OLED) ReadiumColor(0xFFEFEFEF.toInt()) else null
     )
 
-private fun ReaderSettings.toPdfiumPreferences(): PdfiumPreferences =
+private fun ReaderSettings.toPdfiumPreferences(viewportWidthDp: Int, viewportHeightDp: Int): PdfiumPreferences =
     PdfiumPreferences(
-        fit = when (pdfFit) {
+        fit = when (pdfFit.resolvedForViewport(viewportWidthDp, viewportHeightDp)) {
+            ReaderPdfFit.AUTO -> Fit.WIDTH
             ReaderPdfFit.CONTAIN -> Fit.CONTAIN
             ReaderPdfFit.WIDTH -> Fit.WIDTH
             ReaderPdfFit.HEIGHT -> Fit.HEIGHT

@@ -171,6 +171,118 @@ class OpdsCatalogServiceTest {
         }
     }
 
+    @Test
+    fun loadOrImportDownloadsAliasMimeBookUrlsThroughImporter() = runBlocking {
+        val cacheDir = Files.createTempDirectory("xreader-opds-alias-download-test").toFile()
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/books/legacy") { exchange ->
+            val body = "legacy palm database bytes handled by importer fixture".toByteArray(StandardCharsets.UTF_8)
+            exchange.responseHeaders.add("Content-Type", "application/x-prc")
+            exchange.sendResponseHeaders(200, body.size.toLong())
+            exchange.responseBody.use { it.write(body) }
+        }
+        server.start()
+        val imported = mutableListOf<DownloadedBook>()
+        val importer = RemoteBookImporter { file, displayName, mimeType ->
+            imported += DownloadedBook(
+                displayName = displayName,
+                mimeType = mimeType,
+                body = file.readText(StandardCharsets.UTF_8),
+                existsDuringImport = file.exists()
+            )
+            com.xreader.app.importer.ImportService.ImportResult(bookId = 64L, duplicate = false)
+        }
+
+        try {
+            val base = "http://127.0.0.1:${server.address.port}"
+            val result = OpdsCatalogService(importer, cacheDir).loadOrImport("$base/books/legacy")
+
+            assertTrue(result is OpdsCatalogLoadResult.Imported)
+            assertEquals(64L, (result as OpdsCatalogLoadResult.Imported).result.bookId)
+            assertEquals("application/x-prc", imported.single().mimeType)
+            assertTrue(imported.single().displayName.endsWith(".prc"))
+            assertTrue(imported.single().body.contains("legacy palm"))
+        } finally {
+            server.stop(0)
+            cacheDir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun loadOrImportDownloadsCompoundExtensionBookUrlsThroughImporter() = runBlocking {
+        val cacheDir = Files.createTempDirectory("xreader-opds-fb2zip-direct-download-test").toFile()
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/books/orbital.fb2.zip") { exchange ->
+            val body = "fake zipped fb2 body handled by importer fixture".toByteArray(StandardCharsets.UTF_8)
+            exchange.responseHeaders.add("Content-Type", "application/octet-stream")
+            exchange.sendResponseHeaders(200, body.size.toLong())
+            exchange.responseBody.use { it.write(body) }
+        }
+        server.start()
+        val imported = mutableListOf<DownloadedBook>()
+        val importer = RemoteBookImporter { file, displayName, mimeType ->
+            imported += DownloadedBook(
+                displayName = displayName,
+                mimeType = mimeType,
+                body = file.readText(StandardCharsets.UTF_8),
+                existsDuringImport = file.exists()
+            )
+            com.xreader.app.importer.ImportService.ImportResult(bookId = 84L, duplicate = false)
+        }
+
+        try {
+            val base = "http://127.0.0.1:${server.address.port}"
+            val result = OpdsCatalogService(importer, cacheDir)
+                .loadOrImport("$base/books/orbital.fb2.zip?token=reader")
+
+            assertTrue(result is OpdsCatalogLoadResult.Imported)
+            assertEquals(84L, (result as OpdsCatalogLoadResult.Imported).result.bookId)
+            assertEquals("application/octet-stream", imported.single().mimeType)
+            assertTrue(imported.single().displayName.endsWith("orbital.fb2.zip"))
+            assertTrue(imported.single().body.contains("zipped fb2"))
+        } finally {
+            server.stop(0)
+            cacheDir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun loadOrImportDownloadsGenericZipResponsesThroughImporter() = runBlocking {
+        val cacheDir = Files.createTempDirectory("xreader-opds-zip-direct-download-test").toFile()
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/download") { exchange ->
+            val body = "zip bytes are classified by the importer".toByteArray(StandardCharsets.UTF_8)
+            exchange.responseHeaders.add("Content-Type", "application/zip")
+            exchange.sendResponseHeaders(200, body.size.toLong())
+            exchange.responseBody.use { it.write(body) }
+        }
+        server.start()
+        val imported = mutableListOf<DownloadedBook>()
+        val importer = RemoteBookImporter { file, displayName, mimeType ->
+            imported += DownloadedBook(
+                displayName = displayName,
+                mimeType = mimeType,
+                body = file.readText(StandardCharsets.UTF_8),
+                existsDuringImport = file.exists()
+            )
+            com.xreader.app.importer.ImportService.ImportResult(bookId = 126L, duplicate = false)
+        }
+
+        try {
+            val base = "http://127.0.0.1:${server.address.port}"
+            val result = OpdsCatalogService(importer, cacheDir).loadOrImport("$base/download")
+
+            assertTrue(result is OpdsCatalogLoadResult.Imported)
+            assertEquals(126L, (result as OpdsCatalogLoadResult.Imported).result.bookId)
+            assertEquals("application/zip", imported.single().mimeType)
+            assertTrue(imported.single().displayName.endsWith("catalog-book.zip"))
+            assertTrue(imported.single().body.contains("classified by the importer"))
+        } finally {
+            server.stop(0)
+            cacheDir.deleteRecursively()
+        }
+    }
+
     private data class DownloadedBook(
         val displayName: String,
         val mimeType: String,

@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.xreader.app.data.ReaderTheme
+import com.xreader.app.tts.NeuralTtsModelCatalog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -69,6 +70,10 @@ class SettingsRepositoryInstrumentedTest {
         repository.setReadAloudRate(0.2f)
         repository.setReadAloudVoiceName("local-en-us-voice")
         repository.setReadAloudSleepTimer(ReadAloudSleepTimer.THIRTY_MINUTES)
+        repository.setNeuralTtsModelId("vits-piper-en_US-lessac-medium")
+        repository.setNeuralTtsGender(NeuralTtsGender.MALE)
+        repository.setNeuralTtsTone(NeuralTtsTone.BRIGHT)
+        repository.setNeuralTtsPace(NeuralTtsPace.BRISK)
         repository.setHighlightColor(ReaderHighlightColor.GREEN.hex)
         repository.setFullScreen(true)
         repository.setPublisherStyles(true)
@@ -99,6 +104,10 @@ class SettingsRepositoryInstrumentedTest {
         assertEquals(0.7f, readerSettings.readAloudRate, 0.001f)
         assertEquals("local-en-us-voice", readerSettings.readAloudVoiceName)
         assertEquals(ReadAloudSleepTimer.THIRTY_MINUTES, readerSettings.readAloudSleepTimer)
+        assertEquals("vits-piper-en_US-lessac-medium", readerSettings.neuralTtsModelId)
+        assertEquals(NeuralTtsGender.MALE, readerSettings.neuralTtsGender)
+        assertEquals(NeuralTtsTone.BRIGHT, readerSettings.neuralTtsTone)
+        assertEquals(NeuralTtsPace.BRISK, readerSettings.neuralTtsPace)
         assertEquals(ReaderHighlightColor.GREEN.hex, readerSettings.highlightColor)
         assertTrue(readerSettings.fullScreen)
         assertTrue(readerSettings.publisherStyles)
@@ -112,6 +121,8 @@ class SettingsRepositoryInstrumentedTest {
 
         repository.setReadAloudVoiceName(null)
         assertNull(repository.settings.first().readAloudVoiceName)
+        repository.setNeuralTtsModelId("not-real")
+        assertEquals(NeuralTtsModelCatalog.DEFAULT_MODEL_ID, repository.settings.first().neuralTtsModelId)
         repository.setHighlightColor("#not-a-palette-color")
         assertEquals(ReaderHighlightColor.YELLOW.hex, repository.settings.first().highlightColor)
     }

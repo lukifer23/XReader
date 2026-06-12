@@ -10,3 +10,5 @@ captures/
 *.aab
 *.keystore
 *.jks
+.native-build/
+.native-cache/

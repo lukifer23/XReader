@@ -4,7 +4,6 @@ import com.xreader.app.data.ReadingSessionEntity
 import com.xreader.app.data.ReadingStateEntity
 import java.time.Clock
 import kotlin.math.abs
-import kotlin.math.roundToInt
 
 data class ReadingTrackerFlush(
     val state: ReadingStateEntity,
@@ -27,6 +26,7 @@ class ReadingAnalyticsTracker(
     private var currentProgressOverride: Double? = null
     private var countedWords = 0
     private var lastCountedUnit: Int? = null
+    private var retainedEstimatedWpm = 0
     private var initialized = false
 
     fun record(
@@ -52,6 +52,26 @@ class ReadingAnalyticsTracker(
         return stateAt(now)
     }
 
+    fun seed(
+        unit: Int,
+        locator: String = unit.toString(),
+        progressOverride: Double? = null,
+        retainedEstimatedWpm: Int = 0,
+    ): ReadingStateEntity {
+        val now = clock.millis()
+        val boundedUnit = unit.coerceIn(0, (totalUnits - 1).coerceAtLeast(0))
+        startUnit = boundedUnit
+        currentUnit = boundedUnit
+        currentLocator = locator
+        currentProgressOverride = progressOverride
+        countedWords = 0
+        lastCountedUnit = boundedUnit
+        this.retainedEstimatedWpm = retainedEstimatedWpm.coerceAtLeast(0)
+        initialized = true
+        lastInteractionAt = now
+        return stateAt(now)
+    }
+
     fun snapshot(): ReadingStateEntity? {
         if (!initialized) return null
         val now = clock.millis()
@@ -63,7 +83,7 @@ class ReadingAnalyticsTracker(
     fun flush(): ReadingTrackerFlush? {
         val state = snapshot() ?: return null
         val wordsRead = countedWords
-        val session = if (activeMillis >= 5_000L && wordsRead > 0) {
+        val session = if (activeMillis >= MIN_READING_SESSION_ACTIVE_MILLIS && wordsRead > 0) {
             ReadingSessionEntity(
                 bookId = bookId,
                 startedAt = startedAt,
@@ -72,7 +92,7 @@ class ReadingAnalyticsTracker(
                 startUnit = startUnit,
                 endUnit = currentUnit,
                 wordsRead = wordsRead,
-                wpm = estimateWpm(wordsRead, activeMillis)
+                wpm = estimatedReadingWpm(wordsRead, activeMillis)
             )
         } else {
             null
@@ -92,7 +112,7 @@ class ReadingAnalyticsTracker(
         val progress = currentProgressOverride
             ?: if (totalUnits <= 0) 0.0 else (currentUnit + 1).toDouble() / totalUnits.toDouble()
         val wordsRead = countedWords
-        val wpm = estimateWpm(wordsRead, activeMillis)
+        val wpm = currentEstimatedWpm(wordsRead, activeMillis)
         return ReadingStateEntity(
             bookId = bookId,
             locator = currentLocator,
@@ -123,10 +143,10 @@ class ReadingAnalyticsTracker(
         lastCountedUnit = unit
     }
 
-    private fun estimateWpm(wordsRead: Int, activeMillis: Long): Int {
-        if (activeMillis <= 0L) return 0
-        val minutes = activeMillis / 60_000.0
-        return abs(wordsRead / minutes).roundToInt().coerceIn(0, 1200)
+    private fun currentEstimatedWpm(wordsRead: Int, activeMillis: Long): Int {
+        val estimate = estimatedReadingWpm(wordsRead, activeMillis)
+        if (estimate > 0) retainedEstimatedWpm = estimate
+        return retainedEstimatedWpm
     }
 
     private companion object {

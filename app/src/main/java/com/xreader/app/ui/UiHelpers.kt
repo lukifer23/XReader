@@ -75,37 +75,46 @@ import kotlin.math.ceil
 import kotlin.math.roundToInt
 
 @Composable
-internal fun LibraryBottomBar(
+internal fun AppBottomBar(
+    selectedTab: AppTab,
+    openLibrary: () -> Unit,
     openAnalytics: () -> Unit,
     openNotes: () -> Unit,
     openSettings: () -> Unit,
 ) {
     NavigationBar {
         NavigationBarItem(
-            selected = true,
-            onClick = {},
+            selected = selectedTab == AppTab.LIBRARY,
+            onClick = openLibrary,
             icon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null) },
             label = { Text("Library") }
         )
         NavigationBarItem(
-            selected = false,
+            selected = selectedTab == AppTab.STATS,
             onClick = openAnalytics,
             icon = { Icon(Icons.Filled.QueryStats, contentDescription = null) },
             label = { Text("Stats") }
         )
         NavigationBarItem(
-            selected = false,
+            selected = selectedTab == AppTab.NOTES,
             onClick = openNotes,
             icon = { Icon(Icons.AutoMirrored.Filled.NoteAdd, contentDescription = null) },
             label = { Text("Notes") }
         )
         NavigationBarItem(
-            selected = false,
+            selected = selectedTab == AppTab.SETTINGS,
             onClick = openSettings,
             icon = { Icon(Icons.Filled.Settings, contentDescription = null) },
             label = { Text("Settings") }
         )
     }
+}
+
+internal enum class AppTab {
+    LIBRARY,
+    STATS,
+    NOTES,
+    SETTINGS,
 }
 
 @Composable
@@ -302,19 +311,25 @@ internal fun BookListItem.rawLibraryProgress(): Double =
     (state?.progress ?: 0.0).coerceIn(0.0, 1.0)
 
 internal fun BookListItem.displayLibraryProgress(): Double =
-    if (book.finished) 1.0 else rawLibraryProgress()
+    if (hasPersistedFinishedState()) 1.0 else rawLibraryProgress()
 
 internal fun BookListItem.libraryRecentTimestamp(): Long =
     state?.lastReadAt ?: book.lastOpenedAt ?: book.importedAt
 
 internal fun BookListItem.isLibraryFinished(): Boolean =
-    book.finished || rawLibraryProgress() >= 0.995
+    hasPersistedFinishedState() || rawLibraryProgress() >= LIBRARY_FINISHED_PROGRESS_THRESHOLD
 
 internal fun BookListItem.isLibraryInProgress(): Boolean =
-    !isLibraryFinished() && rawLibraryProgress() in 0.01..0.994
+    !isLibraryFinished() && rawLibraryProgress() > LIBRARY_UNREAD_PROGRESS_THRESHOLD
 
 internal fun BookListItem.isLibraryUnread(): Boolean =
-    !isLibraryFinished() && rawLibraryProgress() <= 0.01
+    !isLibraryFinished() && rawLibraryProgress() <= LIBRARY_UNREAD_PROGRESS_THRESHOLD
+
+private fun BookListItem.hasPersistedFinishedState(): Boolean =
+    book.finished || state?.finishedAt != null
+
+private const val LIBRARY_UNREAD_PROGRESS_THRESHOLD = 0.01
+private const val LIBRARY_FINISHED_PROGRESS_THRESHOLD = 0.995
 
 internal data class SeriesNextRecommendation(
     val series: String,
@@ -433,6 +448,32 @@ internal fun bookLengthLabel(book: BookEntity): String =
         "${book.pageCount} ${if (book.pageCount == 1) "page" else "pages"}"
     } else {
         wordCountLabel(book.wordCount)
+    }
+
+internal fun readabilityCompactLabel(book: BookEntity): String? {
+    val grade = book.readabilityGradeLevel ?: return null
+    val score = book.readabilityScore
+    val level = readabilityLevelLabel(score, grade)
+    return "$level • G${grade.roundToInt().coerceIn(0, 18)}"
+}
+
+internal fun readabilityDetailLabel(book: BookEntity): String? {
+    val grade = book.readabilityGradeLevel ?: return null
+    val score = book.readabilityScore
+    val level = readabilityLevelLabel(score, grade)
+    val scoreText = score?.roundToInt()?.coerceIn(0, 100)?.let { "ease $it" }
+    return listOfNotNull(level, "grade ${"%.1f".format(Locale.US, grade.coerceIn(0.0, 18.0))}", scoreText).joinToString(" • ")
+}
+
+private fun readabilityLevelLabel(score: Double?, grade: Double): String =
+    when {
+        score != null && score >= 80.0 -> "Easy"
+        score != null && score >= 60.0 -> "Clear"
+        score != null && score >= 40.0 -> "Dense"
+        grade <= 6.0 -> "Easy"
+        grade <= 9.0 -> "Clear"
+        grade <= 12.0 -> "Dense"
+        else -> "Very dense"
     }
 
 internal fun readingEtaLabel(

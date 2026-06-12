@@ -58,6 +58,15 @@ fun XReaderApp(
         }
         onIncomingIntentConsumed(intent)
     }
+    fun navigatePrimary(route: String) {
+        navController.navigate(route) {
+            launchSingleTop = true
+            restoreState = true
+            popUpTo("library") {
+                saveState = true
+            }
+        }
+    }
     XReaderTheme(readerTheme = settings.theme) {
         AppSystemBars(activity = activity, theme = settings.theme)
         NavHost(
@@ -76,9 +85,10 @@ fun XReaderApp(
                             navController.navigate("reader/$bookId?locator=${Uri.encode(locator)}")
                         }
                     },
-                    openAnalytics = { navController.navigate("analytics") },
-                    openNotes = { navController.navigate("notes") },
-                    openSettings = { navController.navigate("settings") },
+                    openLibrary = { navigatePrimary("library") },
+                    openAnalytics = { navigatePrimary("analytics") },
+                    openNotes = { navigatePrimary("notes") },
+                    openSettings = { navigatePrimary("settings") },
                     currentTheme = settings.theme,
                     onToggleTheme = settingsViewModel::toggleLightDark
                 )
@@ -101,23 +111,55 @@ fun XReaderApp(
                 )
             }
             composable("analytics") {
-                AnalyticsRoute(container = container, onBack = { navController.popBackStack() })
+                AnalyticsRoute(
+                    container = container,
+                    bottomBar = {
+                        PrimaryBottomBar(
+                            selectedTab = AppTab.STATS,
+                            navigatePrimary = ::navigatePrimary
+                        )
+                    }
+                )
             }
             composable("notes") {
                 NotesRoute(
                     container = container,
-                    onBack = { navController.popBackStack() },
                     openReaderAt = { bookId, locator ->
                         navController.navigate("reader/$bookId?locator=${Uri.encode(locator)}")
+                    },
+                    bottomBar = {
+                        PrimaryBottomBar(
+                            selectedTab = AppTab.NOTES,
+                            navigatePrimary = ::navigatePrimary
+                        )
                     }
                 )
             }
             composable("settings") {
                 SettingsRoute(
                     viewModel = settingsViewModel,
-                    onBack = { navController.popBackStack() }
+                    bottomBar = {
+                        PrimaryBottomBar(
+                            selectedTab = AppTab.SETTINGS,
+                            navigatePrimary = ::navigatePrimary
+                        )
+                    }
                 )
             }
         }
     }
+}
+
+@Composable
+private fun PrimaryBottomBar(
+    selectedTab: AppTab,
+    navigatePrimary: (String) -> Unit,
+) {
+    AppBottomBar(
+        selectedTab = selectedTab,
+        openLibrary = { navigatePrimary("library") },
+        openAnalytics = { navigatePrimary("analytics") },
+        openNotes = { navigatePrimary("notes") },
+        openSettings = { navigatePrimary("settings") }
+    )
 }

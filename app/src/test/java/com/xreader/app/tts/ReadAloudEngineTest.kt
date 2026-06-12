@@ -41,6 +41,18 @@ class ReadAloudEngineTest {
     }
 
     @Test
+    fun noReadableTextMessageDoesNotSuggestRepairForImageOnlyBooks() {
+        assertEquals(
+            "Read aloud is unavailable because this book has no extractable text.",
+            readAloudNoReadableTextMessage(0)
+        )
+        assertEquals(
+            "No readable text is indexed for this book. Repair the book from its details screen and try again.",
+            readAloudNoReadableTextMessage(1200)
+        )
+    }
+
+    @Test
     fun mediaActionsReflectReadAloudTransportState() {
         val playing = readAloudMediaActions(
             playing = true,

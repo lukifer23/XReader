@@ -29,6 +29,16 @@ class LibraryProgressStateTest {
     }
 
     @Test
+    fun persistedFinishedAtCountsAsFinishedForLibraryClassification() {
+        val item = item(progress = 0.42, finished = false, finishedAt = 1_700_000_000_000L)
+
+        assertTrue(item.isLibraryFinished())
+        assertFalse(item.isLibraryInProgress())
+        assertFalse(item.isLibraryUnread())
+        assertEquals(1.0, item.displayLibraryProgress(), 0.0)
+    }
+
+    @Test
     fun activeProgressStaysInProgress() {
         val item = item(progress = 0.42, finished = false)
 
@@ -36,6 +46,24 @@ class LibraryProgressStateTest {
         assertTrue(item.isLibraryInProgress())
         assertFalse(item.isLibraryUnread())
         assertEquals(0.42, item.displayLibraryProgress(), 0.0)
+    }
+
+    @Test
+    fun onePercentProgressStaysUnreadNotInProgress() {
+        val item = item(progress = 0.01, finished = false)
+
+        assertFalse(item.isLibraryFinished())
+        assertFalse(item.isLibraryInProgress())
+        assertTrue(item.isLibraryUnread())
+    }
+
+    @Test
+    fun progressBetweenOnePercentAndCompletionThresholdStaysInProgress() {
+        val item = item(progress = 0.9945, finished = false)
+
+        assertFalse(item.isLibraryFinished())
+        assertTrue(item.isLibraryInProgress())
+        assertFalse(item.isLibraryUnread())
     }
 
     @Test
@@ -66,10 +94,21 @@ class LibraryProgressStateTest {
         assertEquals(null, readingEtaLabel(item.book, item.state))
     }
 
+    @Test
+    fun readabilityLabelsStayCompact() {
+        val clear = book(finished = false).copy(readabilityScore = 68.0, readabilityGradeLevel = 7.4)
+        val dense = book(finished = false).copy(readabilityScore = 34.0, readabilityGradeLevel = 13.1)
+
+        assertEquals("Clear • G7", readabilityCompactLabel(clear))
+        assertEquals("Clear • grade 7.4 • ease 68", readabilityDetailLabel(clear))
+        assertEquals("Very dense • G13", readabilityCompactLabel(dense))
+    }
+
     private fun item(
         progress: Double,
         finished: Boolean,
         estimatedWpm: Int = 0,
+        finishedAt: Long? = null,
     ): BookListItem =
         BookListItem(
             book = book(finished = finished),
@@ -81,7 +120,8 @@ class LibraryProgressStateTest {
                 totalUnits = 10,
                 activeMillis = 0L,
                 estimatedWpm = estimatedWpm,
-                lastReadAt = 1_700_000_000_000L
+                lastReadAt = 1_700_000_000_000L,
+                finishedAt = finishedAt
             )
         )
 

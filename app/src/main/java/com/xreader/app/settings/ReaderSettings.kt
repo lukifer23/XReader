@@ -1,6 +1,7 @@
 package com.xreader.app.settings
 
 import com.xreader.app.data.ReaderTheme
+import com.xreader.app.tts.NeuralTtsModelCatalog
 
 enum class ReaderTextAlign {
     START,
@@ -8,6 +9,7 @@ enum class ReaderTextAlign {
 }
 
 enum class ReaderPdfFit(val label: String) {
+    AUTO("Auto"),
     CONTAIN("Page"),
     WIDTH("Width"),
     HEIGHT("Height"),
@@ -49,6 +51,43 @@ enum class ReadAloudSleepTimer(
     THIRTY_MINUTES("30 min", 30 * 60_000L),
     FORTY_FIVE_MINUTES("45 min", 45 * 60_000L),
     SIXTY_MINUTES("60 min", 60 * 60_000L),
+}
+
+enum class ReadAloudPlaybackMode(
+    val label: String,
+    val description: String,
+) {
+    DEVICE_TTS("Device TTS", "Streams from Android's installed text-to-speech engine."),
+    GENERATED_AUDIO("Generated audio", "Plays the saved local neural audiobook for this book."),
+}
+
+enum class NeuralTtsGender(
+    val label: String,
+) {
+    ANY("Any"),
+    FEMALE("Female"),
+    MALE("Male"),
+}
+
+enum class NeuralTtsTone(
+    val label: String,
+    val noiseScale: Float,
+    val noiseScaleW: Float,
+    val silenceScale: Float,
+) {
+    NATURAL("Natural", noiseScale = 0.667f, noiseScaleW = 0.8f, silenceScale = 0.2f),
+    WARM("Warm", noiseScale = 0.58f, noiseScaleW = 0.72f, silenceScale = 0.24f),
+    BRIGHT("Bright", noiseScale = 0.74f, noiseScaleW = 0.86f, silenceScale = 0.18f),
+    CALM("Calm", noiseScale = 0.52f, noiseScaleW = 0.68f, silenceScale = 0.30f),
+}
+
+enum class NeuralTtsPace(
+    val label: String,
+    val speed: Float,
+) {
+    RELAXED("Relaxed", 0.92f),
+    STANDARD("Standard", 1.0f),
+    BRISK("Brisk", 1.10f),
 }
 
 enum class ReaderHighlightColor(
@@ -121,12 +160,19 @@ data class ReaderSettings(
     val volumeKeysTurnPages: Boolean = false,
     val screenDim: Float = 0f,
     val readAloudRate: Float = 1.0f,
+    val readAloudEngineName: String? = null,
     val readAloudVoiceName: String? = null,
     val readAloudSleepTimer: ReadAloudSleepTimer = ReadAloudSleepTimer.OFF,
+    val readAloudPlaybackMode: ReadAloudPlaybackMode = ReadAloudPlaybackMode.DEVICE_TTS,
+    val neuralTtsModelId: String = NeuralTtsModelCatalog.DEFAULT_MODEL_ID,
+    val neuralTtsSpeakerId: Int = 0,
+    val neuralTtsGender: NeuralTtsGender = NeuralTtsGender.ANY,
+    val neuralTtsTone: NeuralTtsTone = NeuralTtsTone.NATURAL,
+    val neuralTtsPace: NeuralTtsPace = NeuralTtsPace.STANDARD,
     val fullScreen: Boolean = false,
     val publisherStyles: Boolean = false,
     val textAlign: ReaderTextAlign = ReaderTextAlign.START,
-    val pdfFit: ReaderPdfFit = ReaderPdfFit.WIDTH,
+    val pdfFit: ReaderPdfFit = ReaderPdfFit.AUTO,
     val pdfScrollAxis: ReaderPdfScrollAxis = ReaderPdfScrollAxis.HORIZONTAL,
     val pageDirection: ReaderPageDirection = ReaderPageDirection.AUTO,
     val orientation: ReaderOrientation = ReaderOrientation.SYSTEM,
@@ -143,6 +189,15 @@ fun ReaderSettings.withSpacingPreset(preset: ReaderSpacingPreset): ReaderSetting
 
 fun ReaderSettings.spacingPresetOrNull(): ReaderSpacingPreset? =
     ReaderSpacingPreset.entries.firstOrNull { it.matches(this) }
+
+fun ReaderPdfFit.resolvedForViewport(widthDp: Int, heightDp: Int): ReaderPdfFit =
+    when (this) {
+        ReaderPdfFit.AUTO -> {
+            val compactPortrait = widthDp in 1..599 && heightDp > widthDp
+            if (compactPortrait) ReaderPdfFit.WIDTH else ReaderPdfFit.CONTAIN
+        }
+        else -> this
+    }
 
 data class BookReaderAppearance(
     val fontScale: Float,

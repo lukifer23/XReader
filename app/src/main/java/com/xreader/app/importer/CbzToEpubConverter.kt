@@ -194,6 +194,7 @@ class CbzToEpubConverter {
             "jpg", "jpeg" -> "jpg"
             "png" -> "png"
             "webp" -> "webp"
+            "gif" -> "gif"
             else -> null
         }
 
@@ -202,6 +203,7 @@ class CbzToEpubConverter {
             "jpg" -> "image/jpeg"
             "png" -> "image/png"
             "webp" -> "image/webp"
+            "gif" -> "image/gif"
             else -> "application/octet-stream"
         }
 

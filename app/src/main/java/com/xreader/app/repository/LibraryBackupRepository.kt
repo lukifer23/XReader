@@ -16,6 +16,10 @@ import com.xreader.app.settings.BookReaderAppearance
 import com.xreader.app.settings.LibraryDensity
 import com.xreader.app.settings.LibrarySettings
 import com.xreader.app.settings.LibrarySort
+import com.xreader.app.settings.NeuralTtsGender
+import com.xreader.app.settings.NeuralTtsPace
+import com.xreader.app.settings.NeuralTtsTone
+import com.xreader.app.settings.ReadAloudPlaybackMode
 import com.xreader.app.settings.ReadAloudSleepTimer
 import com.xreader.app.settings.ReaderFontFamily
 import com.xreader.app.settings.ReaderHighlightColor
@@ -107,6 +111,8 @@ class LibraryBackupRepository(
                                 .putNullable("year", book.year)
                                 .putNullable("description", book.description)
                                 .putNullable("language", book.language)
+                                .putNullable("readabilityScore", book.readabilityScore)
+                                .putNullable("readabilityGradeLevel", book.readabilityGradeLevel)
                                 .put("favorite", book.favorite)
                                 .put("finished", book.finished)
                                 .putNullable("lastOpenedAt", book.lastOpenedAt)
@@ -244,6 +250,8 @@ class LibraryBackupRepository(
                 year = item.optNullableInt("year"),
                 description = item.optNullableString("description")?.trim()?.ifBlank { null },
                 language = item.optNullableString("language")?.trim()?.ifBlank { null },
+                readabilityScore = item.optNullableDouble("readabilityScore") ?: existing.readabilityScore,
+                readabilityGradeLevel = item.optNullableDouble("readabilityGradeLevel") ?: existing.readabilityGradeLevel,
                 favorite = item.optBoolean("favorite", existing.favorite),
                 finished = item.optBoolean("finished", existing.finished),
                 lastOpenedAt = item.optNullableLong("lastOpenedAt") ?: existing.lastOpenedAt,
@@ -505,8 +513,15 @@ class LibraryBackupRepository(
             .put("volumeKeysTurnPages", volumeKeysTurnPages)
             .put("screenDim", screenDim)
             .put("readAloudRate", readAloudRate)
+            .putNullable("readAloudEngineName", readAloudEngineName)
             .putNullable("readAloudVoiceName", readAloudVoiceName)
             .put("readAloudSleepTimer", readAloudSleepTimer.name)
+            .put("readAloudPlaybackMode", readAloudPlaybackMode.name)
+            .put("neuralTtsModelId", neuralTtsModelId)
+            .put("neuralTtsSpeakerId", neuralTtsSpeakerId)
+            .put("neuralTtsGender", neuralTtsGender.name)
+            .put("neuralTtsTone", neuralTtsTone.name)
+            .put("neuralTtsPace", neuralTtsPace.name)
             .put("fullScreen", fullScreen)
             .put("publisherStyles", publisherStyles)
             .put("textAlign", textAlign.name)
@@ -534,12 +549,21 @@ class LibraryBackupRepository(
                 volumeKeysTurnPages = optBoolean("volumeKeysTurnPages", false),
                 screenDim = normalizedReaderDimAmount(optDouble("screenDim", 0.0).toFloat()),
                 readAloudRate = optDouble("readAloudRate", 1.0).toFloat().coerceIn(0.7f, 1.4f),
+                readAloudEngineName = optNullableString("readAloudEngineName")?.takeIf { it.isNotBlank() },
                 readAloudVoiceName = optNullableString("readAloudVoiceName")?.takeIf { it.isNotBlank() },
                 readAloudSleepTimer = enumValueOrNull<ReadAloudSleepTimer>("readAloudSleepTimer") ?: ReadAloudSleepTimer.OFF,
+                readAloudPlaybackMode = enumValueOrNull<ReadAloudPlaybackMode>("readAloudPlaybackMode") ?: ReadAloudPlaybackMode.DEVICE_TTS,
+                neuralTtsModelId = optNullableString("neuralTtsModelId")
+                    ?.takeIf { id -> com.xreader.app.tts.NeuralTtsModelCatalog.models.any { it.modelId == id } }
+                    ?: com.xreader.app.tts.NeuralTtsModelCatalog.DEFAULT_MODEL_ID,
+                neuralTtsSpeakerId = optInt("neuralTtsSpeakerId", 0),
+                neuralTtsGender = enumValueOrNull<NeuralTtsGender>("neuralTtsGender") ?: NeuralTtsGender.ANY,
+                neuralTtsTone = enumValueOrNull<NeuralTtsTone>("neuralTtsTone") ?: NeuralTtsTone.NATURAL,
+                neuralTtsPace = enumValueOrNull<NeuralTtsPace>("neuralTtsPace") ?: NeuralTtsPace.STANDARD,
                 fullScreen = optBoolean("fullScreen", false),
                 publisherStyles = optBoolean("publisherStyles", false),
                 textAlign = enumValueOrNull<ReaderTextAlign>("textAlign") ?: ReaderTextAlign.START,
-                pdfFit = enumValueOrNull<ReaderPdfFit>("pdfFit") ?: ReaderPdfFit.WIDTH,
+                pdfFit = enumValueOrNull<ReaderPdfFit>("pdfFit") ?: ReaderPdfFit.AUTO,
                 pdfScrollAxis = enumValueOrNull<ReaderPdfScrollAxis>("pdfScrollAxis") ?: ReaderPdfScrollAxis.HORIZONTAL,
                 pageDirection = enumValueOrNull<ReaderPageDirection>("pageDirection") ?: ReaderPageDirection.AUTO,
                 orientation = enumValueOrNull<ReaderOrientation>("orientation") ?: ReaderOrientation.SYSTEM,
@@ -587,7 +611,7 @@ class LibraryBackupRepository(
                 hyphenation = optBoolean("hyphenation", false),
                 publisherStyles = optBoolean("publisherStyles", false),
                 textAlign = enumValueOrNull<ReaderTextAlign>("textAlign") ?: ReaderTextAlign.START,
-                pdfFit = enumValueOrNull<ReaderPdfFit>("pdfFit") ?: ReaderPdfFit.WIDTH,
+                pdfFit = enumValueOrNull<ReaderPdfFit>("pdfFit") ?: ReaderPdfFit.AUTO,
                 pdfScrollAxis = enumValueOrNull<ReaderPdfScrollAxis>("pdfScrollAxis") ?: ReaderPdfScrollAxis.HORIZONTAL,
                 pageDirection = enumValueOrNull<ReaderPageDirection>("pageDirection") ?: ReaderPageDirection.AUTO
             )

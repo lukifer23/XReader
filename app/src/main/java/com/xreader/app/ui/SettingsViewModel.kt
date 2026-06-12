@@ -1,14 +1,20 @@
 package com.xreader.app.ui
 
+import android.media.AudioAttributes
+import android.media.MediaPlayer
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.xreader.app.AppContainer
 import com.xreader.app.data.ReaderTheme
+import com.xreader.app.data.NeuralTtsModelEntity
 import com.xreader.app.settings.LibraryDensity
 import com.xreader.app.settings.LibrarySettings
 import com.xreader.app.settings.LibrarySort
+import com.xreader.app.settings.NeuralTtsGender
+import com.xreader.app.settings.NeuralTtsPace
+import com.xreader.app.settings.NeuralTtsTone
 import com.xreader.app.settings.ReadAloudSleepTimer
 import com.xreader.app.settings.ReaderFontFamily
 import com.xreader.app.settings.ReaderOrientation
@@ -19,6 +25,7 @@ import com.xreader.app.settings.ReaderSettings
 import com.xreader.app.settings.ReaderSpacingPreset
 import com.xreader.app.settings.ReaderTapZonePreset
 import com.xreader.app.settings.ReaderTextAlign
+import com.xreader.app.tts.ReadAloudEngineOption
 import com.xreader.app.tts.ReadAloudVoiceOption
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -37,6 +44,8 @@ data class SettingsMaintenanceUiState(
 )
 
 class SettingsViewModel(private val container: AppContainer) : ViewModel() {
+    private var neuralPreviewPlayer: MediaPlayer? = null
+
     val settings: StateFlow<ReaderSettings> =
         container.settingsRepository.settings
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ReaderSettings())
@@ -49,12 +58,23 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         container.readAloudEngine.voices
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    val readAloudEngines: StateFlow<List<ReadAloudEngineOption>> =
+        container.readAloudEngine.engines
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val neuralTtsModels: StateFlow<List<NeuralTtsModelEntity>> =
+        container.neuralTtsRepository.observeModels()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     private val _maintenance = MutableStateFlow(SettingsMaintenanceUiState())
     val maintenance: StateFlow<SettingsMaintenanceUiState> = _maintenance
 
     init {
         viewModelScope.launch {
-            container.readAloudEngine.refreshVoices()
+            container.neuralTtsRepository.ensureCatalogSeeded()
+            settings.collect { settings ->
+                container.readAloudEngine.refreshVoices(settings.readAloudEngineName)
+            }
         }
     }
 
@@ -119,6 +139,11 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         container.readAloudEngine.setSpeechRate(value)
     }
 
+    fun setReadAloudEngineName(value: String?) {
+        viewModelScope.launch { container.settingsRepository.setReadAloudEngineName(value) }
+        container.readAloudEngine.setEngine(value)
+    }
+
     fun setReadAloudVoiceName(value: String?) {
         viewModelScope.launch { container.settingsRepository.setReadAloudVoiceName(value) }
         container.readAloudEngine.setVoice(value)
@@ -127,6 +152,81 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     fun setReadAloudSleepTimer(value: ReadAloudSleepTimer) {
         viewModelScope.launch { container.settingsRepository.setReadAloudSleepTimer(value) }
         container.readAloudEngine.setSleepTimer(value.durationMillis)
+    }
+
+    fun downloadNeuralTtsModel(modelId: String) {
+        viewModelScope.launch {
+            runCatching { container.neuralTtsRepository.downloadModel(modelId) }
+                .onFailure { error ->
+                    _maintenance.update { it.copy(message = error.message ?: "Neural voice download failed") }
+                }
+        }
+    }
+
+    fun deleteNeuralTtsModel(modelId: String) {
+        viewModelScope.launch {
+            runCatching { container.neuralTtsRepository.deleteModel(modelId) }
+                .onFailure { error ->
+                    _maintenance.update { it.copy(message = error.message ?: "Could not delete neural voice") }
+                }
+        }
+    }
+
+    fun setNeuralTtsModelId(modelId: String) {
+        viewModelScope.launch { container.settingsRepository.setNeuralTtsModelId(modelId) }
+    }
+
+    fun setNeuralTtsSpeakerId(speakerId: Int) {
+        viewModelScope.launch { container.settingsRepository.setNeuralTtsSpeakerId(speakerId) }
+    }
+
+    fun setNeuralTtsGender(value: NeuralTtsGender) {
+        viewModelScope.launch { container.settingsRepository.setNeuralTtsGender(value) }
+    }
+
+    fun setNeuralTtsTone(value: NeuralTtsTone) {
+        viewModelScope.launch { container.settingsRepository.setNeuralTtsTone(value) }
+    }
+
+    fun setNeuralTtsPace(value: NeuralTtsPace) {
+        viewModelScope.launch { container.settingsRepository.setNeuralTtsPace(value) }
+    }
+
+    fun previewNeuralTtsModel(modelId: String) {
+        viewModelScope.launch {
+            runCatching {
+                val currentSettings = settings.value
+                val file = container.neuralTtsRepository.generatePreviewAudio(
+                    modelId = modelId,
+                    speakerId = currentSettings.neuralTtsSpeakerId,
+                    pace = currentSettings.neuralTtsPace,
+                    tone = currentSettings.neuralTtsTone
+                )
+                neuralPreviewPlayer?.release()
+                neuralPreviewPlayer = MediaPlayer().apply {
+                    setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                            .build()
+                    )
+                    setDataSource(file.absolutePath)
+                    setOnCompletionListener {
+                        it.release()
+                        if (neuralPreviewPlayer === it) neuralPreviewPlayer = null
+                    }
+                    setOnErrorListener { player, _, _ ->
+                        player.release()
+                        if (neuralPreviewPlayer === player) neuralPreviewPlayer = null
+                        true
+                    }
+                    prepare()
+                    start()
+                }
+            }.onFailure { error ->
+                _maintenance.update { it.copy(message = error.message ?: "Neural voice preview failed") }
+            }
+        }
     }
 
     fun setFullScreen(value: Boolean) {
@@ -303,5 +403,11 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
                 override fun <T : ViewModel> create(modelClass: Class<T>): T =
                     SettingsViewModel(container) as T
             }
+    }
+
+    override fun onCleared() {
+        neuralPreviewPlayer?.release()
+        neuralPreviewPlayer = null
+        super.onCleared()
     }
 }

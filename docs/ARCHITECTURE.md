@@ -19,7 +19,7 @@ XReader is a single-module native Android app built around a local-first library
 
 `XReaderApplication` owns an `AppContainer`. The container constructs the database, repositories, import services, reader services, dictionary repository, analytics repository, and shared application coroutine scope. Expensive reader initialization is kept out of app startup. Readium/PDF service setup is warmed shortly after the first screen, while WebView warmup stays delayed on the main thread to avoid stealing startup frames.
 
-The UI is Compose-first. ViewModels expose immutable state objects and one-shot actions. UI code delegates persistence, file access, parsing, and indexing to repositories and services.
+The UI is Compose-first. ViewModels expose immutable state objects and one-shot actions. UI code delegates persistence, file access, parsing, and indexing to repositories and services. Library, Stats, Notes, and Settings are primary destinations with one shared bottom navigation bar and selected state; reader and book-specific flows remain secondary surfaces.
 
 ## Data Model
 
@@ -35,6 +35,8 @@ Room stores:
 - `BookmarkEntity`
 - `SearchIndexEntity`
 - `DictionaryEntryEntity`
+- `NeuralTtsModelEntity`
+- `BookAudioEntity`
 
 Search uses a normal table plus an FTS table. Book deletion removes search rows and stored files.
 
@@ -53,7 +55,7 @@ EPUB cover extraction checks explicit OPF cover metadata, EPUB 3 `cover-image` p
 
 The manual Settings repair action and the per-book metadata repair action reuse this parsing/indexing path against stored private-library files. They refresh covers, metadata fields that are empty or safe to improve, word/page counts, and search rows. The Settings repair action also canonicalizes existing metadata and harmonizes obvious same-author/same-series genre drift when one strong genre is mixed with weak labels such as general fiction, adventure, or war. They preserve user-edited title and author values. Covers manually replaced from local image files are stored as app-private downsampled JPEGs and are not overwritten by repair.
 
-Folder imports walk SAF document trees recursively, filter to EPUB, PDF, TXT, CBZ, FB2, `.fb2.zip`, RTF, MOBI, PRC, ODT, DOCX, HTML, HTM, XHTML, MHTML, MHT, MD, and Markdown documents, and summarize imported, restored, duplicate, unsupported, and failed files. Android Open with and Share intents for supported book MIME types route into the same private-copy import flow instead of a separate reader path. The catalog URL flow can also download a direct supported book URL when the server content type or final redirected URL identifies a real supported document, then hands it to the same import service. They do not require broad all-files access.
+Folder imports walk SAF document trees recursively, filter to EPUB, PDF, TXT, CBZ, FB2, `.fb2.zip`, RTF, MOBI, PRC, ODT, DOCX, HTML, HTM, XHTML, MHTML, MHT, MD, and Markdown documents, and summarize imported, restored, duplicate, unsupported, and failed files. Generic ZIP imports are accepted only when their contents prove they are a supported ZIP-backed book or document: EPUB, zipped FB2, ODT, DOCX, or a CBZ-style image archive. Android Open with and Share intents for supported book MIME types route into the same private-copy import flow instead of a separate reader path. The catalog URL flow can also download a direct supported book URL when the server content type or final redirected URL identifies a real supported document, then hands it to the same import service. They do not require broad all-files access.
 
 Single-book imports and duplicate re-imports carry the target book id back to the library UI, where the snackbar exposes a contextual `Open` action. Batch and folder imports keep summary-only feedback unless the completed import set contains exactly one actionable book.
 
@@ -86,9 +88,13 @@ The Books home derives series continuation recommendations from the already load
 - bounded return history for manual TOC, bookmark, note, search-result, and find-next/find-previous jumps
 - selection actions for highlight, note, and dictionary lookup
 - scrollbar cleanup for nested Readium/WebView content
-- reader preferences for theme, typography, PDF fit/layout, page direction, fullscreen, keep-screen-awake behavior, app-local dimming, tap-zone sizing, page-turn animation behavior, and per-book appearance overrides
+- reader preferences for theme, typography, adaptive PDF fit/layout, page direction, fullscreen, keep-screen-awake behavior, app-local dimming, tap-zone sizing, page-turn animation behavior, and per-book appearance overrides
 
-Read aloud is handled by `ReadAloudEngine`, a small wrapper around Android `TextToSpeech`. `ReaderViewModel` builds speech chunks from the app's local search index, splits them into Readium-position-sized chunks by reading-order word progress, starts from the visible reader position or nearest earlier position, persists the spoken locator as playback advances, and keeps Compose limited to play/pause/resume/stop, previous/next passage, speed, sleep timer countdown, installed offline voice selection, and error feedback. Playback owns Android audio focus while speaking, releases it on pause/stop/shutdown, pauses with a clear message on transient audio interruptions, and stops on permanent audio-focus loss.
+Read aloud is handled by `ReadAloudEngine`, a small wrapper around Android `TextToSpeech`. It can initialize against the device default engine or a specific installed TTS engine package from Settings, which lets real local/offline neural Android TTS providers participate. `ReaderViewModel` builds speech chunks from the app's local search index, splits them into Readium-position-sized chunks by reading-order word progress, starts from the visible reader position or nearest earlier position, persists the spoken locator as playback advances, and keeps Compose limited to play/pause/resume/stop, previous/next passage, engine and voice selection, speed, sleep timer countdown, and error feedback. Playback owns Android audio focus while speaking, releases it on pause/stop/shutdown, pauses with a clear message on transient audio interruptions, and stops on permanent audio-focus loss.
+
+Embedded neural audiobook generation is handled separately by `NeuralTtsRepository`. Settings exposes a compact local neural voice downloader backed by the Sherpa-ONNX Android JNI runtime and the Kokoro v1.0 model. Downloads are stored in app-private model storage, progress is persisted in Room, archive size and SHA-256 are verified before extraction, and extraction rejects unsafe archive paths. Startup maintenance removes obsolete voice models that are no longer in the supported catalog. The book action menu can generate cached audiobook audio from XReader's indexed reading-order text. Generation prepares text by removing common extraction noise and repeated boilerplate, then splits full-book text into sentence-aware bounded speech segments tuned for Kokoro cadence. It synthesizes each segment to a WAV file, writes a manifest with the runtime provider, and links the generated audio directory to the book/model/speaker/speed/tone tuple in Room so repeat requests reuse the prior output. The save-audiobook action exports the generated segment set as a ZIP through Android's `CreateDocument` picker.
+
+The current embedded path tries Sherpa-ONNX `xnnpack` first and falls back to `cpu`. NNAPI is not used for OfflineTTS because current Sherpa-ONNX evidence shows it can crash instead of falling back cleanly. Qualcomm QNN/NPU remains future work until it is packaged as a real runtime provider, measured for battery/latency, and kept behind the same no-placeholder UI rule.
 
 Reader search first tries Readium's publication search and falls back to XReader's local search index when needed. Search results carry an approximate reading unit so the compact find bar can jump to the previous or next match from the visible page, then keep the search active until the user closes it. Library full-text search uses the same FTS index joined to book metadata so result rows can show the source title/author and a query-centered snippet before jumping into the matched reading unit. User search text is normalized into bounded FTS terms so punctuation, hyphenated phrases, possessives, and pasted quotes do not break local search. PDF imports sort extracted text by page position and clean soft hyphens/wrapped line-break hyphens before indexing so search and read-aloud do not inherit common PDF extraction artifacts.
 
@@ -110,12 +116,15 @@ Reader and library settings are persisted with DataStore. Settings include:
 - volume-button page turns
 - reader dim amount
 - read-aloud speed
+- read-aloud engine
+- read-aloud voice
 - read-aloud sleep timer
+- local neural voice download
 - fullscreen
 - reader orientation
 - publisher styles
 - alignment
-- PDF fit, layout, and page direction
+- adaptive PDF fit, layout, and page direction
 - idle timeout
 - library sort
 - library density
@@ -136,7 +145,7 @@ Settings also exposes local JSON backup and restore through Android's Storage Ac
 
 ## Analytics
 
-`ReadingAnalyticsTracker` tracks foreground active reading sessions. It uses reading movement and idle timeout rules to estimate active time, words traversed, WPM, and completion. Normal page movement and small rereading moves count toward words traversed, while large search, TOC, bookmark, or scrubber jumps reset the traversal anchor so skipped pages do not inflate WPM or ETA. `AnalyticsRepository` aggregates those sessions into selectable 7-day, 30-day, 13-week, and all-time ranges with appropriate daily, weekly, monthly, or yearly activity buckets. `AnalyticsExportService` writes those summaries to local CSV or JSON through Android's Storage Access Framework without including imported book files, private file paths, or checksums. Current/best streaks and book, author, and genre summaries stay quiet, with no popups or gamified interruptions during reading. Per-book ETA is derived from persisted progress, imported word count, and the current WPM estimate, and is shown only on existing reader/home surfaces when enough data is available.
+`ReadingAnalyticsTracker` tracks foreground active reading sessions. It uses reading movement and idle timeout rules to estimate active time, words traversed, WPM, and completion. Normal page movement and small rereading moves count toward words traversed, while large search, TOC, bookmark, or scrubber jumps reset the traversal anchor so skipped pages do not inflate WPM or ETA. Resumed locations seed the tracker without counting the already-visible page again, and short or implausibly fast/slow samples are excluded from pace calculations while still preserving total reading time and words. Import and repair also run `ReadabilityAnalyzer` over extracted text and persist Flesch reading-ease plus grade-level estimates on `BookEntity`, so readability is available offline in existing book health and stats surfaces without adding a new screen. `AnalyticsRepository` aggregates sessions into selectable 7-day, 30-day, 13-week, and all-time ranges with appropriate daily, weekly, monthly, or yearly activity buckets. Finished-book counts use the same persisted manual flag, `finishedAt`, and 99.5% completion threshold as the library filters so restored progress and near-end books do not disagree across Home, Stats, and exports. `AnalyticsExportService` writes those summaries to local CSV or JSON through Android's Storage Access Framework without including imported book files, private file paths, or checksums. Current/best streaks and book, author, genre, and reading-level summaries stay quiet, with no popups or gamified interruptions during reading. Per-book ETA is derived from persisted progress, imported word count, and the current reliable WPM estimate, and is shown only on existing reader/home surfaces when enough data is available.
 
 ## Validation
 

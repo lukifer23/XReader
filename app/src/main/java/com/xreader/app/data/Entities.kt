@@ -24,6 +24,21 @@ enum class ReaderTheme {
     OLED,
 }
 
+enum class NeuralTtsModelStatus {
+    NOT_DOWNLOADED,
+    DOWNLOADING,
+    EXTRACTING,
+    INSTALLED,
+    FAILED,
+}
+
+enum class BookAudioStatus {
+    GENERATED,
+    GENERATING,
+    CANCELED,
+    FAILED,
+}
+
 @Entity(
     tableName = "books",
     indices = [
@@ -55,6 +70,8 @@ data class BookEntity(
     val fileSizeBytes: Long,
     val wordCount: Int,
     val pageCount: Int? = null,
+    val readabilityScore: Double? = null,
+    val readabilityGradeLevel: Double? = null,
     val importedAt: Long,
     val updatedAt: Long,
     val lastOpenedAt: Long? = null,
@@ -162,6 +179,63 @@ data class ReadingSessionEntity(
     val endUnit: Int,
     val wordsRead: Int,
     val wpm: Int,
+)
+
+@Entity(
+    tableName = "neural_tts_models",
+    indices = [Index(value = ["modelId"], unique = true)]
+)
+data class NeuralTtsModelEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val modelId: String,
+    val displayName: String,
+    val engine: String,
+    val status: NeuralTtsModelStatus,
+    val localPath: String? = null,
+    val downloadedBytes: Long = 0,
+    val totalBytes: Long = 0,
+    val checksumSha256: String? = null,
+    val installedAt: Long? = null,
+    val updatedAt: Long,
+    val error: String? = null,
+)
+
+@Entity(
+    tableName = "book_audio",
+    foreignKeys = [
+        ForeignKey(
+            entity = BookEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["bookId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [
+        Index(value = ["bookId"]),
+        Index(value = ["bookId", "modelId", "speakerId", "speed", "tone"], unique = true)
+    ]
+)
+data class BookAudioEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val bookId: Long,
+    val modelId: String,
+    val modelDisplayName: String,
+    val speakerId: Int,
+    val speed: Float,
+    val tone: String = "NATURAL",
+    val status: BookAudioStatus,
+    val filePath: String? = null,
+    val segmentCount: Int = 0,
+    val completedSegments: Int = 0,
+    val wordCount: Int = 0,
+    val sampleRate: Int = 0,
+    val fileSizeBytes: Long = 0,
+    val generationStartedAt: Long? = null,
+    val generatedAt: Long? = null,
+    val playbackSegmentIndex: Int = 0,
+    val playbackPositionMs: Int = 0,
+    val updatedAt: Long,
+    val error: String? = null,
 )
 
 @Entity(

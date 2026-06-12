@@ -18,13 +18,15 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         BookCollectionEntity::class,
         ReadingStateEntity::class,
         ReadingSessionEntity::class,
+        NeuralTtsModelEntity::class,
+        BookAudioEntity::class,
         AnnotationEntity::class,
         BookmarkEntity::class,
         SearchIndexEntity::class,
         SearchIndexFtsEntity::class,
         DictionaryEntryEntity::class
     ],
-    version = 3,
+    version = 9,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -35,6 +37,7 @@ abstract class XReaderDatabase : RoomDatabase() {
     abstract fun annotations(): AnnotationDao
     abstract fun search(): SearchDao
     abstract fun dictionary(): DictionaryDao
+    abstract fun neuralTts(): NeuralTtsDao
 
     companion object {
         @Volatile private var instance: XReaderDatabase? = null
@@ -46,7 +49,7 @@ abstract class XReaderDatabase : RoomDatabase() {
                     XReaderDatabase::class.java,
                     "xreader.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
                     .fallbackToDestructiveMigration(false)
                     .build()
                     .also { instance = it }
@@ -85,6 +88,98 @@ abstract class XReaderDatabase : RoomDatabase() {
                 )
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_book_collections_bookId ON book_collections(bookId)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_book_collections_collectionId ON book_collections(collectionId)")
+            }
+        }
+
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE books ADD COLUMN readabilityScore REAL")
+                db.execSQL("ALTER TABLE books ADD COLUMN readabilityGradeLevel REAL")
+            }
+        }
+
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS neural_tts_models (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        modelId TEXT NOT NULL,
+                        displayName TEXT NOT NULL,
+                        engine TEXT NOT NULL,
+                        status TEXT NOT NULL,
+                        localPath TEXT,
+                        downloadedBytes INTEGER NOT NULL,
+                        totalBytes INTEGER NOT NULL,
+                        checksumSha256 TEXT,
+                        installedAt INTEGER,
+                        updatedAt INTEGER NOT NULL,
+                        error TEXT
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_neural_tts_models_modelId ON neural_tts_models(modelId)")
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS book_audio (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        bookId INTEGER NOT NULL,
+                        modelId TEXT NOT NULL,
+                        modelDisplayName TEXT NOT NULL,
+                        speakerId INTEGER NOT NULL,
+                        speed REAL NOT NULL,
+                        status TEXT NOT NULL,
+                        filePath TEXT,
+                        segmentCount INTEGER NOT NULL,
+                        wordCount INTEGER NOT NULL,
+                        sampleRate INTEGER NOT NULL,
+                        fileSizeBytes INTEGER NOT NULL,
+                        generatedAt INTEGER,
+                        updatedAt INTEGER NOT NULL,
+                        error TEXT,
+                        FOREIGN KEY(bookId) REFERENCES books(id) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_book_audio_bookId ON book_audio(bookId)")
+                db.execSQL(
+                    """
+                    CREATE UNIQUE INDEX IF NOT EXISTS index_book_audio_bookId_modelId_speakerId_speed
+                    ON book_audio(bookId, modelId, speakerId, speed)
+                    """.trimIndent()
+                )
+            }
+        }
+
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE book_audio ADD COLUMN tone TEXT NOT NULL DEFAULT 'NATURAL'")
+                db.execSQL("DROP INDEX IF EXISTS index_book_audio_bookId_modelId_speakerId_speed")
+                db.execSQL(
+                    """
+                    CREATE UNIQUE INDEX IF NOT EXISTS index_book_audio_bookId_modelId_speakerId_speed_tone
+                    ON book_audio(bookId, modelId, speakerId, speed, tone)
+                    """.trimIndent()
+                )
+            }
+        }
+
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE book_audio ADD COLUMN completedSegments INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        private val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE book_audio ADD COLUMN playbackSegmentIndex INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE book_audio ADD COLUMN playbackPositionMs INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        private val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE book_audio ADD COLUMN generationStartedAt INTEGER")
             }
         }
     }

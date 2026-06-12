@@ -31,6 +31,12 @@ data class ReadAloudVoiceOption(
     val latency: Int,
 )
 
+data class ReadAloudEngineOption(
+    val name: String?,
+    val label: String,
+    val isDefault: Boolean = false,
+)
+
 data class ReadAloudState(
     val activeBookId: Long? = null,
     val bookTitle: String? = null,
@@ -46,6 +52,13 @@ data class ReadAloudState(
     val sleepTimerRemainingMillis: Long? = null,
     val message: String? = null,
 )
+
+internal fun readAloudNoReadableTextMessage(wordCount: Int?): String =
+    if ((wordCount ?: 0) <= 0) {
+        "Read aloud is unavailable because this book has no extractable text."
+    } else {
+        "No readable text is indexed for this book. Repair the book from its details screen and try again."
+    }
 
 class ReadAloudEngine(
     context: Context,
@@ -72,6 +85,8 @@ class ReadAloudEngine(
     val state: StateFlow<ReadAloudState> = _state.asStateFlow()
     private val _voices = MutableStateFlow<List<ReadAloudVoiceOption>>(emptyList())
     val voices: StateFlow<List<ReadAloudVoiceOption>> = _voices.asStateFlow()
+    private val _engines = MutableStateFlow<List<ReadAloudEngineOption>>(emptyList())
+    val engines: StateFlow<List<ReadAloudEngineOption>> = _engines.asStateFlow()
     private val mediaSession = ReadAloudMediaSessionController(
         context = appContext,
         callbacks = object : ReadAloudMediaSessionCallbacks {
@@ -109,6 +124,7 @@ class ReadAloudEngine(
     )
 
     private var tts: TextToSpeech? = null
+    private var activeEngineName: String? = null
     private var activeSpeech: ActiveSpeech? = null
     private var pendingUtteranceId: String? = null
     private var sleepTimerJob: Job? = null
@@ -126,11 +142,13 @@ class ReadAloudEngine(
         bookTitle: String,
         speechRate: Float = DEFAULT_SPEECH_RATE,
         voiceName: String? = null,
+        engineName: String? = null,
         sleepTimerDurationMillis: Long? = null,
+        emptyChunksMessage: String = readAloudNoReadableTextMessage(null),
     ) {
         withContext(Dispatchers.Main.immediate) {
             if (chunks.isEmpty()) {
-                showMessage(bookId, "No readable text is indexed for this book. Repair the book from its details screen and try again.")
+                showMessage(bookId, emptyChunksMessage)
                 return@withContext
             }
 
@@ -142,7 +160,7 @@ class ReadAloudEngine(
                 totalChunks = chunks.size
             )
 
-            if (!ensureReady()) {
+            if (!ensureReady(engineName)) {
                 _state.value = ReadAloudState(
                     activeBookId = bookId,
                     message = "Android text-to-speech is not available on this device."
@@ -188,18 +206,34 @@ class ReadAloudEngine(
         }
     }
 
-    suspend fun refreshVoices(): List<ReadAloudVoiceOption> =
+    suspend fun refreshEngines(): List<ReadAloudEngineOption> =
         withContext(Dispatchers.Main.immediate) {
-            if (!ensureReady()) {
+            if (!ensureReady(activeEngineName)) {
+                _engines.value = emptyList()
+                return@withContext emptyList()
+            }
+            updateEngineOptions()
+        }
+
+    suspend fun refreshVoices(engineName: String? = activeEngineName): List<ReadAloudVoiceOption> =
+        withContext(Dispatchers.Main.immediate) {
+            if (!ensureReady(engineName)) {
                 _voices.value = emptyList()
                 return@withContext emptyList()
             }
             updateVoiceOptions()
         }
 
+    fun setEngine(engineName: String?) {
+        scope.launch(Dispatchers.Main.immediate) {
+            ensureReady(engineName)
+            updateVoiceOptions()
+        }
+    }
+
     fun setVoice(voiceName: String?) {
         scope.launch(Dispatchers.Main.immediate) {
-            if (ensureReady()) setVoiceInternal(voiceName)
+            if (ensureReady(activeEngineName)) setVoiceInternal(voiceName)
         }
     }
 
@@ -244,6 +278,8 @@ class ReadAloudEngine(
             stopInternal()
             tts?.shutdown()
             tts = null
+            activeEngineName = null
+            _engines.value = emptyList()
             mediaSession.release()
             _voices.value = emptyList()
         }
@@ -267,12 +303,26 @@ class ReadAloudEngine(
         )
     }
 
-    private suspend fun ensureReady(): Boolean {
-        tts?.let { return true }
+    private suspend fun ensureReady(engineName: String? = activeEngineName): Boolean {
+        val requestedEngine = engineName?.takeIf { it.isNotBlank() }
+        tts?.let {
+            if (activeEngineName == requestedEngine) return true
+            stopInternal()
+            it.shutdown()
+            tts = null
+            activeEngineName = null
+            _voices.value = emptyList()
+        }
 
         val status = CompletableDeferred<Int>()
-        val engine = TextToSpeech(appContext) { initStatus ->
-            if (!status.isCompleted) status.complete(initStatus)
+        val engine = if (requestedEngine == null) {
+            TextToSpeech(appContext) { initStatus ->
+                if (!status.isCompleted) status.complete(initStatus)
+            }
+        } else {
+            TextToSpeech(appContext, { initStatus ->
+                if (!status.isCompleted) status.complete(initStatus)
+            }, requestedEngine)
         }
         val initialized = withTimeoutOrNull(TTS_INIT_TIMEOUT_MILLIS) { status.await() } == TextToSpeech.SUCCESS
         if (!initialized) {
@@ -307,6 +357,8 @@ class ReadAloudEngine(
         })
         engine.setAudioAttributes(speechAudioAttributes)
         tts = engine
+        activeEngineName = requestedEngine
+        updateEngineOptions(engine)
         updateVoiceOptions(engine)
         return true
     }
@@ -614,6 +666,35 @@ class ReadAloudEngine(
         }.getOrDefault(emptyList())
         _voices.value = options
         return options
+    }
+
+    private fun updateEngineOptions(engine: TextToSpeech? = tts): List<ReadAloudEngineOption> {
+        val activeEngine = engine ?: return emptyList()
+        val defaultEngine = activeEngine.defaultEngine
+        val installed = runCatching {
+            activeEngine.engines.orEmpty()
+                .sortedWith(
+                    compareBy<TextToSpeech.EngineInfo> { it.label.orEmpty().lowercase(Locale.getDefault()) }
+                        .thenBy { it.name.orEmpty() }
+                )
+                .mapNotNull { info ->
+                    val packageName = info.name?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                    ReadAloudEngineOption(
+                        name = packageName,
+                        label = info.label?.takeIf { it.isNotBlank() } ?: packageName,
+                        isDefault = packageName == defaultEngine
+                    )
+                }
+        }.getOrDefault(emptyList())
+        val options = listOf(
+            ReadAloudEngineOption(
+                name = null,
+                label = "Device default",
+                isDefault = activeEngineName == null
+            )
+        ) + installed
+        _engines.value = options.distinctBy { it.name }
+        return _engines.value
     }
 
     private fun setDefaultLanguage(engine: TextToSpeech): Boolean {

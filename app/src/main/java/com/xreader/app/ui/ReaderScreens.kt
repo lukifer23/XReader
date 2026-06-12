@@ -99,6 +99,7 @@ import com.xreader.app.settings.ReaderSpacingPreset
 import com.xreader.app.settings.ReaderTapZonePreset
 import com.xreader.app.settings.ReaderTextAlign
 import com.xreader.app.settings.ReadAloudSleepTimer
+import com.xreader.app.settings.ReadAloudPlaybackMode
 import com.xreader.app.settings.normalizedReaderDimAmount
 import com.xreader.app.settings.spacingPresetOrNull
 import com.xreader.app.tts.ReadAloudState
@@ -179,6 +180,7 @@ internal fun ReaderRoute(
         onScreenDim = viewModel::setScreenDim,
         onReadAloudRate = viewModel::setReadAloudRate,
         onReadAloudSleepTimer = viewModel::setReadAloudSleepTimer,
+        onReadAloudPlaybackMode = viewModel::setReadAloudPlaybackMode,
         onHighlightColor = viewModel::setHighlightColor,
         onTextAlign = viewModel::setTextAlign,
         onPdfFit = viewModel::setPdfFit,
@@ -235,6 +237,7 @@ internal fun ReaderScreen(
     onScreenDim: (Float) -> Unit,
     onReadAloudRate: (Float) -> Unit,
     onReadAloudSleepTimer: (ReadAloudSleepTimer) -> Unit,
+    onReadAloudPlaybackMode: (ReadAloudPlaybackMode) -> Unit,
     onHighlightColor: (String) -> Unit,
     onTextAlign: (ReaderTextAlign) -> Unit,
     onPdfFit: (ReaderPdfFit) -> Unit,
@@ -450,7 +453,7 @@ internal fun ReaderScreen(
     if (state.noteDraftOpen) {
         NoteDialog(onDismiss = onCloseNote, onSave = onAddNote)
     }
-    state.readAloud.message?.let { message ->
+    (state.readAloud.message ?: state.readAloudMessage)?.let { message ->
         ReadAloudMessageDialog(message = message, onDismiss = onClearReadAloudMessage)
     }
     if (navigationOpen) {
@@ -503,6 +506,7 @@ internal fun ReaderScreen(
             onScreenDim = onScreenDim,
             onReadAloudRate = onReadAloudRate,
             onReadAloudSleepTimer = onReadAloudSleepTimer,
+            onReadAloudPlaybackMode = onReadAloudPlaybackMode,
             onHighlightColor = onHighlightColor,
             onTextAlign = onTextAlign,
             onPdfFit = onPdfFit,
@@ -583,8 +587,8 @@ internal fun ReaderTopChrome(
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onBack, modifier = Modifier.size(44.dp)) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+            TooltipIconButton(label = "Back to library", onClick = onBack, modifier = Modifier.size(44.dp)) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
             }
             Column(Modifier.weight(1f)) {
                 Text(
@@ -601,24 +605,32 @@ internal fun ReaderTopChrome(
                 )
             }
             if (canReturn) {
-                IconButton(onClick = onReturn, modifier = Modifier.size(40.dp)) {
-                    Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = "Return to previous reading location")
+                TooltipIconButton(
+                    label = "Return to previous reading location",
+                    onClick = onReturn,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = null)
                 }
             }
-            IconButton(onClick = onContents, modifier = Modifier.size(40.dp)) {
-                Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = "Contents")
+            TooltipIconButton(label = "Contents", onClick = onContents, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null)
             }
-            IconButton(onClick = onSearch, modifier = Modifier.size(40.dp)) {
-                Icon(Icons.Filled.Search, contentDescription = "Search this book")
+            TooltipIconButton(label = "Search this book", onClick = onSearch, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Filled.Search, contentDescription = null)
             }
-            IconButton(onClick = onBookmark, modifier = Modifier.size(40.dp)) {
-                Icon(if (bookmarked) Icons.Filled.Bookmark else Icons.Filled.BookmarkBorder, contentDescription = "Bookmark")
+            TooltipIconButton(
+                label = readerBookmarkActionLabel(bookmarked),
+                onClick = onBookmark,
+                modifier = Modifier.size(40.dp)
+            ) {
+                Icon(if (bookmarked) Icons.Filled.Bookmark else Icons.Filled.BookmarkBorder, contentDescription = null)
             }
-            IconButton(onClick = onNote, modifier = Modifier.size(40.dp)) {
-                Icon(Icons.AutoMirrored.Filled.NoteAdd, contentDescription = "Add note")
+            TooltipIconButton(label = "Add note", onClick = onNote, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.AutoMirrored.Filled.NoteAdd, contentDescription = null)
             }
-            IconButton(onClick = onSettings, modifier = Modifier.size(40.dp)) {
-                Icon(Icons.Filled.Settings, contentDescription = "Reader settings")
+            TooltipIconButton(label = "Reader settings", onClick = onSettings, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Filled.Settings, contentDescription = null)
             }
         }
     }
@@ -644,6 +656,8 @@ internal fun ReaderBottomBar(
     modifier: Modifier = Modifier,
 ) {
     var sliderValue by remember(progress) { mutableFloatStateOf(progress.toFloat().coerceIn(0f, 1f)) }
+    val canGoPreviousPage = readerCanGoPreviousPage(page, pageCount)
+    val canGoNextPage = readerCanGoNextPage(page, pageCount)
     Surface(
         modifier = modifier
             .fillMaxWidth()
@@ -705,8 +719,13 @@ internal fun ReaderBottomBar(
                     }
                 }
                 if (!readAloud.active) {
-                    IconButton(onClick = onPrevious, modifier = Modifier.size(44.dp)) {
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous page")
+                    TooltipIconButton(
+                        label = "Previous page",
+                        onClick = onPrevious,
+                        enabled = canGoPreviousPage,
+                        modifier = Modifier.size(44.dp)
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = null)
                     }
                 }
                 Slider(
@@ -721,8 +740,13 @@ internal fun ReaderBottomBar(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 if (!readAloud.active) {
-                    IconButton(onClick = onNext, modifier = Modifier.size(44.dp)) {
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next page")
+                    TooltipIconButton(
+                        label = "Next page",
+                        onClick = onNext,
+                        enabled = canGoNextPage,
+                        modifier = Modifier.size(44.dp)
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
                     }
                 }
             }
@@ -732,12 +756,12 @@ internal fun ReaderBottomBar(
 
 @Composable
 private fun ReadAloudButton(readAloud: ReadAloudState, onClick: () -> Unit) {
-    IconButton(onClick = onClick, modifier = Modifier.size(44.dp)) {
+    TooltipIconButton(label = readAloudToggleLabel(readAloud), onClick = onClick, modifier = Modifier.size(44.dp)) {
         when {
             readAloud.initializing -> CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
-            readAloud.playing -> Icon(Icons.Filled.Pause, contentDescription = "Pause read aloud")
-            readAloud.paused -> Icon(Icons.Filled.PlayArrow, contentDescription = "Resume read aloud")
-            else -> Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = "Read aloud")
+            readAloud.playing -> Icon(Icons.Filled.Pause, contentDescription = null)
+            readAloud.paused -> Icon(Icons.Filled.PlayArrow, contentDescription = null)
+            else -> Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null)
         }
     }
 }
@@ -773,6 +797,7 @@ internal fun ReaderQuickSettingsDialog(
     onScreenDim: (Float) -> Unit,
     onReadAloudRate: (Float) -> Unit,
     onReadAloudSleepTimer: (ReadAloudSleepTimer) -> Unit,
+    onReadAloudPlaybackMode: (ReadAloudPlaybackMode) -> Unit,
     onHighlightColor: (String) -> Unit,
     onTextAlign: (ReaderTextAlign) -> Unit,
     onPdfFit: (ReaderPdfFit) -> Unit,
@@ -955,6 +980,21 @@ internal fun ReaderQuickSettingsDialog(
                     expanded = readAloudOpen,
                     onToggle = { readAloudOpen = !readAloudOpen }
                 ) {
+                    Text("Source", style = MaterialTheme.typography.titleMedium)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ReadAloudPlaybackMode.entries.forEach { mode ->
+                            FilterChip(
+                                selected = settings.readAloudPlaybackMode == mode,
+                                onClick = { onReadAloudPlaybackMode(mode) },
+                                label = { Text(mode.label) }
+                            )
+                        }
+                    }
+                    Text(
+                        text = settings.readAloudPlaybackMode.description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     SettingSlider("Speed", settings.readAloudRate, 0.7f..1.4f, onReadAloudRate)
                     Text("Sleep timer", style = MaterialTheme.typography.titleMedium)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

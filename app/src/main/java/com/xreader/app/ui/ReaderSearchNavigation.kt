@@ -28,6 +28,18 @@ internal fun readerSearchNavigationState(
     )
 }
 
+internal fun readerFindBarSummary(
+    query: String,
+    navigation: ReaderSearchNavigationState,
+): String {
+    val cleanQuery = query.trim()
+    return if (cleanQuery.isBlank()) {
+        navigation.label
+    } else {
+        "$cleanQuery • ${navigation.label}"
+    }
+}
+
 private fun previousSearchResultIndex(
     currentUnit: Int,
     results: List<ReaderSearchResult>,

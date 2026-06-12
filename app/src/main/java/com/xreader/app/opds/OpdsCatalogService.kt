@@ -1,6 +1,7 @@
 package com.xreader.app.opds
 
 import com.xreader.app.importer.ImportService
+import com.xreader.app.importer.SupportedBookTypes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -351,7 +352,7 @@ fun OpdsLink.isSupportedAcquisition(): Boolean {
     if (!relation.contains("acquisition") && relation != "enclosure") return false
     if (UNSUPPORTED_ACQUISITION_RELATIONS.any { it in relation }) return false
     val mediaType = type?.substringBefore(';')?.trim()?.lowercase(Locale.US).orEmpty()
-    return mediaType in SUPPORTED_ACQUISITION_TYPES || href.supportedBookExtension() != null
+    return mediaType in SupportedBookTypes.mimeTypes || href.supportedBookExtension() != null
 }
 
 private fun OpdsLink.isNavigationLink(): Boolean {
@@ -375,16 +376,21 @@ private fun String.relationTokens(): Set<String> =
         .toSet()
 
 private fun String.supportedBookExtension(): String? =
+    normalizedDownloadName()
+        .let { name ->
+            SupportedBookTypes.extensions.firstOrNull { it.contains('.') && (name == it || name.endsWith(".$it")) }
+                ?: name.substringAfterLast('.', "").takeIf { it in SupportedBookTypes.extensions }
+        }
+
+private fun String.normalizedDownloadName(): String =
     substringBefore('#')
         .substringBefore('?')
         .substringAfterLast('/')
         .substringAfterLast('\\')
-        .substringAfterLast('.', "")
         .lowercase(Locale.US)
-        .takeIf { it in SUPPORTED_ACQUISITION_EXTENSIONS }
 
 private fun HttpURLConnection.isSupportedDirectDownload(mediaType: String): Boolean =
-    mediaType in SUPPORTED_ACQUISITION_TYPES ||
+    mediaType in SupportedBookTypes.mimeTypes ||
         url.toString().supportedBookExtension() != null
 
 private fun String?.mediaType(): String =
@@ -414,7 +420,8 @@ private fun URL.safeDownloadName(contentType: String?): String {
         ?.substringBefore(';')
         ?.trim()
         ?.lowercase(Locale.US)
-        ?.let(MIME_EXTENSION::get)
+        ?.let(SupportedBookTypes::extensionForMimeType)
+        ?.takeIf { it.isNotBlank() }
         ?: path.supportedBookExtension()
         ?: "epub"
     return "catalog-book.$extension"
@@ -437,82 +444,6 @@ private fun java.io.InputStream.copyBoundedTo(output: java.io.OutputStream, limi
         output.write(buffer, 0, read)
     }
 }
-
-private val SUPPORTED_ACQUISITION_EXTENSIONS = setOf(
-    "epub",
-    "pdf",
-    "txt",
-    "cbz",
-    "fb2",
-    "rtf",
-    "mobi",
-    "prc",
-    "odt",
-    "docx",
-    "html",
-    "htm",
-    "xhtml",
-    "mhtml",
-    "mht",
-    "md",
-    "markdown",
-)
-
-private val SUPPORTED_ACQUISITION_TYPES = setOf(
-    "application/epub+zip",
-    "application/pdf",
-    "text/plain",
-    "application/x-cbz",
-    "application/vnd.comicbook+zip",
-    "application/x-fictionbook+xml",
-    "application/fb2+xml",
-    "text/fb2+xml",
-    "application/rtf",
-    "text/rtf",
-    "application/x-rtf",
-    "application/x-mobipocket-ebook",
-    "application/vnd.amazon.ebook",
-    "application/vnd.oasis.opendocument.text",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "text/html",
-    "application/xhtml+xml",
-    "multipart/related",
-    "application/x-mimearchive",
-    "application/mhtml",
-    "message/rfc822",
-    "text/markdown",
-    "text/x-markdown",
-    "application/markdown",
-    "application/x-markdown",
-)
-
-private val MIME_EXTENSION = mapOf(
-    "application/epub+zip" to "epub",
-    "application/pdf" to "pdf",
-    "text/plain" to "txt",
-    "application/x-cbz" to "cbz",
-    "application/vnd.comicbook+zip" to "cbz",
-    "application/x-fictionbook+xml" to "fb2",
-    "application/fb2+xml" to "fb2",
-    "text/fb2+xml" to "fb2",
-    "application/rtf" to "rtf",
-    "text/rtf" to "rtf",
-    "application/x-rtf" to "rtf",
-    "application/x-mobipocket-ebook" to "mobi",
-    "application/vnd.amazon.ebook" to "mobi",
-    "application/vnd.oasis.opendocument.text" to "odt",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document" to "docx",
-    "text/html" to "html",
-    "application/xhtml+xml" to "xhtml",
-    "multipart/related" to "mhtml",
-    "application/x-mimearchive" to "mhtml",
-    "application/mhtml" to "mhtml",
-    "message/rfc822" to "mhtml",
-    "text/markdown" to "md",
-    "text/x-markdown" to "md",
-    "application/markdown" to "md",
-    "application/x-markdown" to "md",
-)
 
 private val NAVIGATION_RELATIONS = setOf(
     "alternate",

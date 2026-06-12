@@ -19,7 +19,12 @@ import com.xreader.app.repository.LibraryBackupService
 import com.xreader.app.repository.LibraryRepository
 import com.xreader.app.repository.ReadingRepository
 import com.xreader.app.settings.SettingsRepository
+import com.xreader.app.settings.NeuralTtsPace
+import com.xreader.app.settings.NeuralTtsTone
+import com.xreader.app.tts.AudiobookGenerationForegroundService
 import com.xreader.app.tts.ReadAloudEngine
+import com.xreader.app.tts.NeuralTtsRepository
+import com.xreader.app.tts.GeneratedAudiobookPlaybackController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -90,6 +95,44 @@ class AppContainer(
     }
     val readAloudEngine: ReadAloudEngine by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         ReadAloudEngine(appContext, applicationScope)
+    }
+    val neuralTtsRepository: NeuralTtsRepository by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        NeuralTtsRepository(appContext, database.neuralTts())
+    }
+    val generatedAudiobookPlayback: GeneratedAudiobookPlaybackController by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        GeneratedAudiobookPlaybackController(appContext, neuralTtsRepository, applicationScope)
+    }
+
+    init {
+        applicationScope.launch(Dispatchers.IO) {
+            runCatching {
+                neuralTtsRepository.ensureCatalogSeeded()
+                neuralTtsRepository.repairInterruptedModelInstalls()
+                neuralTtsRepository.repairStaleGeneratingAudio()
+            }
+                .onFailure { Log.w("XReader", "Neural TTS startup maintenance failed", it) }
+        }
+    }
+
+    fun startAudiobookGeneration(
+        bookId: Long,
+        modelId: String,
+        speakerId: Int = 0,
+        pace: NeuralTtsPace,
+        tone: NeuralTtsTone,
+    ) {
+        AudiobookGenerationForegroundService.start(
+            context = appContext,
+            bookId = bookId,
+            modelId = modelId,
+            speakerId = speakerId,
+            pace = pace,
+            tone = tone
+        )
+    }
+
+    fun cancelAudiobookGeneration() {
+        AudiobookGenerationForegroundService.cancel(appContext)
     }
 
     fun warmReaderPath() {

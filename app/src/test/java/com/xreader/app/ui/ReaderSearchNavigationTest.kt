@@ -82,6 +82,18 @@ class ReaderSearchNavigationTest {
         assertEquals(0, navigation.nextIndex)
     }
 
+    @Test
+    fun findBarSummaryCombinesQueryAndNavigationLabel() {
+        val navigation = ReaderSearchNavigationState(
+            label = "2 of 5",
+            previousIndex = 0,
+            nextIndex = 2
+        )
+
+        assertEquals("orbit • 2 of 5", readerFindBarSummary(" orbit ", navigation))
+        assertEquals("2 of 5", readerFindBarSummary(" ", navigation))
+    }
+
     private fun result(unit: Int): ReaderSearchResult =
         ReaderSearchResult(
             title = "Chapter",
