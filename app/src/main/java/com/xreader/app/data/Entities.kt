@@ -212,7 +212,7 @@ data class NeuralTtsModelEntity(
     ],
     indices = [
         Index(value = ["bookId"]),
-        Index(value = ["bookId", "modelId", "speakerId", "speed", "tone"], unique = true)
+        Index(value = ["bookId", "modelId", "speakerId", "speed", "tone", "scope"], unique = true)
     ]
 )
 data class BookAudioEntity(
@@ -223,6 +223,8 @@ data class BookAudioEntity(
     val speakerId: Int,
     val speed: Float,
     val tone: String = "NATURAL",
+    val scope: String = "FULL_BOOK",
+    val scopeLabel: String = "Full book",
     val status: BookAudioStatus,
     val filePath: String? = null,
     val segmentCount: Int = 0,
@@ -231,6 +233,7 @@ data class BookAudioEntity(
     val sampleRate: Int = 0,
     val fileSizeBytes: Long = 0,
     val generationStartedAt: Long? = null,
+    val generationSessionStartCompletedSegments: Int = 0,
     val generatedAt: Long? = null,
     val playbackSegmentIndex: Int = 0,
     val playbackPositionMs: Int = 0,

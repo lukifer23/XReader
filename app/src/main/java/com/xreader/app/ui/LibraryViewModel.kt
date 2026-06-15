@@ -10,7 +10,6 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.xreader.app.AppContainer
 import com.xreader.app.data.BookAudioEntity
-import com.xreader.app.data.BookAudioStatus
 import com.xreader.app.data.BookEntity
 import com.xreader.app.data.CollectionEntity
 import com.xreader.app.data.LibrarySearchRow
@@ -32,6 +31,11 @@ import com.xreader.app.tts.ReadAloudPlanner
 import com.xreader.app.tts.ReadAloudChunk
 import com.xreader.app.tts.NeuralTtsPreparedBook
 import com.xreader.app.tts.AudiobookPlaybackUiState
+import com.xreader.app.tts.AudiobookGenerationScope
+import com.xreader.app.tts.GeneratedAudiobookChapter
+import com.xreader.app.tts.generatedAudiobookChapters
+import com.xreader.app.tts.playableSegmentCount
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -41,9 +45,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.Locale
 
 enum class LibraryGroup {
@@ -81,6 +87,9 @@ data class AudiobookScanUiState(
     val scanning: Boolean = false,
     val wordCount: Int = 0,
     val segmentCount: Int = 0,
+    val chapterCount: Int = 0,
+    val chapterTitles: List<String> = emptyList(),
+    val firstChapterSegmentCount: Int = 0,
     val sourceSectionCount: Int = 0,
     val estimatedAudioMillis: Long = 0L,
     val estimatedStorageBytes: Long = 0L,
@@ -96,6 +105,11 @@ data class LibraryMessage(
     val actionLabel: String? = null,
     val openBookId: Long? = null,
     val undoRemoveBookId: Long? = null,
+)
+
+data class BookAudiobookAudioUiItem(
+    val audio: BookAudioEntity,
+    val chapters: List<GeneratedAudiobookChapter> = emptyList(),
 )
 
 data class LibraryUiState(
@@ -661,8 +675,18 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
-    fun observeBookAudio(bookId: Long): Flow<List<BookAudioEntity>> =
+    fun observeBookAudio(bookId: Long): Flow<List<BookAudiobookAudioUiItem>> =
         container.neuralTtsRepository.observeBookAudio(bookId)
+            .map { rows ->
+                withContext(Dispatchers.IO) {
+                    rows.map { audio ->
+                        BookAudiobookAudioUiItem(
+                            audio = audio,
+                            chapters = audio.generatedAudiobookChapters()
+                        )
+                    }
+                }
+            }
 
     fun scanAudiobook(book: BookEntity) {
         viewModelScope.launch {
@@ -686,16 +710,17 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
-    fun generateAudiobook(book: BookEntity) {
+    fun generateAudiobook(book: BookEntity, scope: AudiobookGenerationScope = AudiobookGenerationScope.FULL_BOOK) {
         val settings = readerSettings.value
         container.startAudiobookGeneration(
             bookId = book.id,
             modelId = settings.neuralTtsModelId,
             speakerId = settings.neuralTtsSpeakerId,
             pace = settings.neuralTtsPace,
-            tone = settings.neuralTtsTone
+            tone = settings.neuralTtsTone,
+            scope = scope
         )
-        postMessage("Generating audiobook for ${book.title}")
+        postMessage("Generating ${scope.label.lowercase(Locale.US)} audio for ${book.title}")
     }
 
     fun cancelAudiobookGeneration(book: BookEntity) {
@@ -704,13 +729,23 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     fun playAudiobookAudio(book: BookEntity, audio: BookAudioEntity) {
-        if (audio.status != BookAudioStatus.GENERATED) {
-            postMessage("Generate this audiobook before playing it")
+        if (audio.playableSegmentCount() <= 0) {
+            postMessage("Generate at least one audiobook segment before playing it")
             return
         }
         neuralPreviewPlayer?.release()
         neuralPreviewPlayer = null
         container.generatedAudiobookPlayback.play(book.title, audio)
+    }
+
+    fun playAudiobookAudioFromSegment(book: BookEntity, audio: BookAudioEntity, segmentIndex: Int) {
+        if (audio.playableSegmentCount() <= 0) {
+            postMessage("Generate at least one audiobook segment before playing it")
+            return
+        }
+        neuralPreviewPlayer?.release()
+        neuralPreviewPlayer = null
+        container.generatedAudiobookPlayback.playFromSegment(book.title, audio, segmentIndex)
     }
 
     fun pauseAudiobookPlayback(audio: BookAudioEntity? = null) {
@@ -826,6 +861,12 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
                 scanning = false,
                 wordCount = prepared.wordCount,
                 segmentCount = prepared.segments.size,
+                chapterCount = prepared.chapters.size,
+                chapterTitles = prepared.chapters
+                    .map { it.title }
+                    .filter { it.isNotBlank() }
+                    .take(AUDIOBOOK_SCAN_PREVIEW_CHAPTERS),
+                firstChapterSegmentCount = prepared.chapters.firstOrNull()?.segmentCount ?: 0,
                 sourceSectionCount = sourceSectionCount,
                 estimatedAudioMillis = estimatedAudioMillis(prepared.wordCount),
                 estimatedStorageBytes = estimatedStorageBytes(prepared.wordCount),
@@ -1012,6 +1053,7 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         private const val UNDO_REMOVE_TIMEOUT_MS = 8_000L
         private const val AUDIOBOOK_ESTIMATED_WORDS_PER_MINUTE = 150
         private const val AUDIOBOOK_ESTIMATED_WAV_BYTES_PER_SECOND = 44_100L
+        private const val AUDIOBOOK_SCAN_PREVIEW_CHAPTERS = 3
 
         fun factory(container: AppContainer): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {

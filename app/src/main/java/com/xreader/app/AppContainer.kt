@@ -22,6 +22,7 @@ import com.xreader.app.settings.SettingsRepository
 import com.xreader.app.settings.NeuralTtsPace
 import com.xreader.app.settings.NeuralTtsTone
 import com.xreader.app.tts.AudiobookGenerationForegroundService
+import com.xreader.app.tts.AudiobookGenerationScope
 import com.xreader.app.tts.ReadAloudEngine
 import com.xreader.app.tts.NeuralTtsRepository
 import com.xreader.app.tts.GeneratedAudiobookPlaybackController
@@ -120,6 +121,7 @@ class AppContainer(
         speakerId: Int = 0,
         pace: NeuralTtsPace,
         tone: NeuralTtsTone,
+        scope: AudiobookGenerationScope = AudiobookGenerationScope.FULL_BOOK,
     ) {
         AudiobookGenerationForegroundService.start(
             context = appContext,
@@ -127,7 +129,8 @@ class AppContainer(
             modelId = modelId,
             speakerId = speakerId,
             pace = pace,
-            tone = tone
+            tone = tone,
+            scope = scope
         )
     }
 

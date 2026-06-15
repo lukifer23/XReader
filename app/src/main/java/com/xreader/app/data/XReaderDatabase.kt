@@ -26,7 +26,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SearchIndexFtsEntity::class,
         DictionaryEntryEntity::class
     ],
-    version = 9,
+    version = 11,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -49,7 +49,18 @@ abstract class XReaderDatabase : RoomDatabase() {
                     XReaderDatabase::class.java,
                     "xreader.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
+                    .addMigrations(
+                        MIGRATION_1_2,
+                        MIGRATION_2_3,
+                        MIGRATION_3_4,
+                        MIGRATION_4_5,
+                        MIGRATION_5_6,
+                        MIGRATION_6_7,
+                        MIGRATION_7_8,
+                        MIGRATION_8_9,
+                        MIGRATION_9_10,
+                        MIGRATION_10_11
+                    )
                     .fallbackToDestructiveMigration(false)
                     .build()
                     .also { instance = it }
@@ -180,6 +191,26 @@ abstract class XReaderDatabase : RoomDatabase() {
         private val MIGRATION_8_9 = object : Migration(8, 9) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE book_audio ADD COLUMN generationStartedAt INTEGER")
+            }
+        }
+
+        private val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE book_audio ADD COLUMN scope TEXT NOT NULL DEFAULT 'FULL_BOOK'")
+                db.execSQL("ALTER TABLE book_audio ADD COLUMN scopeLabel TEXT NOT NULL DEFAULT 'Full book'")
+                db.execSQL("DROP INDEX IF EXISTS index_book_audio_bookId_modelId_speakerId_speed_tone")
+                db.execSQL(
+                    """
+                    CREATE UNIQUE INDEX IF NOT EXISTS index_book_audio_bookId_modelId_speakerId_speed_tone_scope
+                    ON book_audio(bookId, modelId, speakerId, speed, tone, scope)
+                    """.trimIndent()
+                )
+            }
+        }
+
+        private val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE book_audio ADD COLUMN generationSessionStartCompletedSegments INTEGER NOT NULL DEFAULT 0")
             }
         }
     }

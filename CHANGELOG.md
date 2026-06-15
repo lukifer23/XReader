@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Embedded Kokoro v1.0 audiobook generation with model download/install/delete controls, narrator selection, narration style, pacing, scan summaries, sample/first-chapter/full-book scopes, persisted progress/ETA, partial playback, generated-audio resume, chapter picker/jump controls, delete, and ZIP export.
+- Global Audiobooks screen for completed, partial, active, failed, and generated audio rows, with compact playback controls and chapter navigation.
+
+### Changed
+
+- Audiobook text preparation now uses anchored chapter detection, normalized chapter labels, shorter Kokoro-safe prompts, paragraph/question/chapter pause metadata, and prepared-chapter scoped first-chapter generation so scan estimates match generated output.
+- Generated audiobook sidecars are sanitized on read so stale, overlapping, out-of-range, or invalid chapter metadata cannot break playback navigation.
+- Full-book neural generation prefers WebGPU with isolated-process runtime rotation, then XNNPACK/CPU fallback; preview generation stays on XNNPACK/CPU for stability.
+
 ## 0.1.0 - 2026-05-28
 
 Initial public repository snapshot.

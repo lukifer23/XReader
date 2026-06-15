@@ -71,14 +71,12 @@ enum class NeuralTtsGender(
 
 enum class NeuralTtsTone(
     val label: String,
-    val noiseScale: Float,
-    val noiseScaleW: Float,
     val silenceScale: Float,
 ) {
-    NATURAL("Natural", noiseScale = 0.667f, noiseScaleW = 0.8f, silenceScale = 0.2f),
-    WARM("Warm", noiseScale = 0.58f, noiseScaleW = 0.72f, silenceScale = 0.24f),
-    BRIGHT("Bright", noiseScale = 0.74f, noiseScaleW = 0.86f, silenceScale = 0.18f),
-    CALM("Calm", noiseScale = 0.52f, noiseScaleW = 0.68f, silenceScale = 0.30f),
+    NATURAL("Natural", silenceScale = 0.2f),
+    WARM("Warm", silenceScale = 0.24f),
+    BRIGHT("Bright", silenceScale = 0.18f),
+    CALM("Calm", silenceScale = 0.30f),
 }
 
 enum class NeuralTtsPace(

@@ -18,23 +18,61 @@ internal object TtsAccelerationRuntime {
         "libQnnSystem.so",
     )
 
-    fun providerOrder(context: Context): List<String> {
+    fun providerOrder(
+        context: Context,
+        includeExperimentalWebGpu: Boolean = false,
+    ): List<String> {
+        return providerOrder(
+            installedLibraries = packagedNativeLibraries(context),
+            hasVulkan = context.packageManager.hasSystemFeature("android.hardware.vulkan.level"),
+            includeExperimentalWebGpu = includeExperimentalWebGpu,
+            hardware = Build.HARDWARE.orEmpty(),
+            boardPlatform = systemProperty("ro.board.platform"),
+            socManufacturer = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) Build.SOC_MANUFACTURER.orEmpty() else "",
+            socModel = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) Build.SOC_MODEL.orEmpty() else "",
+            logDecisions = true,
+        )
+    }
+
+    internal fun providerOrder(
+        installedLibraries: Set<String>,
+        hasVulkan: Boolean,
+        includeExperimentalWebGpu: Boolean,
+        hardware: String,
+        boardPlatform: String,
+        socManufacturer: String,
+        socModel: String,
+        logDecisions: Boolean = false,
+    ): List<String> {
         val providers = mutableListOf<String>()
-        val qnn = qnnReadiness(context)
+        val qnn = qnnReadiness(
+            installedLibraries = installedLibraries,
+            hardware = hardware,
+            boardPlatform = boardPlatform,
+            socManufacturer = socManufacturer,
+            socModel = socModel,
+        )
         if (qnn.ready && ENABLE_QNN_BY_DEFAULT) {
             providers += "qnn"
-            Log.i(TAG, "QNN provider enabled: ${qnn.reason}")
+            if (logDecisions) Log.i(TAG, "QNN provider enabled: ${qnn.reason}")
         } else if (qnn.ready) {
-            Log.i(TAG, "QNN provider staged but not enabled by default: no no-fallback hardware smoke has passed on this device.")
+            if (logDecisions) Log.i(TAG, "QNN provider staged but not enabled by default: no no-fallback hardware smoke has passed on this device.")
         } else {
-            Log.i(TAG, "QNN provider unavailable: ${qnn.reason}")
+            if (logDecisions) Log.i(TAG, "QNN provider unavailable: ${qnn.reason}")
         }
-        val webGpu = webGpuReadiness(context)
-        if (webGpu.ready) {
-            providers += "webgpu"
-            Log.i(TAG, "WebGPU provider enabled for Android Vulkan GPU acceleration.")
+        if (includeExperimentalWebGpu) {
+            val webGpu = webGpuReadiness(
+                installedLibraries = installedLibraries,
+                hasVulkan = hasVulkan,
+            )
+            if (webGpu.ready) {
+                providers += "webgpu"
+                if (logDecisions) Log.i(TAG, "WebGPU provider enabled for experimental Android Vulkan acceleration.")
+            } else {
+                if (logDecisions) Log.i(TAG, "WebGPU provider unavailable: ${webGpu.reason}")
+            }
         } else {
-            Log.i(TAG, "WebGPU provider unavailable: ${webGpu.reason}")
+            if (logDecisions) Log.i(TAG, "WebGPU provider skipped for stable audiobook generation.")
         }
         providers += "xnnpack"
         providers += "cpu"
@@ -42,11 +80,19 @@ internal object TtsAccelerationRuntime {
     }
 
     fun webGpuReadiness(context: Context): WebGpuReadiness {
-        val hasVulkan = context.packageManager.hasSystemFeature("android.hardware.vulkan.level")
+        return webGpuReadiness(
+            installedLibraries = packagedNativeLibraries(context),
+            hasVulkan = context.packageManager.hasSystemFeature("android.hardware.vulkan.level"),
+        )
+    }
+
+    internal fun webGpuReadiness(
+        installedLibraries: Set<String>,
+        hasVulkan: Boolean,
+    ): WebGpuReadiness {
         if (!hasVulkan) {
             return WebGpuReadiness(false, "Device does not advertise Vulkan support.")
         }
-        val installedLibraries = packagedNativeLibraries(context)
         if ("libonnxruntime.so" !in installedLibraries || "libsherpa-onnx-jni.so" !in installedLibraries) {
             return WebGpuReadiness(false, "Missing packaged Sherpa/ONNX Runtime libraries.")
         }

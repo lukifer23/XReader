@@ -6,7 +6,6 @@ import androidx.lifecycle.viewModelScope
 import com.xreader.app.AppContainer
 import com.xreader.app.analytics.ReadingAnalyticsTracker
 import com.xreader.app.data.AnnotationEntity
-import com.xreader.app.data.BookAudioStatus
 import com.xreader.app.data.BookEntity
 import com.xreader.app.data.BookmarkEntity
 import com.xreader.app.data.DictionaryEntryEntity
@@ -551,21 +550,21 @@ class ReaderViewModel(
         }
         viewModelScope.launch {
             val settings = _uiState.value.settings
-            val audio = container.neuralTtsRepository.generatedBookAudio(
+            val audio = container.neuralTtsRepository.bestPlayableBookAudio(
                 bookId = bookId,
                 modelId = settings.neuralTtsModelId,
                 speakerId = settings.neuralTtsSpeakerId,
                 pace = settings.neuralTtsPace,
                 tone = settings.neuralTtsTone
             )
-            if (audio == null || audio.status != BookAudioStatus.GENERATED) {
+            if (audio == null) {
                 val model = com.xreader.app.tts.NeuralTtsModelCatalog.models
                     .firstOrNull { it.modelId == settings.neuralTtsModelId }
                     ?.displayName
                     ?: "selected neural voice"
                 _uiState.update {
                     it.copy(
-                        readAloudMessage = "Generate saved audio for this book with $model, ${settings.neuralTtsTone.label}, ${settings.neuralTtsPace.label} before using generated read aloud."
+                        readAloudMessage = "Generate a sample, chapter, or full audiobook for this book with $model, ${settings.neuralTtsTone.label}, ${settings.neuralTtsPace.label} before using generated read aloud."
                     )
                 }
                 return@launch

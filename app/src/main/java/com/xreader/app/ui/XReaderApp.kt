@@ -87,6 +87,7 @@ fun XReaderApp(
                     },
                     openLibrary = { navigatePrimary("library") },
                     openAnalytics = { navigatePrimary("analytics") },
+                    openAudiobooks = { navigatePrimary("audiobooks") },
                     openNotes = { navigatePrimary("notes") },
                     openSettings = { navigatePrimary("settings") },
                     currentTheme = settings.theme,
@@ -116,6 +117,18 @@ fun XReaderApp(
                     bottomBar = {
                         PrimaryBottomBar(
                             selectedTab = AppTab.STATS,
+                            navigatePrimary = ::navigatePrimary
+                        )
+                    }
+                )
+            }
+            composable("audiobooks") {
+                AudiobooksRoute(
+                    container = container,
+                    openReaderAt = { bookId -> navController.navigate("reader/$bookId") },
+                    bottomBar = {
+                        PrimaryBottomBar(
+                            selectedTab = AppTab.AUDIO,
                             navigatePrimary = ::navigatePrimary
                         )
                     }
@@ -159,6 +172,7 @@ private fun PrimaryBottomBar(
         selectedTab = selectedTab,
         openLibrary = { navigatePrimary("library") },
         openAnalytics = { navigatePrimary("analytics") },
+        openAudiobooks = { navigatePrimary("audiobooks") },
         openNotes = { navigatePrimary("notes") },
         openSettings = { navigatePrimary("settings") }
     )

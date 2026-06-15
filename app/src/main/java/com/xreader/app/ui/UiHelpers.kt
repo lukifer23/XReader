@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.QueryStats
 import androidx.compose.material.icons.filled.Search
@@ -79,6 +80,7 @@ internal fun AppBottomBar(
     selectedTab: AppTab,
     openLibrary: () -> Unit,
     openAnalytics: () -> Unit,
+    openAudiobooks: () -> Unit,
     openNotes: () -> Unit,
     openSettings: () -> Unit,
 ) {
@@ -94,6 +96,12 @@ internal fun AppBottomBar(
             onClick = openAnalytics,
             icon = { Icon(Icons.Filled.QueryStats, contentDescription = null) },
             label = { Text("Stats") }
+        )
+        NavigationBarItem(
+            selected = selectedTab == AppTab.AUDIO,
+            onClick = openAudiobooks,
+            icon = { Icon(Icons.Filled.GraphicEq, contentDescription = null) },
+            label = { Text("Audio") }
         )
         NavigationBarItem(
             selected = selectedTab == AppTab.NOTES,
@@ -113,6 +121,7 @@ internal fun AppBottomBar(
 internal enum class AppTab {
     LIBRARY,
     STATS,
+    AUDIO,
     NOTES,
     SETTINGS,
 }

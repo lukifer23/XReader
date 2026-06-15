@@ -163,6 +163,7 @@
         <service
             android:name=".tts.AudiobookGenerationForegroundService"
             android:exported="false"
+            android:process=":audiobook_generation"
             android:foregroundServiceType="dataSync" />
     </application>
 </manifest>

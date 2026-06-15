@@ -50,7 +50,14 @@ class NeuralTtsRepository(
     fun observeBookAudio(bookId: Long): Flow<List<BookAudioEntity>> =
         dao.observeBookAudio(bookId).onEach { rows ->
             rows.forEach { audio ->
-                repairCompletedGeneratingAudio(audio, reconcileIncomplete = false)
+                repairBookAudioFilesystemState(audio)
+            }
+        }
+
+    fun observeAllBookAudio(): Flow<List<BookAudioEntity>> =
+        dao.observeAllBookAudio().onEach { rows ->
+            rows.forEach { audio ->
+                repairBookAudioFilesystemState(audio)
             }
         }
 
@@ -61,11 +68,35 @@ class NeuralTtsRepository(
         pace: NeuralTtsPace = NeuralTtsPace.STANDARD,
         tone: NeuralTtsTone = NeuralTtsTone.NATURAL,
     ): BookAudioEntity? = withContext(Dispatchers.IO) {
-        dao.bookAudio(bookId, modelId, speakerId, pace.speed, tone.name)?.let {
-            repairCompletedGeneratingAudio(it, reconcileIncomplete = false)
+        dao.bookAudio(bookId, modelId, speakerId, pace.speed, tone.name, AudiobookGenerationScope.FULL_BOOK.key)?.let {
+            repairBookAudioFilesystemState(it)
         }
-        dao.generatedBookAudio(bookId, modelId, speakerId, pace.speed, tone.name)
-            ?.takeIf { it.filePath?.let { path -> File(path).isDirectory } == true }
+        dao.generatedBookAudio(bookId, modelId, speakerId, pace.speed, tone.name, AudiobookGenerationScope.FULL_BOOK.key)
+            ?.takeIf { it.hasCompletePlayableAudiobook() }
+    }
+
+    suspend fun bestPlayableBookAudio(
+        bookId: Long,
+        modelId: String,
+        speakerId: Int = 0,
+        pace: NeuralTtsPace = NeuralTtsPace.STANDARD,
+        tone: NeuralTtsTone = NeuralTtsTone.NATURAL,
+    ): BookAudioEntity? = withContext(Dispatchers.IO) {
+        dao.bookAudioForBook(bookId)
+            .filter { audio ->
+                audio.modelId == modelId &&
+                    audio.speakerId == speakerId &&
+                    kotlin.math.abs(audio.speed - pace.speed) < 0.001f &&
+                    audio.tone == tone.name
+            }
+            .onEach { repairBookAudioFilesystemState(it) }
+            .mapNotNull { dao.bookAudioById(it.id) }
+            .bestPlayableAudiobookForProfile(
+                modelId = modelId,
+                speakerId = speakerId,
+                speed = pace.speed,
+                tone = tone.name
+            )
     }
 
     suspend fun exportBookAudio(audioId: Long, uri: Uri): BookAudioEntity =
@@ -73,15 +104,24 @@ class NeuralTtsRepository(
             val audio = requireNotNull(dao.bookAudioById(audioId)) {
                 "Generated audiobook audio is no longer available."
             }
-            require(audio.status == BookAudioStatus.GENERATED) { "Generate this audiobook before saving it." }
-            exportAudio(audio, uri)
-            audio
+            repairBookAudioFilesystemState(audio)
+            val current = requireNotNull(dao.bookAudioById(audioId)) {
+                "Generated audiobook audio is no longer available."
+            }
+            require(current.playableSegmentFiles().isNotEmpty()) {
+                "Generated audiobook files are missing. Regenerate this audio."
+            }
+            exportAudio(current, uri)
+            current
         }
 
     suspend fun deleteBookAudio(audioId: Long): BookAudioEntity =
         withContext(Dispatchers.IO) {
             val audio = requireNotNull(dao.bookAudioById(audioId)) {
                 "Generated audiobook audio is no longer available."
+            }
+            require(audio.canDeleteGeneratedAudiobook()) {
+                "Stop audiobook generation before deleting this audio."
             }
             dao.deleteBookAudio(audioId)
             deleteGeneratedAudiobookFiles(audio)
@@ -91,6 +131,9 @@ class NeuralTtsRepository(
     suspend fun deleteBookAudioForBook(bookId: Long): List<BookAudioEntity> =
         withContext(Dispatchers.IO) {
             val audio = dao.bookAudioForBook(bookId)
+            require(audio.none { !it.canDeleteGeneratedAudiobook() }) {
+                "Stop audiobook generation before deleting generated audio."
+            }
             dao.deleteBookAudioForBook(bookId)
             audio.forEach { deleteGeneratedAudiobookFiles(it) }
             audio
@@ -144,6 +187,34 @@ class NeuralTtsRepository(
                 generatedAt = audio.generatedAt ?: now,
                 updatedAt = now,
                 error = null
+            )
+        )
+    }
+
+    private suspend fun repairBookAudioFilesystemState(audio: BookAudioEntity) = withContext(Dispatchers.IO) {
+        repairCompletedGeneratingAudio(
+            audio = audio,
+            reconcileIncomplete = audio.updatedAt < clock.millis() - STALE_GENERATING_AUDIO_REPAIR_AGE_MS
+        )
+        if (audio.status == BookAudioStatus.GENERATING) return@withContext
+        val expectedPlayable = audio.playableSegmentCount()
+        if (expectedPlayable <= 0) return@withContext
+        val verifiedPlayable = audio.playableSegmentFiles().size
+        if (verifiedPlayable == expectedPlayable) return@withContext
+        val now = clock.millis()
+        dao.upsertBookAudio(
+            audio.copy(
+                status = if (verifiedPlayable > 0) BookAudioStatus.CANCELED else BookAudioStatus.FAILED,
+                completedSegments = verifiedPlayable,
+                fileSizeBytes = audio.filePath?.let(::File)
+                    ?.takeIf { it.isDirectory }
+                    ?.walkTopDown()
+                    ?.filter { it.isFile }
+                    ?.sumOf { it.length() }
+                    ?: 0L,
+                generatedAt = if (verifiedPlayable > 0) audio.generatedAt else null,
+                updatedAt = now,
+                error = if (verifiedPlayable > 0) null else "Generated audio files are missing. Start generation again."
             )
         )
     }
@@ -334,19 +405,20 @@ class NeuralTtsRepository(
         speakerId: Int = 0,
         pace: NeuralTtsPace = NeuralTtsPace.STANDARD,
         tone: NeuralTtsTone = NeuralTtsTone.NATURAL,
+        scope: AudiobookGenerationScope = AudiobookGenerationScope.FULL_BOOK,
     ): BookAudioEntity = withContext(Dispatchers.IO) {
         val spec = NeuralTtsModelCatalog.requireModel(modelId)
         val model = dao.model(modelId)
         require(model?.status == NeuralTtsModelStatus.INSTALLED && !model.localPath.isNullOrBlank()) {
             "Download the neural voice before generating audiobook audio."
         }
-        val prepared = NeuralTtsText.prepare(chunks)
+        val prepared = NeuralTtsText.prepare(chunks.forAudiobookScope(scope)).forScope(scope)
         require(prepared.segments.isNotEmpty()) { "This book has no extractable text for audiobook generation." }
 
         val speed = pace.speed
-        val target = audioDirectory(bookId, modelId, speakerId, pace, tone)
-        val existing = dao.bookAudio(bookId, modelId, speakerId, speed, tone.name)
-        if (existing?.status == BookAudioStatus.GENERATED && existing.filePath?.let { File(it).isDirectory } == true) {
+        val target = audioDirectory(bookId, modelId, speakerId, pace, tone, scope)
+        val existing = dao.bookAudio(bookId, modelId, speakerId, speed, tone.name, scope.key)
+        if (existing?.hasCompletePlayableAudiobook() == true) {
             return@withContext existing
         }
         val canResumeExistingAudio = existing.canResumeGeneration(
@@ -367,22 +439,27 @@ class NeuralTtsRepository(
                 speakerId = speakerId,
                 speed = speed,
                 tone = tone.name,
+                scope = scope.key,
+                scopeLabel = scope.label,
                 status = BookAudioStatus.GENERATING,
                 generationStartedAt = now,
                 updatedAt = now
             )).copy(
             status = BookAudioStatus.GENERATING,
             modelDisplayName = spec.displayName,
+            scope = scope.key,
+            scopeLabel = scope.label,
             filePath = target.absolutePath,
             segmentCount = prepared.segments.size,
             completedSegments = reusableSegments,
             wordCount = prepared.wordCount,
             generationStartedAt = now,
+            generationSessionStartCompletedSegments = reusableSegments,
             updatedAt = now,
             error = null
         )
         dao.upsertBookAudio(generating)
-        val activeAudio = requireNotNull(dao.bookAudio(bookId, modelId, speakerId, speed, tone.name)) {
+        val activeAudio = requireNotNull(dao.bookAudio(bookId, modelId, speakerId, speed, tone.name, scope.key)) {
             "Could not create audiobook generation record."
         }
         writeAudiobookManifest(
@@ -392,12 +469,17 @@ class NeuralTtsRepository(
             provider = null,
             pace = pace,
             tone = tone,
+            scope = scope,
             segmentCount = prepared.segments.size,
             completedSegments = reusableSegments,
             wordCount = prepared.wordCount,
             sampleRate = null,
             status = BookAudioStatus.GENERATING,
             error = null
+        )
+        writeAudiobookStructure(
+            target = target,
+            prepared = prepared
         )
 
         var completedSegments = reusableSegments
@@ -407,27 +489,50 @@ class NeuralTtsRepository(
             if (!canResumeExistingAudio && target.exists()) target.deleteRecursively()
             target.mkdirs()
             val modelDir = requireNotNull(model.localPath)
-            val tts = createOfflineTts(spec, modelDir, tone)
-            activeProvider = tts.provider
-            writeAudiobookManifest(
-                target = target,
-                title = bookTitle,
-                spec = spec,
-                provider = tts.provider,
-                pace = pace,
-                tone = tone,
-                segmentCount = prepared.segments.size,
-                completedSegments = completedSegments,
-                wordCount = prepared.wordCount,
-                sampleRate = null,
-                status = BookAudioStatus.GENERATING,
-                error = null
-            )
+            var runtime: TtsRuntime? = null
+            var segmentsOnRuntime = 0
             try {
                 var sampleRate = spec.sampleRate
                 prepared.segments.forEachIndexed { index, segment ->
                     currentCoroutineContext().ensureActive()
                     if (index < reusableSegments) return@forEachIndexed
+                    if (runtime == null || runtime.shouldRotateAfter(segmentsOnRuntime)) {
+                        runtime?.engine?.release()
+                        runtime = createOfflineTts(
+                            spec = spec,
+                            modelDir = modelDir,
+                            tone = tone,
+                            includeExperimentalWebGpu = true
+                        )
+                        segmentsOnRuntime = 0
+                        activeProvider = runtime.provider
+                        writeAudiobookManifest(
+                            target = target,
+                            title = bookTitle,
+                            spec = spec,
+                            provider = activeProvider,
+                            pace = pace,
+                            tone = tone,
+                            scope = scope,
+                            segmentCount = prepared.segments.size,
+                            completedSegments = completedSegments,
+                            wordCount = prepared.wordCount,
+                            sampleRate = activeSampleRate,
+                            status = BookAudioStatus.GENERATING,
+                            error = null
+                        )
+                    }
+                    val tts = requireNotNull(runtime)
+                    dao.updateBookAudioProgress(
+                        bookId = bookId,
+                        modelId = modelId,
+                        speakerId = speakerId,
+                        speed = speed,
+                        tone = tone.name,
+                        scope = scope.key,
+                        completedSegments = completedSegments,
+                        updatedAt = clock.millis()
+                    )
                     val generated = tts.engine.generateWithConfig(
                         text = segment,
                         config = generationConfig(speakerId, pace, tone)
@@ -438,12 +543,14 @@ class NeuralTtsRepository(
                     val file = File(target, generatedAudiobookSegmentFileName(index))
                     require(generated.save(file.absolutePath)) { "Could not save generated segment ${index + 1}." }
                     completedSegments = index + 1
+                    segmentsOnRuntime += 1
                     dao.updateBookAudioProgress(
                         bookId = bookId,
                         modelId = modelId,
                         speakerId = speakerId,
                         speed = speed,
                         tone = tone.name,
+                        scope = scope.key,
                         completedSegments = completedSegments,
                         updatedAt = clock.millis()
                     )
@@ -454,6 +561,7 @@ class NeuralTtsRepository(
                         provider = tts.provider,
                         pace = pace,
                         tone = tone,
+                        scope = scope,
                         segmentCount = prepared.segments.size,
                         completedSegments = completedSegments,
                         wordCount = prepared.wordCount,
@@ -466,9 +574,10 @@ class NeuralTtsRepository(
                     target = target,
                     title = bookTitle,
                     spec = spec,
-                    provider = tts.provider,
+                    provider = activeProvider,
                     pace = pace,
                     tone = tone,
+                    scope = scope,
                     segmentCount = prepared.segments.size,
                     completedSegments = prepared.segments.size,
                     wordCount = prepared.wordCount,
@@ -479,6 +588,8 @@ class NeuralTtsRepository(
                 activeAudio.copy(
                     status = BookAudioStatus.GENERATED,
                     filePath = target.absolutePath,
+                    scope = scope.key,
+                    scopeLabel = scope.label,
                     segmentCount = prepared.segments.size,
                     completedSegments = prepared.segments.size,
                     wordCount = prepared.wordCount,
@@ -491,7 +602,7 @@ class NeuralTtsRepository(
                     error = null
                 )
             } finally {
-                tts.engine.release()
+                runtime?.engine?.release()
             }
         }.fold(
             onSuccess = { result ->
@@ -503,9 +614,13 @@ class NeuralTtsRepository(
                     val canceled = activeAudio.copy(
                         status = BookAudioStatus.CANCELED,
                         filePath = target.absolutePath,
+                        scope = scope.key,
+                        scopeLabel = scope.label,
                         segmentCount = prepared.segments.size,
                         completedSegments = completedSegments,
                         wordCount = prepared.wordCount,
+                        generationSessionStartCompletedSegments = reusableSegments,
+                        fileSizeBytes = target.takeIf { it.isDirectory }?.walkTopDown()?.filter { it.isFile }?.sumOf { it.length() } ?: 0L,
                         updatedAt = clock.millis(),
                         error = null
                     )
@@ -517,6 +632,7 @@ class NeuralTtsRepository(
                             provider = activeProvider,
                             pace = pace,
                             tone = tone,
+                            scope = scope,
                             segmentCount = prepared.segments.size,
                             completedSegments = completedSegments,
                             wordCount = prepared.wordCount,
@@ -531,9 +647,13 @@ class NeuralTtsRepository(
                 val failed = activeAudio.copy(
                     status = BookAudioStatus.FAILED,
                     filePath = target.absolutePath,
+                    scope = scope.key,
+                    scopeLabel = scope.label,
                     segmentCount = prepared.segments.size,
                     completedSegments = completedSegments,
                     wordCount = prepared.wordCount,
+                    generationSessionStartCompletedSegments = reusableSegments,
+                    fileSizeBytes = target.takeIf { it.isDirectory }?.walkTopDown()?.filter { it.isFile }?.sumOf { it.length() } ?: 0L,
                     updatedAt = clock.millis(),
                     error = error.message ?: "Neural audiobook generation failed for $bookTitle"
                 )
@@ -544,6 +664,7 @@ class NeuralTtsRepository(
                     provider = activeProvider,
                     pace = pace,
                     tone = tone,
+                    scope = scope,
                     segmentCount = prepared.segments.size,
                     completedSegments = completedSegments,
                     wordCount = prepared.wordCount,
@@ -571,7 +692,12 @@ class NeuralTtsRepository(
         previewRoot.mkdirs()
         val output = File(previewRoot, "${modelId}-s$speakerId-${pace.name.lowercase()}-${tone.name.lowercase()}.wav")
         val modelDir = requireNotNull(model.localPath)
-        val tts = createOfflineTts(spec, modelDir, tone)
+        val tts = createOfflineTts(
+            spec = spec,
+            modelDir = modelDir,
+            tone = tone,
+            includeExperimentalWebGpu = false
+        )
         try {
             val generated = tts.engine.generateWithConfig(
                 text = PREVIEW_TEXT,
@@ -674,30 +800,42 @@ class NeuralTtsRepository(
         speakerId: Int,
         pace: NeuralTtsPace,
         tone: NeuralTtsTone,
+        scope: AudiobookGenerationScope,
     ): File {
         val safeSpeed = "%.2f".format(java.util.Locale.US, pace.speed)
-        return File(audioRoot, "book-$bookId/$modelId-s$speakerId-v$safeSpeed-${tone.name.lowercase()}")
+        return File(audioRoot, "book-$bookId/$modelId-s$speakerId-v$safeSpeed-${tone.name.lowercase()}-${scope.key.lowercase()}")
     }
 
     private fun exportAudio(audio: BookAudioEntity, uri: Uri) {
         val source = File(requireNotNull(audio.filePath) { "Generated audio files are missing." })
         require(source.isDirectory) { "Generated audio files are missing." }
+        val segments = audio.playableSegmentFiles()
+        require(segments.isNotEmpty()) { "Generated audio segments are missing." }
         val output = requireNotNull(appContext.contentResolver.openOutputStream(uri)) {
             "Could not open output file."
         }
         output.use { stream ->
             ZipOutputStream(stream).use { zip ->
-                source.walkTopDown()
-                    .filter { it.isFile }
-                    .sortedWith(
-                        compareBy<File> { it.name == "manifest.txt" }
-                            .thenBy { it.relativeTo(source).path }
-                    )
-                    .forEach { file ->
-                        zip.putNextEntry(ZipEntry(file.relativeTo(source).path))
-                        file.inputStream().use { input -> input.copyTo(zip) }
+                File(source, "manifest.txt")
+                    .takeIf { it.isFile }
+                    ?.let { manifest ->
+                        zip.putNextEntry(ZipEntry(manifest.name))
+                        manifest.inputStream().use { input -> input.copyTo(zip) }
                         zip.closeEntry()
                     }
+                listOf(CHAPTERS_FILE, SEGMENTS_FILE)
+                    .map { File(source, it) }
+                    .filter { it.isFile }
+                    .forEach { metadata ->
+                        zip.putNextEntry(ZipEntry(metadata.name))
+                        metadata.inputStream().use { input -> input.copyTo(zip) }
+                        zip.closeEntry()
+                    }
+                segments.forEach { file ->
+                    zip.putNextEntry(ZipEntry(file.name))
+                    file.inputStream().use { input -> input.copyTo(zip) }
+                    zip.closeEntry()
+                }
             }
         }
     }
@@ -709,6 +847,7 @@ class NeuralTtsRepository(
         provider: String?,
         pace: NeuralTtsPace,
         tone: NeuralTtsTone,
+        scope: AudiobookGenerationScope,
         segmentCount: Int,
         completedSegments: Int,
         wordCount: Int,
@@ -724,6 +863,7 @@ class NeuralTtsRepository(
             appendLine("gender=${spec.gender.label}")
             appendLine("tone=${tone.label}")
             appendLine("pace=${pace.label}")
+            appendLine("scope=${scope.label}")
             appendLine("status=${status.name.lowercase()}")
             appendLine("segments=$segmentCount")
             appendLine("completed=$completedSegments")
@@ -739,8 +879,53 @@ class NeuralTtsRepository(
         }
     }
 
-    private fun createOfflineTts(spec: NeuralTtsModelSpec, modelDir: String, tone: NeuralTtsTone): TtsRuntime {
-        val providers = TtsAccelerationRuntime.providerOrder(appContext)
+    private fun writeAudiobookStructure(
+        target: File,
+        prepared: NeuralTtsPreparedBook,
+    ) {
+        target.mkdirs()
+        File(target, CHAPTERS_FILE).writeText(
+            buildString {
+                appendLine("index\tfirstSegment\tsegmentCount\ttitle")
+                prepared.chapters.forEach { chapter ->
+                    appendLine(
+                        listOf(
+                            chapter.index.toString(),
+                            chapter.firstSegmentIndex.toString(),
+                            chapter.segmentCount.toString(),
+                            chapter.title.tsvEscaped()
+                        ).joinToString("\t")
+                    )
+                }
+            }
+        )
+        File(target, SEGMENTS_FILE).writeText(
+            buildString {
+                appendLine("index\tchapterIndex\tpauseAfterMs\ttext")
+                prepared.segments.forEachIndexed { index, segment ->
+                    appendLine(
+                        listOf(
+                            index.toString(),
+                            prepared.segmentChapterIndexes.getOrElse(index) { 0 }.toString(),
+                            prepared.segmentPauseMillis.getOrElse(index) { DEFAULT_AUDIOBOOK_SEGMENT_PAUSE_MS }.toString(),
+                            segment.tsvEscaped()
+                        ).joinToString("\t")
+                    )
+                }
+            }
+        )
+    }
+
+    private fun createOfflineTts(
+        spec: NeuralTtsModelSpec,
+        modelDir: String,
+        tone: NeuralTtsTone,
+        includeExperimentalWebGpu: Boolean,
+    ): TtsRuntime {
+        val providers = TtsAccelerationRuntime.providerOrder(
+            context = appContext,
+            includeExperimentalWebGpu = includeExperimentalWebGpu
+        )
         var lastError: Throwable? = null
         providers.forEach { provider ->
             runCatching {
@@ -790,12 +975,7 @@ class NeuralTtsRepository(
         speakerId: Int,
         pace: NeuralTtsPace,
         tone: NeuralTtsTone,
-    ): GenerationConfig =
-        GenerationConfig(
-            sid = speakerId,
-            speed = pace.speed.coerceIn(0.75f, 1.35f),
-            silenceScale = tone.silenceScale,
-        )
+    ): GenerationConfig = neuralTtsGenerationConfig(speakerId, pace, tone)
 
     private fun sha256(file: File): String {
         val digest = MessageDigest.getInstance("SHA-256")
@@ -812,10 +992,12 @@ class NeuralTtsRepository(
 
     private companion object {
         const val DOWNLOAD_PROGRESS_STEP_BYTES = 1_048_576L
-        const val STALE_GENERATING_AUDIO_REPAIR_AGE_MS = 30 * 60 * 1000L
+        const val STALE_GENERATING_AUDIO_REPAIR_AGE_MS = 60 * 1000L
         const val PREVIEW_TEXT = "This is XReader's local neural voice preview, generated privately on this device."
         const val FINAL_MANIFEST = "manifest.txt"
         const val IN_PROGRESS_MANIFEST = "manifest.in-progress.txt"
+        const val CHAPTERS_FILE = "chapters.tsv"
+        const val SEGMENTS_FILE = "segments.tsv"
     }
 }
 
@@ -823,6 +1005,20 @@ private data class TtsRuntime(
     val engine: OfflineTts,
     val provider: String,
 )
+
+internal fun neuralTtsGenerationConfig(
+    speakerId: Int,
+    pace: NeuralTtsPace,
+    tone: NeuralTtsTone,
+): GenerationConfig =
+    GenerationConfig(
+        sid = speakerId,
+        speed = pace.speed.coerceIn(0.75f, 1.35f),
+        silenceScale = tone.silenceScale,
+    )
+
+private fun TtsRuntime.shouldRotateAfter(generatedSegments: Int): Boolean =
+    provider == "webgpu" && generatedSegments >= WEBGPU_SEGMENTS_PER_RUNTIME
 
 private fun BookAudioEntity?.canResumeGeneration(
     target: File,
@@ -836,6 +1032,12 @@ private fun BookAudioEntity?.canResumeGeneration(
     if (this.wordCount != wordCount) return false
     return target.isDirectory
 }
+
+internal fun String.tsvEscaped(): String =
+    replace("\\", "\\\\")
+        .replace("\t", "\\t")
+        .replace("\r", "\\r")
+        .replace("\n", "\\n")
 
 internal fun reusableGeneratedAudiobookSegments(directory: File, expectedSegments: Int): Int {
     if (expectedSegments <= 0 || !directory.isDirectory) return 0
@@ -861,4 +1063,4 @@ internal fun deleteGeneratedAudiobookFiles(audio: BookAudioEntity): Boolean {
     }
 }
 
-private const val WAV_HEADER_BYTES = 44L
+private const val WEBGPU_SEGMENTS_PER_RUNTIME = 32

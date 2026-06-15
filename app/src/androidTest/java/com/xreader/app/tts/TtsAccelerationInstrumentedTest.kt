@@ -28,7 +28,10 @@ class TtsAccelerationInstrumentedTest {
         assumeTrue("Kokoro model must be installed on this device.", File(modelDir, spec.modelFile).isFile)
 
         val requestedProvider = InstrumentationRegistry.getArguments().getString("xreader.tts.provider")
-        val providers = TtsAccelerationRuntime.providerOrder(context)
+        val providers = TtsAccelerationRuntime.providerOrder(
+            context = context,
+            includeExperimentalWebGpu = true
+        )
         val provider = requestedProvider ?: providers.first()
         assertTrue(provider in providers || requestedProvider != null)
 

@@ -256,6 +256,9 @@ interface NeuralTtsDao {
     @Query("SELECT * FROM book_audio WHERE bookId = :bookId ORDER BY updatedAt DESC")
     fun observeBookAudio(bookId: Long): Flow<List<BookAudioEntity>>
 
+    @Query("SELECT * FROM book_audio ORDER BY updatedAt DESC")
+    fun observeAllBookAudio(): Flow<List<BookAudioEntity>>
+
     @Query("SELECT * FROM book_audio WHERE bookId = :bookId")
     suspend fun bookAudioForBook(bookId: Long): List<BookAudioEntity>
 
@@ -274,21 +277,21 @@ interface NeuralTtsDao {
     @Query(
         """
         SELECT * FROM book_audio
-        WHERE bookId = :bookId AND modelId = :modelId AND speakerId = :speakerId AND speed = :speed AND tone = :tone
+        WHERE bookId = :bookId AND modelId = :modelId AND speakerId = :speakerId AND speed = :speed AND tone = :tone AND scope = :scope
         LIMIT 1
         """
     )
-    suspend fun bookAudio(bookId: Long, modelId: String, speakerId: Int, speed: Float, tone: String): BookAudioEntity?
+    suspend fun bookAudio(bookId: Long, modelId: String, speakerId: Int, speed: Float, tone: String, scope: String): BookAudioEntity?
 
     @Query(
         """
         SELECT * FROM book_audio
-        WHERE bookId = :bookId AND modelId = :modelId AND speakerId = :speakerId AND speed = :speed AND tone = :tone
+        WHERE bookId = :bookId AND modelId = :modelId AND speakerId = :speakerId AND speed = :speed AND tone = :tone AND scope = :scope
             AND status = 'GENERATED'
         LIMIT 1
         """
     )
-    suspend fun generatedBookAudio(bookId: Long, modelId: String, speakerId: Int, speed: Float, tone: String): BookAudioEntity?
+    suspend fun generatedBookAudio(bookId: Long, modelId: String, speakerId: Int, speed: Float, tone: String, scope: String): BookAudioEntity?
 
     @Upsert
     suspend fun upsertBookAudio(audio: BookAudioEntity)
@@ -297,7 +300,7 @@ interface NeuralTtsDao {
         """
         UPDATE book_audio
         SET completedSegments = :completedSegments, updatedAt = :updatedAt
-        WHERE bookId = :bookId AND modelId = :modelId AND speakerId = :speakerId AND speed = :speed AND tone = :tone
+        WHERE bookId = :bookId AND modelId = :modelId AND speakerId = :speakerId AND speed = :speed AND tone = :tone AND scope = :scope
         """
     )
     suspend fun updateBookAudioProgress(
@@ -306,6 +309,7 @@ interface NeuralTtsDao {
         speakerId: Int,
         speed: Float,
         tone: String,
+        scope: String,
         completedSegments: Int,
         updatedAt: Long,
     )

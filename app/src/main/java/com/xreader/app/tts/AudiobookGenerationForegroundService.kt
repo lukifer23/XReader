@@ -26,6 +26,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -42,6 +43,7 @@ class AudiobookGenerationForegroundService : Service() {
     private var activeSpeakerId: Int = 0
     private var activePace: NeuralTtsPace = NeuralTtsPace.STANDARD
     private var activeTone: NeuralTtsTone = NeuralTtsTone.NATURAL
+    private var activeScope: AudiobookGenerationScope = AudiobookGenerationScope.FULL_BOOK
 
     override fun onCreate() {
         super.onCreate()
@@ -83,6 +85,7 @@ class AudiobookGenerationForegroundService : Service() {
             ?: NeuralTtsPace.STANDARD
         activeTone = intent.getStringExtra(EXTRA_TONE)?.let { runCatching { NeuralTtsTone.valueOf(it) }.getOrNull() }
             ?: NeuralTtsTone.NATURAL
+        activeScope = AudiobookGenerationScope.fromKey(intent.getStringExtra(EXTRA_SCOPE))
         updateNotification(buildNotification(title = activeTitle, audio = null, preparing = true))
         progressJob?.cancel()
         progressJob = serviceScope.launch {
@@ -106,7 +109,8 @@ class AudiobookGenerationForegroundService : Service() {
                     modelId = activeModelId,
                     speakerId = activeSpeakerId,
                     pace = activePace,
-                    tone = activeTone
+                    tone = activeTone,
+                    scope = activeScope
                 )
             }.onFailure { error ->
                 if (error !is CancellationException) {
@@ -118,18 +122,29 @@ class AudiobookGenerationForegroundService : Service() {
     }
 
     private fun cancelGeneration() {
-        generationJob?.cancel()
+        val job = generationJob
         generationJob = null
-        progressJob?.cancel()
-        progressJob = null
-        stopForegroundAndSelf(removeNotification = true)
+        if (job == null) {
+            progressJob?.cancel()
+            progressJob = null
+            stopForegroundAndSelf(removeNotification = true)
+            return
+        }
+        updateNotification(buildNotification(title = activeTitle, audio = null, preparing = true, canceling = true))
+        serviceScope.launch {
+            job.cancelAndJoin()
+            progressJob?.cancel()
+            progressJob = null
+            stopForegroundAndSelf(removeNotification = true)
+        }
     }
 
     private fun BookAudioEntity.matchesActiveProfile(): Boolean =
         modelId == activeModelId &&
             speakerId == activeSpeakerId &&
             kotlin.math.abs(speed - activePace.speed) < 0.001f &&
-            tone == activeTone.name
+            tone == activeTone.name &&
+            scope == activeScope.key
 
     private fun startForegroundIfNeeded(notification: Notification) {
         if (foregroundStarted) return
@@ -166,11 +181,12 @@ class AudiobookGenerationForegroundService : Service() {
         audio: BookAudioEntity?,
         preparing: Boolean,
         alreadyRunning: Boolean = false,
+        canceling: Boolean = false,
     ): Notification =
         Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_monochrome)
             .setContentTitle(title.takeIf { it.isNotBlank() } ?: "XReader audiobook")
-            .setContentText(audiobookGenerationStatusText(audio, preparing, alreadyRunning))
+            .setContentText(audiobookGenerationStatusText(audio, preparing, alreadyRunning, canceling))
             .setSubText(audiobookGenerationProgressText(audio))
             .setContentIntent(openAppIntent())
             .setDeleteIntent(serviceIntent(ACTION_CANCEL, REQUEST_CANCEL))
@@ -202,7 +218,7 @@ class AudiobookGenerationForegroundService : Service() {
 
     private fun ensureNotificationChannel() {
         val channel = NotificationChannel(CHANNEL_ID, "Audiobook generation", NotificationManager.IMPORTANCE_LOW).apply {
-            description = "Full-book neural audiobook generation"
+            description = "Neural audiobook generation"
             setShowBadge(false)
         }
         notificationManager.createNotificationChannel(channel)
@@ -221,6 +237,7 @@ class AudiobookGenerationForegroundService : Service() {
         private const val EXTRA_SPEAKER_ID = "speaker_id"
         private const val EXTRA_PACE = "pace"
         private const val EXTRA_TONE = "tone"
+        private const val EXTRA_SCOPE = "scope"
         private const val REQUEST_OPEN_APP = 42_510
         private const val REQUEST_CANCEL = 42_511
 
@@ -231,6 +248,7 @@ class AudiobookGenerationForegroundService : Service() {
             speakerId: Int = 0,
             pace: NeuralTtsPace,
             tone: NeuralTtsTone,
+            scope: AudiobookGenerationScope = AudiobookGenerationScope.FULL_BOOK,
         ) {
             val intent = Intent(context.applicationContext, AudiobookGenerationForegroundService::class.java)
                 .setAction(ACTION_START)
@@ -239,6 +257,7 @@ class AudiobookGenerationForegroundService : Service() {
                 .putExtra(EXTRA_SPEAKER_ID, speakerId.coerceAtLeast(0))
                 .putExtra(EXTRA_PACE, pace.name)
                 .putExtra(EXTRA_TONE, tone.name)
+                .putExtra(EXTRA_SCOPE, scope.key)
             androidx.core.content.ContextCompat.startForegroundService(context.applicationContext, intent)
         }
 
@@ -254,8 +273,10 @@ internal fun audiobookGenerationStatusText(
     audio: BookAudioEntity?,
     preparing: Boolean,
     alreadyRunning: Boolean = false,
+    canceling: Boolean = false,
 ): String =
     when {
+        canceling -> "Stopping audiobook generation"
         alreadyRunning -> "Another audiobook is already generating"
         audio?.status == BookAudioStatus.GENERATING -> "Generating neural audiobook"
         audio?.status == BookAudioStatus.GENERATED -> "Audiobook ready"
@@ -278,10 +299,13 @@ internal fun BookAudioEntity.generationEtaLabel(nowMillis: Long = System.current
     val total = segmentCount.takeIf { it > 0 } ?: return null
     val completed = completedSegments.coerceIn(0, total)
     if (completed <= 0 || completed >= total) return null
+    val sessionStartCompleted = generationSessionStartCompletedSegments.coerceIn(0, completed)
+    val sessionCompleted = completed - sessionStartCompleted
+    if (sessionCompleted <= 0) return null
     val startedAt = generationStartedAt ?: return null
     val elapsed = (nowMillis - startedAt).coerceAtLeast(0L)
     if (elapsed < 5_000L) return null
-    val millisPerSegment = elapsed.toDouble() / completed.toDouble()
+    val millisPerSegment = elapsed.toDouble() / sessionCompleted.toDouble()
     val remainingMillis = ((total - completed) * millisPerSegment).toLong().coerceAtLeast(0L)
     return "${formatGenerationDuration(remainingMillis)} left"
 }
