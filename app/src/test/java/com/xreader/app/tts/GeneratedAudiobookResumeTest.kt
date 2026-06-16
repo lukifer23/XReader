@@ -151,6 +151,18 @@ class GeneratedAudiobookResumeTest {
     }
 
     @Test
+    fun persistedPlaybackPositionClearsWhenNoVerifiedSegmentsExist() {
+        assertEquals(
+            GeneratedAudiobookPersistedPlaybackPosition(segmentIndex = 0, positionMs = 0),
+            generatedAudiobookPersistedPlaybackPosition(
+                requestedSegmentIndex = 4,
+                positionMs = 12_000,
+                segmentCount = 0
+            )
+        )
+    }
+
+    @Test
     fun playableSegmentFilesReturnsOnlyVerifiedContiguousSegments() {
         val dir = temporaryFolder.newFolder()
         writeSegment(dir, index = 0)

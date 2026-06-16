@@ -141,10 +141,18 @@ class NeuralTtsRepository(
 
     suspend fun updateBookAudioPlayback(audioId: Long, segmentIndex: Int, positionMs: Int) {
         withContext(Dispatchers.IO) {
+            val audio = dao.bookAudioById(audioId) ?: return@withContext
+            repairBookAudioFilesystemState(audio)
+            val current = dao.bookAudioById(audioId) ?: return@withContext
+            val position = generatedAudiobookPersistedPlaybackPosition(
+                requestedSegmentIndex = segmentIndex,
+                positionMs = positionMs,
+                segmentCount = current.playableSegmentFiles().size
+            )
             dao.updateBookAudioPlayback(
                 id = audioId,
-                segmentIndex = segmentIndex.coerceAtLeast(0),
-                positionMs = positionMs.coerceAtLeast(0)
+                segmentIndex = position.segmentIndex,
+                positionMs = position.positionMs
             )
         }
     }
