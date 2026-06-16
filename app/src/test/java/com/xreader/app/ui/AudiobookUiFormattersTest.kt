@@ -170,10 +170,12 @@ class AudiobookUiFormattersTest {
 
         assertEquals("Play partial", audiobookPlaybackActionLabel(active = false, playback = AudiobookPlaybackUiState(), audio = partialGenerating))
         assertEquals("Save partial", audiobookExportActionLabel(partialGenerating))
+        assertEquals("Saved partial generated audiobook audio.", audiobookExportSuccessMessage(partialGenerating))
         assertEquals("Play partial", audiobookPlaybackActionLabel(active = false, playback = AudiobookPlaybackUiState(), audio = partialStopped))
         assertEquals("Save partial", audiobookExportActionLabel(partialStopped))
         assertEquals("Play", audiobookPlaybackActionLabel(active = false, playback = AudiobookPlaybackUiState(), audio = generated))
         assertEquals("Save", audiobookExportActionLabel(generated))
+        assertEquals("Saved generated audiobook audio.", audiobookExportSuccessMessage(generated))
     }
 
     @Test
@@ -213,6 +215,50 @@ class AudiobookUiFormattersTest {
             "Play",
             audiobookPlaybackActionLabel(active = false, playback = AudiobookPlaybackUiState(), audio = finishedAudio)
         )
+        assertEquals("Resume 3 / 6", resumedAudio.audiobookResumeLabel())
+        assertEquals("resume 3 / 6", resumedAudio.audiobookResumeLabel(prefix = "resume"))
+        assertNull(finishedAudio.audiobookResumeLabel())
+    }
+
+    @Test
+    fun playbackIconLabelsUseSharedGeneratedAudioActions() {
+        val partial = audio(1).copy(
+            status = BookAudioStatus.CANCELED,
+            segmentCount = 6,
+            completedSegments = 2
+        )
+        val resumed = audio(2).copy(
+            segmentCount = 6,
+            playbackSegmentIndex = 2
+        )
+        val playing = AudiobookPlaybackUiState(audioId = partial.id, playing = true, segmentCount = 6)
+        val preparing = AudiobookPlaybackUiState(audioId = partial.id, preparing = true, segmentCount = 6)
+
+        assertEquals("Play partial generated audio", audiobookPlaybackIconLabel(active = false, playback = AudiobookPlaybackUiState(), audio = partial))
+        assertEquals("Resume generated audio", audiobookPlaybackIconLabel(active = false, playback = AudiobookPlaybackUiState(), audio = resumed))
+        assertEquals("Pause generated audio", audiobookPlaybackIconLabel(active = true, playback = playing, audio = partial))
+        assertEquals("Preparing generated audio", audiobookPlaybackIconLabel(active = true, playback = preparing, audio = partial))
+    }
+
+    @Test
+    fun generatedAudioActionEnablementRequiresPlayableAudioAndSafeState() {
+        val emptyGenerated = audio(1).copy(
+            status = BookAudioStatus.GENERATED,
+            segmentCount = 0,
+            completedSegments = 0
+        )
+        val playable = audio(2).copy(
+            status = BookAudioStatus.GENERATED,
+            segmentCount = 4,
+            completedSegments = 4
+        )
+        val preparing = AudiobookPlaybackUiState(audioId = playable.id, preparing = true, segmentCount = 4)
+
+        assertEquals(false, canPlayGeneratedAudiobookAction(active = false, playback = AudiobookPlaybackUiState(), audio = emptyGenerated))
+        assertEquals(false, canExportGeneratedAudiobookAction(emptyGenerated))
+        assertTrue(canPlayGeneratedAudiobookAction(active = false, playback = AudiobookPlaybackUiState(), audio = playable))
+        assertTrue(canExportGeneratedAudiobookAction(playable))
+        assertEquals(false, canPlayGeneratedAudiobookAction(active = true, playback = preparing, audio = playable))
     }
 
     @Test

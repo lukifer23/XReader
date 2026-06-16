@@ -462,6 +462,7 @@ class NeuralTtsRepository(
         val activeAudio = requireNotNull(dao.bookAudio(bookId, modelId, speakerId, speed, tone.name, scope.key)) {
             "Could not create audiobook generation record."
         }
+        prepareAudiobookGenerationTarget(target = target, canResumeExistingAudio = canResumeExistingAudio)
         writeAudiobookManifest(
             target = target,
             title = bookTitle,
@@ -486,8 +487,6 @@ class NeuralTtsRepository(
         var activeProvider: String? = null
         var activeSampleRate: Int? = null
         runCatching {
-            if (!canResumeExistingAudio && target.exists()) target.deleteRecursively()
-            target.mkdirs()
             val modelDir = requireNotNull(model.localPath)
             var runtime: TtsRuntime? = null
             var segmentsOnRuntime = 0
@@ -823,14 +822,21 @@ class NeuralTtsRepository(
                         manifest.inputStream().use { input -> input.copyTo(zip) }
                         zip.closeEntry()
                     }
-                listOf(CHAPTERS_FILE, SEGMENTS_FILE)
-                    .map { File(source, it) }
-                    .filter { it.isFile }
-                    .forEach { metadata ->
-                        zip.putNextEntry(ZipEntry(metadata.name))
-                        metadata.inputStream().use { input -> input.copyTo(zip) }
-                        zip.closeEntry()
-                    }
+                val chapters = audio.generatedAudiobookChapters()
+                val segmentChapterIndexes = audio.generatedAudiobookSegmentChapterIndexes(segments.size, chapters)
+                zip.putFileOrTextEntry(
+                    source = File(source, CHAPTERS_FILE),
+                    fallbackName = CHAPTERS_FILE,
+                    fallbackText = chapters.takeIf { it.isNotEmpty() }?.toGeneratedAudiobookChaptersTsv()
+                )
+                zip.putFileOrTextEntry(
+                    source = File(source, SEGMENTS_FILE),
+                    fallbackName = SEGMENTS_FILE,
+                    fallbackText = generatedAudiobookFallbackSegmentsTsv(
+                        segmentCount = segments.size,
+                        chapterIndexes = segmentChapterIndexes
+                    )
+                )
                 segments.forEach { file ->
                     zip.putNextEntry(ZipEntry(file.name))
                     file.inputStream().use { input -> input.copyTo(zip) }
@@ -838,6 +844,23 @@ class NeuralTtsRepository(
                 }
             }
         }
+    }
+
+    private fun ZipOutputStream.putFileOrTextEntry(
+        source: File,
+        fallbackName: String,
+        fallbackText: String?,
+    ) {
+        if (source.isFile) {
+            putNextEntry(ZipEntry(source.name))
+            source.inputStream().use { input -> input.copyTo(this) }
+            closeEntry()
+            return
+        }
+        if (fallbackText.isNullOrBlank()) return
+        putNextEntry(ZipEntry(fallbackName))
+        write(fallbackText.toByteArray(Charsets.UTF_8))
+        closeEntry()
     }
 
     private fun writeAudiobookManifest(
@@ -1019,6 +1042,13 @@ internal fun neuralTtsGenerationConfig(
 
 private fun TtsRuntime.shouldRotateAfter(generatedSegments: Int): Boolean =
     provider == "webgpu" && generatedSegments >= WEBGPU_SEGMENTS_PER_RUNTIME
+
+internal fun prepareAudiobookGenerationTarget(target: File, canResumeExistingAudio: Boolean) {
+    if (!canResumeExistingAudio && target.exists()) {
+        target.deleteRecursively()
+    }
+    target.mkdirs()
+}
 
 private fun BookAudioEntity?.canResumeGeneration(
     target: File,

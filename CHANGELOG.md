@@ -10,7 +10,14 @@
 ### Changed
 
 - Audiobook text preparation now uses anchored chapter detection, normalized chapter labels, shorter Kokoro-safe prompts, paragraph/question/chapter pause metadata, and prepared-chapter scoped first-chapter generation so scan estimates match generated output.
+- Audiobook text preparation now preserves extractor-provided numeric and roman numeral chapter headings while still dropping ordinary body page markers.
 - Generated audiobook sidecars are sanitized on read so stale, overlapping, out-of-range, or invalid chapter metadata cannot break playback navigation.
+- Generated audiobooks with missing or unreadable chapter sidecars now fall back to a single scope-labeled section when playable audio files exist, keeping older partial output identifiable in playback.
+- Generated audiobook ZIP export now includes safe fallback chapter and segment sidecars when older playable audio is missing metadata files.
+- Fresh audiobook generation now clears stale output before writing manifests and chapter/segment sidecars, preserving chapter navigation and cadence metadata for newly generated audio.
+- Generated audiobook playback now persists finished playback as an explicit completed position instead of falling back to the beginning after the final segment.
+- Generated audiobook resume, partial-play, and playback icon labels now use shared formatting across Library and Audiobooks surfaces.
+- Per-book generated-audio controls now share the same play/save/delete enablement rules as the global Audiobooks screen, avoiding invalid actions for empty or actively generating audio.
 - Partial generated audiobooks now label global Audiobooks actions as `Play partial` and `Save partial` so incomplete output is not presented like a finished full-book audiobook.
 - Full-book neural generation prefers WebGPU with isolated-process runtime rotation, then XNNPACK/CPU fallback; preview generation stays on XNNPACK/CPU for stability.
 

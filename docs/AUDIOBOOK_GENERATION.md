@@ -26,6 +26,7 @@ Audiobook generation uses the app's indexed reading-order text, then prepares au
 - splitting around sentence and clause boundaries
 - skipping obvious publisher/copyright front matter before an early Prologue/Chapter marker
 - detecting anchored chapter labels including numeric, roman numeral, `Chapter`, `Section`, `Episode`, `Prologue`, `Epilogue`, and word-number headings such as `ONE`/`TWO`
+- preserving extractor-provided bare numeric and roman numeral headings as chapter markers while continuing to drop body/footer page numbers from narration text
 - treating `Part` and `Book` headings as audiobook section labels while preserving them in generated audio and chapter navigation
 - normalizing bare chapter tokens such as `1`, `IV`, or `ONE` into user-facing labels such as `Chapter 1`, `Chapter IV`, or `Chapter One`
 - targeting roughly 560 characters per narration segment, with an 850-character hard cap for normal text and shorter prompts for heading-only passages
@@ -41,7 +42,11 @@ Generation scope is persisted per voice profile:
 - `FIRST_CHAPTER` is applied after audiobook text preparation, using the detected first prepared chapter's segment count so the scan estimate and generated output agree. It falls back to a 60-segment cap when chapter metadata is missing.
 - Stopped, failed, and actively generating rows with completed segments remain playable from their existing WAV files.
 - Retrying the same scope/profile resumes from the first missing segment instead of overwriting completed audio.
+- Fresh generation clears stale output before writing manifest, chapter, and segment metadata so the newly generated WAV files keep matching sidecars for chapter navigation and playback cadence.
 - Generated audio writes `chapters.tsv` and `segments.tsv`; playback sanitizes chapter sidecars against the playable segment count, ignores invalid segment chapter IDs, and falls back to sanitized chapter ranges when metadata is missing or stale.
+- Older generated audio whose chapter sidecar is missing or unreadable falls back to one scope-labeled playback section when verified WAV segments exist, so partial audio remains identifiable without inventing fake chapter boundaries.
+- ZIP export preserves existing sidecars when present and writes safe fallback `chapters.tsv`/`segments.tsv` entries for older playable audio whose metadata files are missing.
+- Playback position persists the current segment and offset, and final-segment completion is stored as an explicit completed position so finished audio does not reappear as a misleading resume-from-start action.
 
 ## User-Facing Controls
 

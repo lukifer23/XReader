@@ -592,7 +592,7 @@ class AudiobooksViewModel(private val container: AppContainer) : ViewModel() {
     fun export(audioId: Long, uri: android.net.Uri) {
         viewModelScope.launch {
             runCatching { container.neuralTtsRepository.exportBookAudio(audioId, uri) }
-                .onSuccess { message.value = "Saved generated audiobook audio." }
+                .onSuccess { audio -> message.value = audiobookExportSuccessMessage(audio) }
                 .onFailure { error -> message.value = error.message ?: "Audiobook export failed." }
         }
     }
@@ -806,7 +806,7 @@ private fun GeneratedAudiobookScreenRow(
             FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 TextButton(
                     onClick = if (active && playback.playing) onPause else onPlay,
-                    enabled = audio.playableSegmentCount() > 0 && !(active && playback.preparing)
+                    enabled = canPlayGeneratedAudiobookAction(active = active, playback = playback, audio = audio)
                 ) {
                     Text(audiobookPlaybackActionLabel(active, playback, audio))
                 }
@@ -825,7 +825,7 @@ private fun GeneratedAudiobookScreenRow(
                 if (audio.canCancelGenerationFromAudiobooksScreen()) {
                     TextButton(onClick = onCancelGeneration) { Text("Stop generation") }
                 }
-                TextButton(onClick = onExport, enabled = audio.playableSegmentCount() > 0) {
+                TextButton(onClick = onExport, enabled = canExportGeneratedAudiobookAction(audio)) {
                     Text(audiobookExportActionLabel(audio))
                 }
                 if (audio.canDeleteFromAudiobooksScreen()) {
@@ -895,11 +895,41 @@ internal fun audiobookPlaybackActionLabel(
         else -> "Play"
     }
 
+internal fun audiobookPlaybackIconLabel(
+    active: Boolean,
+    playback: AudiobookPlaybackUiState,
+    audio: BookAudioEntity,
+): String =
+    when (audiobookPlaybackActionLabel(active = active, playback = playback, audio = audio)) {
+        "Preparing" -> "Preparing generated audio"
+        "Pause" -> "Pause generated audio"
+        "Resume" -> "Resume generated audio"
+        "Play partial" -> "Play partial generated audio"
+        else -> "Play generated audio"
+    }
+
 internal fun audiobookExportActionLabel(audio: BookAudioEntity): String =
     if (audio.hasPartialGeneratedAudio()) "Save partial" else "Save"
 
+internal fun audiobookExportSuccessMessage(audio: BookAudioEntity): String =
+    if (audio.hasPartialGeneratedAudio()) {
+        "Saved partial generated audiobook audio."
+    } else {
+        "Saved generated audiobook audio."
+    }
+
 private fun BookAudioEntity.hasPartialGeneratedAudio(): Boolean =
     status != BookAudioStatus.GENERATED && playableSegmentCount() > 0
+
+internal fun canPlayGeneratedAudiobookAction(
+    active: Boolean,
+    playback: AudiobookPlaybackUiState,
+    audio: BookAudioEntity,
+): Boolean =
+    audio.playableSegmentCount() > 0 && !(active && playback.preparing)
+
+internal fun canExportGeneratedAudiobookAction(audio: BookAudioEntity): Boolean =
+    audio.playableSegmentCount() > 0
 
 internal fun audiobookPlaybackStateLabel(playback: AudiobookPlaybackUiState): String =
     when {
@@ -916,10 +946,10 @@ private fun BookAudioEntity.audiobookDisplayProfileLabel(): String =
         "%.2fx".format(Locale.US, speed)
     ).filterNotNull().joinToString(" ")
 
-private fun BookAudioEntity.audiobookResumeLabel(): String? {
+internal fun BookAudioEntity.audiobookResumeLabel(prefix: String = "Resume"): String? {
     if (!hasAudiobookResumePosition()) return null
     val segment = playbackSegmentIndex.coerceIn(0, segmentCount)
-    return "Resume ${segment + 1} / $segmentCount"
+    return "$prefix ${segment + 1} / $segmentCount"
 }
 
 internal fun BookAudioEntity.hasAudiobookResumePosition(): Boolean {

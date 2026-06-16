@@ -1762,7 +1762,7 @@ private fun AudiobookStatusCard(
         BookAudioStatus.GENERATED -> listOf(
             "${audio.segmentCount} segments",
             audio.estimatedDurationLabel(),
-            audio.playbackResumeLabel(),
+            audio.audiobookResumeLabel(prefix = "resume"),
             audio.fileSizeBytes.takeIf { it > 0 }?.compactBytes()
         ).filterNotNull().joinToString(" • ")
         BookAudioStatus.GENERATING -> {
@@ -1884,7 +1884,7 @@ private fun AudiobookPlaybackActions(
                 if (active && playback.playing) onPauseAudio(audio) else onPlayAudio(audio)
             },
             modifier = Modifier.size(40.dp),
-            enabled = !(active && playback.preparing)
+            enabled = canPlayGeneratedAudiobookAction(active = active, playback = playback, audio = audio)
         ) {
             Icon(if (active && playback.playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, contentDescription = null)
         }
@@ -1898,16 +1898,18 @@ private fun AudiobookPlaybackActions(
             }
         }
         TooltipIconButton(
-            label = "Save generated audio",
+            label = "${audiobookExportActionLabel(audio)} generated audio",
             onClick = { onExportAudio(audio) },
-            modifier = Modifier.size(40.dp)
+            modifier = Modifier.size(40.dp),
+            enabled = canExportGeneratedAudiobookAction(audio)
         ) {
             Icon(Icons.Filled.FileDownload, contentDescription = null)
         }
         TooltipIconButton(
             label = "Delete generated audio",
             onClick = { onDeleteAudio(audio) },
-            modifier = Modifier.size(40.dp)
+            modifier = Modifier.size(40.dp),
+            enabled = audio.canDeleteFromAudiobooksScreen()
         ) {
             Icon(Icons.Filled.Delete, contentDescription = null)
         }
@@ -1924,25 +1926,6 @@ private fun playbackProgressLabel(playback: AudiobookPlaybackUiState): String =
     } else {
         "Ready"
     }
-
-private fun audiobookPlaybackIconLabel(
-    active: Boolean,
-    playback: AudiobookPlaybackUiState,
-    audio: BookAudioEntity,
-): String =
-    when {
-        active && playback.preparing -> "Preparing generated audio"
-        active && playback.playing -> "Pause generated audio"
-        active && playback.paused -> "Resume generated audio"
-        audio.hasAudiobookResumePosition() -> "Resume generated audio"
-        else -> "Play generated audio"
-    }
-
-private fun BookAudioEntity.playbackResumeLabel(): String? {
-    if (!hasAudiobookResumePosition()) return null
-    val segment = playbackSegmentIndex.coerceIn(0, segmentCount)
-    return "resume ${segment + 1} / $segmentCount"
-}
 
 @Composable
 private fun GeneratedAudiobookList(
@@ -2026,7 +2009,7 @@ private fun GeneratedAudiobookRow(
                             "${audioEntity.playableSegmentCount()} playable"
                         },
                         audioEntity.estimatedDurationLabel(),
-                        audioEntity.playbackResumeLabel(),
+                        audioEntity.audiobookResumeLabel(prefix = "resume"),
                         audioEntity.fileSizeBytes.takeIf { it > 0 }?.compactBytes(),
                         audioEntity.generatedAt?.let { "generated ${relativeAgeLabel(it)}" }
                     ).filterNotNull().joinToString(" • "),

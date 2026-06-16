@@ -351,6 +351,44 @@ class NeuralTtsTextTest {
     }
 
     @Test
+    fun numericAndRomanExtractorHeadingsSurvivePageMarkerCleanup() {
+        val prepared = NeuralTtsText.prepare(
+            listOf(
+                chunk(unitIndex = 0, heading = "IV", text = "The fourth chapter opens."),
+                chunk(unitIndex = 1, heading = "12", text = "The twelfth chapter opens.")
+            )
+        )
+
+        assertEquals(listOf("Chapter IV", "Chapter 12"), prepared.chapters.map { it.title })
+        assertEquals(
+            listOf("IV", "The fourth chapter opens.", "12", "The twelfth chapter opens."),
+            prepared.segments
+        )
+    }
+
+    @Test
+    fun bodyPageMarkersStillDropEvenWhenTheyLookLikeChapterTokens() {
+        val prepared = NeuralTtsText.prepare(
+            listOf(
+                chunk(
+                    unitIndex = 0,
+                    heading = "Position 1",
+                    text = "Opening paragraph remains.\n\n12\n\nSecond paragraph remains.\n\niv\n\nThird paragraph remains."
+                )
+            )
+        )
+
+        assertEquals(
+            listOf(
+                "Opening paragraph remains.",
+                "Second paragraph remains.",
+                "Third paragraph remains."
+            ),
+            prepared.segments
+        )
+    }
+
+    @Test
     fun prepareDoesNotTreatShortBodyMentioningChapterAsHeading() {
         val prepared = NeuralTtsText.prepare(
             listOf(

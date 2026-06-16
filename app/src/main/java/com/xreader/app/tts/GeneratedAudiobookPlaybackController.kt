@@ -231,7 +231,7 @@ class GeneratedAudiobookPlaybackController(
         transitionJob?.cancel()
         transitionJob = null
         if (index !in segmentQueue.indices) {
-            persist(audio.id, 0, 0)
+            persist(audio.id, index, 0)
             preparingSegment = false
             releasePlayer()
             activeAudio = null
@@ -390,12 +390,17 @@ class GeneratedAudiobookPlaybackController(
 
     private fun persist(audioId: Long?, segmentIndex: Int, positionMs: Int) {
         if (audioId == null) return
+        val position = generatedAudiobookPersistedPlaybackPosition(
+            requestedSegmentIndex = segmentIndex,
+            positionMs = positionMs,
+            segmentCount = segmentQueue.size
+        )
         scope.launch {
             runCatching {
                 repository.updateBookAudioPlayback(
                     audioId = audioId,
-                    segmentIndex = segmentIndex.coerceAtLeast(0),
-                    positionMs = positionMs.coerceAtLeast(0)
+                    segmentIndex = position.segmentIndex,
+                    positionMs = position.positionMs
                 )
             }.onFailure { error ->
                 Log.e("XReader", "Generated audiobook position save failed for $audioId", error)
@@ -477,6 +482,28 @@ private data class PreparedAudiobookPlayback(
     val segmentChapterIndexes: List<Int>,
     val segmentPauseMillis: List<Long>,
 )
+
+internal data class GeneratedAudiobookPersistedPlaybackPosition(
+    val segmentIndex: Int,
+    val positionMs: Int,
+)
+
+internal fun generatedAudiobookPersistedPlaybackPosition(
+    requestedSegmentIndex: Int,
+    positionMs: Int,
+    segmentCount: Int,
+): GeneratedAudiobookPersistedPlaybackPosition {
+    if (segmentCount <= 0) {
+        return GeneratedAudiobookPersistedPlaybackPosition(segmentIndex = 0, positionMs = 0)
+    }
+    if (requestedSegmentIndex >= segmentCount) {
+        return GeneratedAudiobookPersistedPlaybackPosition(segmentIndex = segmentCount, positionMs = 0)
+    }
+    return GeneratedAudiobookPersistedPlaybackPosition(
+        segmentIndex = requestedSegmentIndex.coerceAtLeast(0),
+        positionMs = positionMs.coerceAtLeast(0)
+    )
+}
 
 internal fun BookAudioEntity.profileLabel(): String =
     listOf(

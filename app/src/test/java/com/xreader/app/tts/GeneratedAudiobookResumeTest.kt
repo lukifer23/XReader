@@ -65,6 +65,28 @@ class GeneratedAudiobookResumeTest {
     }
 
     @Test
+    fun prepareAudiobookGenerationTargetClearsOnlyFreshGeneration() {
+        val freshDir = temporaryFolder.newFolder()
+        writeSegment(freshDir, index = 0)
+        File(freshDir, "chapters.tsv").writeText("stale")
+
+        prepareAudiobookGenerationTarget(target = freshDir, canResumeExistingAudio = false)
+
+        assertTrue(freshDir.isDirectory)
+        assertFalse(File(freshDir, generatedAudiobookSegmentFileName(0)).exists())
+        assertFalse(File(freshDir, "chapters.tsv").exists())
+
+        val resumeDir = temporaryFolder.newFolder()
+        writeSegment(resumeDir, index = 0)
+        File(resumeDir, "chapters.tsv").writeText("current")
+
+        prepareAudiobookGenerationTarget(target = resumeDir, canResumeExistingAudio = true)
+
+        assertTrue(File(resumeDir, generatedAudiobookSegmentFileName(0)).isFile)
+        assertTrue(File(resumeDir, "chapters.tsv").isFile)
+    }
+
+    @Test
     fun generatedAudiobookDeletePolicyProtectsActiveGeneration() {
         assertFalse(audio(filePath = null).copy(status = BookAudioStatus.GENERATING).canDeleteGeneratedAudiobook())
         assertTrue(audio(filePath = null).copy(status = BookAudioStatus.GENERATED).canDeleteGeneratedAudiobook())
@@ -89,6 +111,42 @@ class GeneratedAudiobookResumeTest {
                 segmentCount = 10,
                 completedSegments = 3
             ).playableSegmentCount()
+        )
+    }
+
+    @Test
+    fun persistedPlaybackPositionKeepsFinishedStateOutOfResumePath() {
+        assertEquals(
+            GeneratedAudiobookPersistedPlaybackPosition(segmentIndex = 2, positionMs = 0),
+            generatedAudiobookPersistedPlaybackPosition(
+                requestedSegmentIndex = 2,
+                positionMs = 9_000,
+                segmentCount = 2
+            )
+        )
+        assertEquals(
+            GeneratedAudiobookPersistedPlaybackPosition(segmentIndex = 2, positionMs = 0),
+            generatedAudiobookPersistedPlaybackPosition(
+                requestedSegmentIndex = 5,
+                positionMs = 9_000,
+                segmentCount = 2
+            )
+        )
+        assertEquals(
+            GeneratedAudiobookPersistedPlaybackPosition(segmentIndex = 0, positionMs = 0),
+            generatedAudiobookPersistedPlaybackPosition(
+                requestedSegmentIndex = -1,
+                positionMs = -20,
+                segmentCount = 2
+            )
+        )
+        assertEquals(
+            GeneratedAudiobookPersistedPlaybackPosition(segmentIndex = 1, positionMs = 4_200),
+            generatedAudiobookPersistedPlaybackPosition(
+                requestedSegmentIndex = 1,
+                positionMs = 4_200,
+                segmentCount = 2
+            )
         )
     }
 
@@ -251,6 +309,38 @@ class GeneratedAudiobookResumeTest {
     }
 
     @Test
+    fun generatedAudiobookChapterSidecarTextUsesEscapedChapterMetadata() {
+        val chapters = listOf(
+            GeneratedAudiobookChapter(index = 0, title = "Intro\tOne", firstSegmentIndex = 0, segmentCount = 2),
+            GeneratedAudiobookChapter(index = 1, title = "Chapter\\Two", firstSegmentIndex = 2, segmentCount = 3)
+        )
+
+        assertEquals(
+            """
+            index	firstSegment	segmentCount	title
+            0	0	2	Intro\tOne
+            1	2	3	Chapter\\Two
+
+            """.trimIndent(),
+            chapters.toGeneratedAudiobookChaptersTsv()
+        )
+    }
+
+    @Test
+    fun generatedAudiobookFallbackSegmentsSidecarTextKeepsPlayableSegmentOrder() {
+        assertEquals(
+            """
+            index	chapterIndex	pauseAfterMs	text
+            0	0	240	
+            1	0	240	
+            2	1	240	
+
+            """.trimIndent(),
+            generatedAudiobookFallbackSegmentsTsv(segmentCount = 3, chapterIndexes = listOf(0, 0, 1))
+        )
+    }
+
+    @Test
     fun generatedAudiobookChaptersReadSidecarAndNavigateBoundaries() {
         val dir = temporaryFolder.newFolder()
         repeat(5) { index -> writeSegment(dir, index) }
@@ -272,6 +362,58 @@ class GeneratedAudiobookResumeTest {
         assertEquals(2, chapters.nextChapterStart(1))
         assertEquals(2, chapters.previousChapterStart(4))
         assertEquals(0, chapters.previousChapterStart(2))
+    }
+
+    @Test
+    fun generatedAudiobookChaptersFallbackToScopeWhenSidecarMissing() {
+        val dir = temporaryFolder.newFolder()
+        repeat(3) { index -> writeSegment(dir, index) }
+
+        val chapters = audio(filePath = dir.absolutePath).copy(
+            scope = AudiobookGenerationScope.FIRST_CHAPTER.key,
+            scopeLabel = AudiobookGenerationScope.FIRST_CHAPTER.label,
+            segmentCount = 5,
+            completedSegments = 3
+        ).generatedAudiobookChapters()
+
+        assertEquals(listOf("First chapter"), chapters.map { it.title })
+        assertEquals(listOf(0), chapters.map { it.firstSegmentIndex })
+        assertEquals(listOf(3), chapters.map { it.segmentCount })
+    }
+
+    @Test
+    fun generatedAudiobookChaptersFallbackWhenSidecarInvalidButAudioPlayable() {
+        val dir = temporaryFolder.newFolder()
+        repeat(2) { index -> writeSegment(dir, index) }
+        File(dir, "chapters.tsv").writeText(
+            """
+            index	firstSegment	segmentCount	title
+            broken
+            9	99	1	Out of range
+            """.trimIndent()
+        )
+
+        val chapters = audio(filePath = dir.absolutePath).copy(
+            scope = AudiobookGenerationScope.SAMPLE.key,
+            scopeLabel = AudiobookGenerationScope.SAMPLE.label,
+            segmentCount = 2,
+            completedSegments = 2
+        ).generatedAudiobookChapters()
+
+        assertEquals(listOf("Sample"), chapters.map { it.title })
+        assertEquals(listOf(2), chapters.map { it.segmentCount })
+    }
+
+    @Test
+    fun generatedAudiobookChaptersDoNotFallbackWithoutPlayableAudio() {
+        val dir = temporaryFolder.newFolder()
+
+        val chapters = audio(filePath = dir.absolutePath).copy(
+            segmentCount = 3,
+            completedSegments = 3
+        ).generatedAudiobookChapters()
+
+        assertTrue(chapters.isEmpty())
     }
 
     @Test

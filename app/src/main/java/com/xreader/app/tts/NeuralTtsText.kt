@@ -52,10 +52,10 @@ internal object NeuralTtsText {
             .flatMap { chunk -> chunk.toAudiobookPassages() }
             .dropDuplicatePassages()
             .dropRepeatedShortBoilerplate()
-            .filterNot { it.isIsolatedPageMarker() }
-            .filterNot { it.isPublisherBoilerplate() }
+            .dropIsolatedPageMarkers()
+            .filterNot { it.text.isPublisherBoilerplate() }
             .dropLeadingFrontMatter()
-            .mapNotNull { text -> text.toNarrationUnit() }
+            .mapNotNull { passage -> passage.text.toNarrationUnit() }
         val segments = mutableListOf<String>()
         val segmentChapterIndexes = mutableListOf<Int>()
         val segmentPauseMillis = mutableListOf<Long>()
@@ -113,15 +113,16 @@ internal object NeuralTtsText {
         )
     }
 
-    private fun ReadAloudChunk.toAudiobookPassages(): List<String> {
+    private fun ReadAloudChunk.toAudiobookPassages(): List<AudiobookPassage> {
         val body = normalizeForAudiobook(text)
         val heading = normalizeForAudiobookHeading(heading)
-        if (heading == null) return body
+        val bodyPassages = body.map { AudiobookPassage(text = it, fromHeading = false) }
+        if (heading == null) return bodyPassages
         val firstBody = body.firstOrNull()?.normalizedHeadingComparisonKey()
         return if (firstBody == heading.normalizedHeadingComparisonKey()) {
-            body
+            bodyPassages
         } else {
-            listOf(heading) + body
+            listOf(AudiobookPassage(text = heading, fromHeading = true)) + bodyPassages
         }
     }
 
@@ -154,8 +155,8 @@ internal object NeuralTtsText {
             .trim()
         if (clean.length !in 2..96) return null
         if (clean.startsWith("Position ", ignoreCase = true)) return null
-        if (clean.isIsolatedPageMarker()) return null
-        return clean.takeIf { it.isNarrativeStartMarker() }
+        if (clean.isIsolatedPageMarker() && !clean.looksLikeAudiobookChapterHeading()) return null
+        return clean.takeIf { it.looksLikeAudiobookChapterHeading() }
     }
 
     private fun String.normalizedHeadingComparisonKey(): String =
@@ -249,23 +250,23 @@ internal object NeuralTtsText {
         }
     }
 
-    private fun List<String>.dropRepeatedShortBoilerplate(): List<String> {
-        val repeated = groupingBy { it.normalizedBoilerplateKey() }
+    private fun List<AudiobookPassage>.dropRepeatedShortBoilerplate(): List<AudiobookPassage> {
+        val repeated = groupingBy { it.text.normalizedBoilerplateKey() }
             .eachCount()
             .filterKeys { it != null }
             .filterValues { it >= 3 }
             .keys
         if (repeated.isEmpty()) return this
-        return filterNot { text ->
-            val key = text.normalizedBoilerplateKey()
+        return filterNot { passage ->
+            val key = passage.text.normalizedBoilerplateKey()
             key != null && key in repeated
         }
     }
 
-    private fun List<String>.dropDuplicatePassages(): List<String> {
+    private fun List<AudiobookPassage>.dropDuplicatePassages(): List<AudiobookPassage> {
         val seen = mutableSetOf<String>()
-        return filter { text ->
-            val key = text.normalizedPassageKey()
+        return filter { passage ->
+            val key = passage.text.normalizedPassageKey()
             key == null || seen.add(key)
         }
     }
@@ -291,8 +292,15 @@ internal object NeuralTtsText {
             clean.matches(Regex("(?i)[ivxlcdm]{1,8}"))
     }
 
-    private fun List<String>.dropLeadingFrontMatter(): List<String> {
-        val firstContent = take(FRONT_MATTER_SCAN_LIMIT).indexOfFirst { it.isNarrativeStartMarker() }
+    private fun List<AudiobookPassage>.dropIsolatedPageMarkers(): List<AudiobookPassage> =
+        filterNot { passage ->
+            passage.text.isIsolatedPageMarker() && !(passage.fromHeading && passage.text.looksLikeAudiobookChapterHeading())
+        }
+
+    private fun List<AudiobookPassage>.dropLeadingFrontMatter(): List<AudiobookPassage> {
+        val firstContent = take(FRONT_MATTER_SCAN_LIMIT).indexOfFirst { passage ->
+            passage.text.isNarrativeStartMarker() || (passage.fromHeading && passage.text.looksLikeAudiobookChapterHeading())
+        }
         if (firstContent <= 0) return this
         return drop(firstContent)
     }
@@ -367,6 +375,11 @@ internal object NeuralTtsText {
     private data class AudiobookPreparedSegment(
         val text: String,
         val pauseAfterMillis: Long,
+    )
+
+    private data class AudiobookPassage(
+        val text: String,
+        val fromHeading: Boolean,
     )
 
     private data class NarrationUnit(
