@@ -1606,7 +1606,7 @@ private fun AudiobookScanCard(
                     AudiobookScanPill("${scan.wordCount} words")
                     AudiobookScanPill("${scan.segmentCount} segments")
                     if (scan.chapterCount > 0) {
-                        AudiobookScanPill("${scan.chapterCount} chapters")
+                        AudiobookScanPill(generatedAudiobookChapterCountLabel(scan.chapterCount))
                     }
                     AudiobookScanPill(audiobookDurationLabel(scan.estimatedAudioMillis))
                     AudiobookScanPill(audiobookStorageLabel(scan.estimatedStorageBytes))
@@ -1645,7 +1645,7 @@ internal fun audiobookScanSummary(scan: AudiobookScanUiState?): String =
         scan?.scanning == true -> "Scanning indexed book text for extractable narration."
         scan?.hasText == true -> listOfNotNull(
             "${scan.sourceSectionCount} source sections prepared",
-            scan.chapterCount.takeIf { it > 0 }?.let { "$it chapters detected" }
+            scan.chapterCount.takeIf { it > 0 }?.let { "${generatedAudiobookChapterCountLabel(it)} detected" }
         ).joinToString(" • ")
         scan?.error != null -> "Scan could not prepare narration for this book."
         else -> "Scan the selected ebook before a long generation job."
@@ -2020,7 +2020,7 @@ private fun GeneratedAudiobookRow(
                 Text(
                     listOf(
                         "${audioEntity.segmentCount} segments",
-                        audio.chapters.takeIf { it.isNotEmpty() }?.let { "${it.size} chapters" },
+                        audio.chapters.takeIf { it.isNotEmpty() }?.let { generatedAudiobookChapterCountLabel(it.size) },
                         generatedAudioPlayableDetail(audio),
                         audioEntity.estimatedDurationLabel(),
                         audioEntity.audiobookResumeLabel(prefix = "resume", playableSegmentFiles = audio.playableSegmentFiles),
@@ -2043,7 +2043,7 @@ private fun GeneratedAudiobookRow(
                 onExportAudio = onExportAudio,
                 onDeleteAudio = onDeleteAudio
             )
-            if (audio.chapters.isNotEmpty()) {
+            if (audio.chapters.size > 1) {
                 TooltipIconButton(
                     label = "Choose chapter",
                     onClick = { onShowChapters(audio) },

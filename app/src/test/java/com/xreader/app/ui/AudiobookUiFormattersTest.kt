@@ -71,6 +71,19 @@ class AudiobookUiFormattersTest {
     }
 
     @Test
+    fun scanSummaryUsesSingularChapterLabel() {
+        val scan = AudiobookScanUiState(
+            wordCount = 8_000,
+            segmentCount = 18,
+            chapterCount = 1,
+            chapterTitles = listOf("Part One"),
+            sourceSectionCount = 24
+        )
+
+        assertEquals("24 source sections prepared • 1 chapter detected", audiobookScanSummary(scan))
+    }
+
+    @Test
     fun scopeActionLabelsShowGenerationSizeAfterScan() {
         val scan = AudiobookScanUiState(
             wordCount = 30_000,
