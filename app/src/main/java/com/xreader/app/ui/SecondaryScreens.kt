@@ -791,7 +791,7 @@ private fun GeneratedAudiobookScreenRow(
                 AudiobookInfoPill(audio.scopeLabel)
                 AudiobookInfoPill(audio.audiobookDisplayProfileLabel())
                 if (chapters.isNotEmpty()) {
-                    AudiobookInfoPill("${chapters.size} chapters")
+                    AudiobookInfoPill(generatedAudiobookChapterCountLabel(chapters.size))
                 }
                 audio.estimatedDurationLabel()?.let { AudiobookInfoPill(it) }
                 audio.audiobookResumeLabel(playableSegmentFiles = item.playableSegmentFiles)?.let { AudiobookInfoPill(it) }
@@ -846,7 +846,7 @@ private fun GeneratedAudiobookScreenRow(
                     }
                     TextButton(onClick = onStop) { Text("Stop") }
                 }
-                if (chapters.isNotEmpty()) {
+                if (chapters.size > 1) {
                     TextButton(onClick = onShowChapters) { Text("Chapters") }
                 }
                 if (audio.canCancelGenerationFromAudiobooksScreen()) {
@@ -1046,6 +1046,9 @@ internal fun GeneratedAudiobookChapter.chapterRangeLabel(): String =
         segmentCount <= 1 -> "Segment ${firstSegmentIndex + 1}"
         else -> "Segments ${firstSegmentIndex + 1}-${lastSegmentIndex + 1}"
     }
+
+internal fun generatedAudiobookChapterCountLabel(chapterCount: Int): String =
+    if (chapterCount == 1) "1 chapter" else "$chapterCount chapters"
 
 private fun BookAudioEntity.audiobookFileSafeProfileName(): String =
     listOf(scopeLabel, audiobookDisplayProfileLabel())

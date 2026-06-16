@@ -21,6 +21,7 @@
 - Partial generated audiobooks now label global Audiobooks actions as `Play partial` and `Save partial` so incomplete output is not presented like a finished full-book audiobook.
 - Generated audiobook play, save, partial, and resume labels now use verified playable WAV files rather than stale database segment counters, so repaired or missing audio cannot surface broken controls or impossible resume positions.
 - Generated audiobook chapter jump buttons now use prepared chapter boundaries from the generated audio sidecars, avoiding dead controls when repaired or older audio lacks current-chapter metadata.
+- Generated audiobook rows now use singular/plural chapter labels and hide the chapter picker when there is only one generated section, reducing Audiobooks screen clutter.
 - Full-book neural generation prefers WebGPU with isolated-process runtime rotation, then XNNPACK/CPU fallback; preview generation stays on XNNPACK/CPU for stability.
 
 ## 0.1.0 - 2026-05-28

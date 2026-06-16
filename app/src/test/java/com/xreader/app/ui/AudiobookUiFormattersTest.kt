@@ -456,6 +456,12 @@ class AudiobookUiFormattersTest {
     }
 
     @Test
+    fun generatedAudiobookChapterCountLabelUsesSingularAndPluralText() {
+        assertEquals("1 chapter", generatedAudiobookChapterCountLabel(1))
+        assertEquals("2 chapters", generatedAudiobookChapterCountLabel(2))
+    }
+
+    @Test
     fun generatedAudiobookUiItemCarriesPreparedChaptersAndPlayableFileCount() {
         val chapters = listOf(
             GeneratedAudiobookChapter(index = 0, title = "Chapter 1", firstSegmentIndex = 0, segmentCount = 2)
