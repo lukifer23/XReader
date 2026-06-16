@@ -54,6 +54,9 @@ internal fun BookAudioEntity.playableSegmentFiles(): List<File> {
     }.takeContiguousPrefix()
 }
 
+internal fun BookAudioEntity.verifiedPlayableSegmentCount(): Int =
+    playableSegmentFiles().size
+
 internal fun BookAudioEntity.hasCompletePlayableAudiobook(): Boolean =
     status == BookAudioStatus.GENERATED &&
         segmentCount > 0 &&

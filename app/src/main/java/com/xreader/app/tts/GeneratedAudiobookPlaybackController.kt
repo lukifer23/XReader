@@ -78,7 +78,8 @@ class GeneratedAudiobookPlaybackController(
     }
 
     fun playFromSegment(bookTitle: String, audio: BookAudioEntity, segmentIndex: Int) {
-        if (audio.playableSegmentCount() <= 0) {
+        val verifiedPlayableSegments = audio.verifiedPlayableSegmentCount()
+        if (verifiedPlayableSegments <= 0) {
             setState(AudiobookPlaybackUiState(error = "Generate at least one audiobook segment before playing it."))
             return
         }
@@ -98,7 +99,7 @@ class GeneratedAudiobookPlaybackController(
             profileLabel = audio.profileLabel(),
             playing = false,
             segmentIndex = segmentIndex.coerceAtLeast(0),
-            segmentCount = audio.playableSegmentCount(),
+            segmentCount = verifiedPlayableSegments,
             preparing = true,
             error = null
         ))

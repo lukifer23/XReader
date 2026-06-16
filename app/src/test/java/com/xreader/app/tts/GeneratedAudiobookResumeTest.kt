@@ -225,6 +225,30 @@ class GeneratedAudiobookResumeTest {
     }
 
     @Test
+    fun verifiedPlayableSegmentCountUsesOnlyContiguousFiles() {
+        val dir = temporaryFolder.newFolder()
+        writeSegment(dir, index = 0)
+        writeSegment(dir, index = 2)
+
+        assertEquals(
+            1,
+            audio(filePath = dir.absolutePath).copy(
+                status = BookAudioStatus.CANCELED,
+                segmentCount = 4,
+                completedSegments = 4
+            ).verifiedPlayableSegmentCount()
+        )
+        assertEquals(
+            0,
+            audio(filePath = File(temporaryFolder.root, "missing").absolutePath).copy(
+                status = BookAudioStatus.CANCELED,
+                segmentCount = 4,
+                completedSegments = 4
+            ).verifiedPlayableSegmentCount()
+        )
+    }
+
+    @Test
     fun playableSegmentFilesRejectsHeaderOnlyAndMissingDirectories() {
         val dir = temporaryFolder.newFolder()
         File(dir, generatedAudiobookSegmentFileName(0)).writeBytes(ByteArray(44))
