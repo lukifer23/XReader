@@ -248,6 +248,39 @@ class NeuralTtsTextTest {
     }
 
     @Test
+    fun prepareDropsTableOfContentsEntryRows() {
+        val prepared = NeuralTtsText.prepare(
+            listOf(
+                chunk(unitIndex = 0, text = "Contents"),
+                chunk(unitIndex = 1, text = "Chapter 1 ........ 7"),
+                chunk(unitIndex = 2, text = "Chapter 2 - The Signal 19"),
+                chunk(unitIndex = 3, text = "Prologue"),
+                chunk(unitIndex = 4, text = "The actual story begins here.")
+            )
+        )
+
+        assertEquals(
+            listOf("Prologue", "The actual story begins here."),
+            prepared.segments
+        )
+    }
+
+    @Test
+    fun prepareKeepsRealChapterHeadingsWithoutTocPageNumbers() {
+        val prepared = NeuralTtsText.prepare(
+            listOf(
+                chunk(unitIndex = 0, text = "Chapter 1"),
+                chunk(unitIndex = 1, text = "The actual story begins here.")
+            )
+        )
+
+        assertEquals(
+            listOf("Chapter 1", "The actual story begins here."),
+            prepared.segments
+        )
+    }
+
+    @Test
     fun prepareKeepsBookWithoutEarlyChapterMarker() {
         val prepared = NeuralTtsText.prepare(
             listOf(

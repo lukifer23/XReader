@@ -53,6 +53,7 @@ internal object NeuralTtsText {
             .dropDuplicatePassages()
             .dropRepeatedShortBoilerplate()
             .dropIsolatedPageMarkers()
+            .dropTableOfContentsEntries()
             .filterNot { it.text.isPublisherBoilerplate() }
             .dropLeadingFrontMatter()
             .mapNotNull { passage -> passage.text.toNarrationUnit() }
@@ -297,6 +298,9 @@ internal object NeuralTtsText {
             passage.text.isIsolatedPageMarker() && !(passage.fromHeading && passage.text.looksLikeAudiobookChapterHeading())
         }
 
+    private fun List<AudiobookPassage>.dropTableOfContentsEntries(): List<AudiobookPassage> =
+        filterNot { passage -> passage.text.isTableOfContentsEntry() }
+
     private fun List<AudiobookPassage>.dropLeadingFrontMatter(): List<AudiobookPassage> {
         val firstContent = take(FRONT_MATTER_SCAN_LIMIT).indexOfFirst { passage ->
             passage.text.isNarrativeStartMarker() || (passage.fromHeading && passage.text.looksLikeAudiobookChapterHeading())
@@ -339,6 +343,13 @@ internal object NeuralTtsText {
         )
         if (phrases.any { it in clean }) return true
         return clean.matches(Regex("""(?:isbn|ebook isbn|print isbn)\s+.*"""))
+    }
+
+    private fun String.isTableOfContentsEntry(): Boolean {
+        val clean = trim()
+        if (clean.length !in 5..140) return false
+        if (!clean.any(Char::isLetter)) return false
+        return clean.matches(AUDIOBOOK_TOC_LEADER_ENTRY_REGEX) || clean.matches(AUDIOBOOK_TOC_TRAILING_PAGE_ENTRY_REGEX)
     }
 
     private fun String.toNarrationUnit(): NarrationUnit? {
@@ -400,6 +411,12 @@ internal object NeuralTtsText {
     private const val MAX_SEGMENT_CHARS = 850
     private const val FRONT_MATTER_SCAN_LIMIT = 48
     private val AUDIOBOOK_SENTENCE_BOUNDARY = Regex("(?<=[.!?][\"']?)\\s+")
+    private val AUDIOBOOK_TOC_LEADER_ENTRY_REGEX = Regex(
+        """(?i)^(chapter|section|episode|part|book)?\s*([0-9]{1,3}|[ivxlcdm]{1,8}|$AUDIOBOOK_WORD_NUMBER_PATTERN)(?:[\s.:\-]+.+?)?[\s.·•\-]{2,}[0-9]{1,4}$"""
+    )
+    private val AUDIOBOOK_TOC_TRAILING_PAGE_ENTRY_REGEX = Regex(
+        """(?i)^(chapter|section|episode|part|book)\s+([0-9]{1,3}|[ivxlcdm]{1,8}|$AUDIOBOOK_WORD_NUMBER_PATTERN)(?:\s*[-:]\s+.+?)?\s+[0-9]{1,4}$"""
+    )
 }
 
 internal const val DEFAULT_AUDIOBOOK_SEGMENT_PAUSE_MS = 240L

@@ -21,7 +21,7 @@ NNAPI is intentionally not used for production OfflineTTS. Current device eviden
 Audiobook generation uses the app's indexed reading-order text, then prepares audiobook segments by:
 
 - sorting source chunks by reading order
-- removing URLs, email addresses, ISBN fragments, soft hyphens, repeated boilerplate, duplicate passages, and isolated page markers
+- removing URLs, email addresses, ISBN fragments, soft hyphens, repeated boilerplate, duplicate passages, standalone table-of-contents entry rows, and isolated page markers
 - normalizing smart quotes, dashes, punctuation, and paragraph spacing
 - splitting around sentence and clause boundaries
 - skipping obvious publisher/copyright front matter before an early Prologue/Chapter marker

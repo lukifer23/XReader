@@ -27,6 +27,7 @@
 - Partial generated audiobook ZIP exports now include the in-progress manifest as `manifest.txt` when a final manifest does not exist, preserving provider, scope, progress, and status metadata.
 - Partial generated audiobook ZIP exports now trim `segments.tsv` to verified playable segments, preserving existing metadata for playable audio without exporting future, not-yet-generated rows.
 - Generated audiobook playback now gates startup on verified contiguous WAV files instead of database progress counters, avoiding misleading preparing states when stale records reference missing audio.
+- Audiobook text preparation now drops standalone table-of-contents entry rows such as chapter/page listings before narration, while preserving real chapter headings.
 - Full-book neural generation prefers WebGPU with isolated-process runtime rotation, then XNNPACK/CPU fallback; preview generation stays on XNNPACK/CPU for stability.
 
 ## 0.1.0 - 2026-05-28
