@@ -821,10 +821,9 @@ class NeuralTtsRepository(
         }
         output.use { stream ->
             ZipOutputStream(stream).use { zip ->
-                File(source, "manifest.txt")
-                    .takeIf { it.isFile }
+                source.generatedAudiobookExportManifestFile()
                     ?.let { manifest ->
-                        zip.putNextEntry(ZipEntry(manifest.name))
+                        zip.putNextEntry(ZipEntry(FINAL_MANIFEST))
                         manifest.inputStream().use { input -> input.copyTo(zip) }
                         zip.closeEntry()
                     }
@@ -1055,6 +1054,10 @@ internal fun prepareAudiobookGenerationTarget(target: File, canResumeExistingAud
     }
     target.mkdirs()
 }
+
+internal fun File.generatedAudiobookExportManifestFile(): File? =
+    File(this, "manifest.txt").takeIf { it.isFile }
+        ?: File(this, "manifest.in-progress.txt").takeIf { it.isFile }
 
 private fun BookAudioEntity?.canResumeGeneration(
     target: File,

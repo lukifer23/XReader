@@ -87,6 +87,20 @@ class GeneratedAudiobookResumeTest {
     }
 
     @Test
+    fun generatedAudiobookExportManifestPrefersFinalButKeepsPartialManifest() {
+        val finalDir = temporaryFolder.newFolder()
+        val finalManifest = File(finalDir, "manifest.txt").apply { writeText("status=generated") }
+        File(finalDir, "manifest.in-progress.txt").writeText("status=generating")
+
+        assertEquals(finalManifest, finalDir.generatedAudiobookExportManifestFile())
+
+        val partialDir = temporaryFolder.newFolder()
+        val partialManifest = File(partialDir, "manifest.in-progress.txt").apply { writeText("status=canceled") }
+
+        assertEquals(partialManifest, partialDir.generatedAudiobookExportManifestFile())
+    }
+
+    @Test
     fun generatedAudiobookDeletePolicyProtectsActiveGeneration() {
         assertFalse(audio(filePath = null).copy(status = BookAudioStatus.GENERATING).canDeleteGeneratedAudiobook())
         assertTrue(audio(filePath = null).copy(status = BookAudioStatus.GENERATED).canDeleteGeneratedAudiobook())

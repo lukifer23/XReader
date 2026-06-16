@@ -24,6 +24,7 @@
 - Generated audiobook rows now use singular/plural chapter labels and hide the chapter picker when there is only one generated section, reducing Audiobooks screen clutter.
 - Active generated audiobook rows now keep chapter context in one dedicated line instead of repeating the chapter title in the compact status text.
 - Per-book audiobook generation dialogs now use the same singular/plural chapter labels as the Audiobooks screen and suppress single-section chapter picker controls.
+- Partial generated audiobook ZIP exports now include the in-progress manifest as `manifest.txt` when a final manifest does not exist, preserving provider, scope, progress, and status metadata.
 - Full-book neural generation prefers WebGPU with isolated-process runtime rotation, then XNNPACK/CPU fallback; preview generation stays on XNNPACK/CPU for stability.
 
 ## 0.1.0 - 2026-05-28
