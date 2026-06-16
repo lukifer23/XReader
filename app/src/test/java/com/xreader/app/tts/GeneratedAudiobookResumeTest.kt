@@ -163,6 +163,15 @@ class GeneratedAudiobookResumeTest {
     }
 
     @Test
+    fun playbackStartIndexRestartsFinishedAudiobookFromBeginning() {
+        assertEquals(0, generatedAudiobookStartSegmentIndex(requestedSegmentIndex = 4, segmentCount = 4))
+        assertEquals(0, generatedAudiobookStartSegmentIndex(requestedSegmentIndex = 9, segmentCount = 4))
+        assertEquals(0, generatedAudiobookStartSegmentIndex(requestedSegmentIndex = -1, segmentCount = 4))
+        assertEquals(2, generatedAudiobookStartSegmentIndex(requestedSegmentIndex = 2, segmentCount = 4))
+        assertEquals(0, generatedAudiobookStartSegmentIndex(requestedSegmentIndex = 0, segmentCount = 0))
+    }
+
+    @Test
     fun bookAudioPlaybackBoundingUsesVerifiedGeneratedSegments() {
         val stale = audio(filePath = null).copy(
             segmentCount = 10,

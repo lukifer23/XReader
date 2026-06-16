@@ -117,7 +117,10 @@ class GeneratedAudiobookPlaybackController(
             chapters = prepared.chapters
             segmentChapterIndexes = prepared.segmentChapterIndexes
             segmentPauseMillis = prepared.segmentPauseMillis
-            val startIndex = segmentIndex.coerceIn(0, (prepared.segments.size - 1).coerceAtLeast(0))
+            val startIndex = generatedAudiobookStartSegmentIndex(
+                requestedSegmentIndex = segmentIndex,
+                segmentCount = prepared.segments.size
+            )
             val startPositionMs = if (segmentIndex == audio.playbackSegmentIndex && segmentIndex in prepared.segments.indices) {
                 audio.playbackPositionMs.coerceAtLeast(0)
             } else {
@@ -503,6 +506,15 @@ internal fun generatedAudiobookPersistedPlaybackPosition(
         segmentIndex = requestedSegmentIndex.coerceAtLeast(0),
         positionMs = positionMs.coerceAtLeast(0)
     )
+}
+
+internal fun generatedAudiobookStartSegmentIndex(
+    requestedSegmentIndex: Int,
+    segmentCount: Int,
+): Int {
+    if (segmentCount <= 0) return 0
+    if (requestedSegmentIndex >= segmentCount) return 0
+    return requestedSegmentIndex.coerceAtLeast(0)
 }
 
 internal fun BookAudioEntity.profileLabel(): String =
