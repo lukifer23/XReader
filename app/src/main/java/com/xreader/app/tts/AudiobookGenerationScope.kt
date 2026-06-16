@@ -59,6 +59,18 @@ internal fun BookAudioEntity.hasCompletePlayableAudiobook(): Boolean =
         segmentCount > 0 &&
         playableSegmentFiles().size == segmentCount
 
+internal fun BookAudioEntity.withPlaybackBoundedToGeneratedAudio(playableSegments: Int): BookAudioEntity {
+    val position = generatedAudiobookPersistedPlaybackPosition(
+        requestedSegmentIndex = playbackSegmentIndex,
+        positionMs = playbackPositionMs,
+        segmentCount = playableSegments
+    )
+    return copy(
+        playbackSegmentIndex = position.segmentIndex,
+        playbackPositionMs = position.positionMs
+    )
+}
+
 internal fun BookAudioEntity.canDeleteGeneratedAudiobook(): Boolean =
     status != BookAudioStatus.GENERATING
 

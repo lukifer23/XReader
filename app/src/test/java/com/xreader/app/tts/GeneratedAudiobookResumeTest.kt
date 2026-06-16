@@ -163,6 +163,29 @@ class GeneratedAudiobookResumeTest {
     }
 
     @Test
+    fun bookAudioPlaybackBoundingUsesVerifiedGeneratedSegments() {
+        val stale = audio(filePath = null).copy(
+            segmentCount = 10,
+            completedSegments = 10,
+            playbackSegmentIndex = 8,
+            playbackPositionMs = 12_000
+        )
+
+        assertEquals(
+            stale.copy(playbackSegmentIndex = 3, playbackPositionMs = 0),
+            stale.withPlaybackBoundedToGeneratedAudio(playableSegments = 3)
+        )
+        assertEquals(
+            stale.copy(playbackSegmentIndex = 0, playbackPositionMs = 0),
+            stale.withPlaybackBoundedToGeneratedAudio(playableSegments = 0)
+        )
+        assertEquals(
+            stale.copy(playbackSegmentIndex = 8, playbackPositionMs = 12_000),
+            stale.withPlaybackBoundedToGeneratedAudio(playableSegments = 10)
+        )
+    }
+
+    @Test
     fun playableSegmentFilesReturnsOnlyVerifiedContiguousSegments() {
         val dir = temporaryFolder.newFolder()
         writeSegment(dir, index = 0)

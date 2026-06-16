@@ -603,11 +603,9 @@ class NeuralTtsRepository(
                     sampleRate = sampleRate,
                     fileSizeBytes = target.walkTopDown().filter { it.isFile }.sumOf { it.length() },
                     generatedAt = clock.millis(),
-                    playbackSegmentIndex = activeAudio.playbackSegmentIndex,
-                    playbackPositionMs = activeAudio.playbackPositionMs,
                     updatedAt = clock.millis(),
                     error = null
-                )
+                ).withPlaybackBoundedToGeneratedAudio(prepared.segments.size)
             } finally {
                 runtime?.engine?.release()
             }
@@ -630,7 +628,7 @@ class NeuralTtsRepository(
                         fileSizeBytes = target.takeIf { it.isDirectory }?.walkTopDown()?.filter { it.isFile }?.sumOf { it.length() } ?: 0L,
                         updatedAt = clock.millis(),
                         error = null
-                    )
+                    ).withPlaybackBoundedToGeneratedAudio(completedSegments)
                     withContext(NonCancellable) {
                         writeAudiobookManifest(
                             target = target,
@@ -663,7 +661,7 @@ class NeuralTtsRepository(
                     fileSizeBytes = target.takeIf { it.isDirectory }?.walkTopDown()?.filter { it.isFile }?.sumOf { it.length() } ?: 0L,
                     updatedAt = clock.millis(),
                     error = error.message ?: "Neural audiobook generation failed for $bookTitle"
-                )
+                ).withPlaybackBoundedToGeneratedAudio(completedSegments)
                 writeAudiobookManifest(
                     target = target,
                     title = bookTitle,
