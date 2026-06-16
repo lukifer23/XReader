@@ -834,10 +834,9 @@ class NeuralTtsRepository(
                     fallbackName = CHAPTERS_FILE,
                     fallbackText = chapters.takeIf { it.isNotEmpty() }?.toGeneratedAudiobookChaptersTsv()
                 )
-                zip.putFileOrTextEntry(
-                    source = File(source, SEGMENTS_FILE),
-                    fallbackName = SEGMENTS_FILE,
-                    fallbackText = generatedAudiobookFallbackSegmentsTsv(
+                zip.putTextEntry(
+                    name = SEGMENTS_FILE,
+                    text = File(source, SEGMENTS_FILE).generatedAudiobookExportSegmentsTsv(
                         segmentCount = segments.size,
                         chapterIndexes = segmentChapterIndexes
                     )
@@ -865,6 +864,12 @@ class NeuralTtsRepository(
         if (fallbackText.isNullOrBlank()) return
         putNextEntry(ZipEntry(fallbackName))
         write(fallbackText.toByteArray(Charsets.UTF_8))
+        closeEntry()
+    }
+
+    private fun ZipOutputStream.putTextEntry(name: String, text: String) {
+        putNextEntry(ZipEntry(name))
+        write(text.toByteArray(Charsets.UTF_8))
         closeEntry()
     }
 

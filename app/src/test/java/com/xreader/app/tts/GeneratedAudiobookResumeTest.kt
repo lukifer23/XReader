@@ -399,6 +399,57 @@ class GeneratedAudiobookResumeTest {
     }
 
     @Test
+    fun generatedAudiobookExportSegmentsSidecarKeepsOnlyPlayableRows() {
+        val dir = temporaryFolder.newFolder()
+        val sidecar = File(dir, "segments.tsv").apply {
+            writeText(
+                """
+                index	chapterIndex	pauseAfterMs	text
+                0	0	240	one
+                1	0	360	two
+                2	1	480	three
+                3	1	600	four
+                """.trimIndent()
+            )
+        }
+
+        assertEquals(
+            """
+            index	chapterIndex	pauseAfterMs	text
+            0	0	240	one
+            1	0	360	two
+
+            """.trimIndent(),
+            sidecar.generatedAudiobookExportSegmentsTsv(segmentCount = 2, chapterIndexes = listOf(0, 0))
+        )
+    }
+
+    @Test
+    fun generatedAudiobookExportSegmentsSidecarFillsMissingPlayableRows() {
+        val dir = temporaryFolder.newFolder()
+        val sidecar = File(dir, "segments.tsv").apply {
+            writeText(
+                """
+                index	chapterIndex	pauseAfterMs	text
+                0	0	240	one
+                3	1	600	four
+                """.trimIndent()
+            )
+        }
+
+        assertEquals(
+            """
+            index	chapterIndex	pauseAfterMs	text
+            0	0	240	one
+            1	0	240	
+            2	1	240	
+
+            """.trimIndent(),
+            sidecar.generatedAudiobookExportSegmentsTsv(segmentCount = 3, chapterIndexes = listOf(0, 0, 1))
+        )
+    }
+
+    @Test
     fun generatedAudiobookChaptersReadSidecarAndNavigateBoundaries() {
         val dir = temporaryFolder.newFolder()
         repeat(5) { index -> writeSegment(dir, index) }

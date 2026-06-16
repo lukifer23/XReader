@@ -214,6 +214,42 @@ internal fun generatedAudiobookFallbackSegmentsTsv(
         }
     }
 
+internal fun File.generatedAudiobookExportSegmentsTsv(
+    segmentCount: Int,
+    chapterIndexes: List<Int> = List(segmentCount.coerceAtLeast(0)) { 0 },
+): String {
+    if (segmentCount <= 0) return generatedAudiobookFallbackSegmentsTsv(segmentCount = 0, chapterIndexes = emptyList())
+    if (!isFile) {
+        return generatedAudiobookFallbackSegmentsTsv(segmentCount = segmentCount, chapterIndexes = chapterIndexes)
+    }
+    return runCatching {
+        val rowsByIndex = readLines()
+            .drop(1)
+            .mapNotNull { line ->
+                val columns = line.split('\t')
+                val index = columns.getOrNull(0)?.toIntOrNull() ?: return@mapNotNull null
+                if (index !in 0 until segmentCount) return@mapNotNull null
+                index to line
+            }
+            .toMap()
+        buildString {
+            appendLine("index\tchapterIndex\tpauseAfterMs\ttext")
+            repeat(segmentCount) { index ->
+                appendLine(
+                    rowsByIndex[index] ?: listOf(
+                        index.toString(),
+                        chapterIndexes.getOrElse(index) { 0 }.toString(),
+                        DEFAULT_AUDIOBOOK_SEGMENT_PAUSE_MS.toString(),
+                        ""
+                    ).joinToString("\t")
+                )
+            }
+        }
+    }.getOrElse {
+        generatedAudiobookFallbackSegmentsTsv(segmentCount = segmentCount, chapterIndexes = chapterIndexes)
+    }
+}
+
 internal fun List<GeneratedAudiobookChapter>.nextChapterStart(currentSegmentIndex: Int): Int? =
     firstOrNull { it.firstSegmentIndex > currentSegmentIndex }?.firstSegmentIndex
 

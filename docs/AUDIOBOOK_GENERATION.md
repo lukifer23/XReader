@@ -47,6 +47,7 @@ Generation scope is persisted per voice profile:
 - Older generated audio whose chapter sidecar is missing or unreadable falls back to one scope-labeled playback section when verified WAV segments exist, so partial audio remains identifiable without inventing fake chapter boundaries.
 - ZIP export preserves existing sidecars when present and writes safe fallback `chapters.tsv`/`segments.tsv` entries for older playable audio whose metadata files are missing.
 - ZIP export maps `manifest.in-progress.txt` to `manifest.txt` for partial, stopped, or failed generated audio when no final manifest exists, so exported partial audio still carries status, provider, progress, scope, and voice metadata.
+- ZIP export bounds `segments.tsv` to the verified playable WAV prefix, keeping pause/text metadata for exported audio while omitting future segments that were not generated yet.
 - Playback position persists the current segment and offset, and final-segment completion is stored as an explicit completed position so finished audio does not reappear as a misleading resume-from-start action.
 
 ## User-Facing Controls
