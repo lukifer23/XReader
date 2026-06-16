@@ -151,6 +151,32 @@ class AudiobookUiFormattersTest {
     }
 
     @Test
+    fun generatedAudioActionLabelsDistinguishPartialAudio() {
+        val partialGenerating = audio(1).copy(
+            status = BookAudioStatus.GENERATING,
+            segmentCount = 12,
+            completedSegments = 3
+        )
+        val partialStopped = audio(2).copy(
+            status = BookAudioStatus.CANCELED,
+            segmentCount = 12,
+            completedSegments = 3
+        )
+        val generated = audio(3).copy(
+            status = BookAudioStatus.GENERATED,
+            segmentCount = 12,
+            completedSegments = 12
+        )
+
+        assertEquals("Play partial", audiobookPlaybackActionLabel(active = false, playback = AudiobookPlaybackUiState(), audio = partialGenerating))
+        assertEquals("Save partial", audiobookExportActionLabel(partialGenerating))
+        assertEquals("Play partial", audiobookPlaybackActionLabel(active = false, playback = AudiobookPlaybackUiState(), audio = partialStopped))
+        assertEquals("Save partial", audiobookExportActionLabel(partialStopped))
+        assertEquals("Play", audiobookPlaybackActionLabel(active = false, playback = AudiobookPlaybackUiState(), audio = generated))
+        assertEquals("Save", audiobookExportActionLabel(generated))
+    }
+
+    @Test
     fun playbackActionLabelUsesResumeForSavedAudiobookPosition() {
         val resumedAudio = audio(1).copy(
             segmentCount = 6,

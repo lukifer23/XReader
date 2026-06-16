@@ -11,6 +11,7 @@
 
 - Audiobook text preparation now uses anchored chapter detection, normalized chapter labels, shorter Kokoro-safe prompts, paragraph/question/chapter pause metadata, and prepared-chapter scoped first-chapter generation so scan estimates match generated output.
 - Generated audiobook sidecars are sanitized on read so stale, overlapping, out-of-range, or invalid chapter metadata cannot break playback navigation.
+- Partial generated audiobooks now label global Audiobooks actions as `Play partial` and `Save partial` so incomplete output is not presented like a finished full-book audiobook.
 - Full-book neural generation prefers WebGPU with isolated-process runtime rotation, then XNNPACK/CPU fallback; preview generation stays on XNNPACK/CPU for stability.
 
 ## 0.1.0 - 2026-05-28

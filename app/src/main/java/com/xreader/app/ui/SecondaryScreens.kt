@@ -825,7 +825,9 @@ private fun GeneratedAudiobookScreenRow(
                 if (audio.canCancelGenerationFromAudiobooksScreen()) {
                     TextButton(onClick = onCancelGeneration) { Text("Stop generation") }
                 }
-                TextButton(onClick = onExport, enabled = audio.playableSegmentCount() > 0) { Text("Save") }
+                TextButton(onClick = onExport, enabled = audio.playableSegmentCount() > 0) {
+                    Text(audiobookExportActionLabel(audio))
+                }
                 if (audio.canDeleteFromAudiobooksScreen()) {
                     TextButton(onClick = onDelete) { Text("Delete") }
                 }
@@ -889,8 +891,15 @@ internal fun audiobookPlaybackActionLabel(
         active && playback.playing -> "Pause"
         active && playback.paused -> "Resume"
         audio?.hasAudiobookResumePosition() == true -> "Resume"
+        audio?.hasPartialGeneratedAudio() == true -> "Play partial"
         else -> "Play"
     }
+
+internal fun audiobookExportActionLabel(audio: BookAudioEntity): String =
+    if (audio.hasPartialGeneratedAudio()) "Save partial" else "Save"
+
+private fun BookAudioEntity.hasPartialGeneratedAudio(): Boolean =
+    status != BookAudioStatus.GENERATED && playableSegmentCount() > 0
 
 internal fun audiobookPlaybackStateLabel(playback: AudiobookPlaybackUiState): String =
     when {

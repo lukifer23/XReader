@@ -55,6 +55,7 @@ The app should keep the audiobook surface compact:
 - scan summary before generation, including detected chapters, local storage estimate, duration estimate, and compact per-scope segment/duration labels
 - generate sample, detected first chapter, and full-book actions
 - persisted progress, ETA, cancellation, resume/retry, partial playback, generated playback, chapter picker/jump controls, delete, and export
+- partial rows must explicitly say `Play partial` and `Save partial` so the user can tell incomplete generated audio apart from a completed audiobook
 
 Do not add placeholder model rows, fake acceleration toggles, or unsupported voice families.
 
