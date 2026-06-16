@@ -426,6 +426,24 @@ class AudiobookUiFormattersTest {
     }
 
     @Test
+    fun playbackChapterJumpRulesUsePreparedChapterBoundariesWhenAvailable() {
+        val chapters = listOf(
+            GeneratedAudiobookChapter(index = 0, title = "Chapter 1", firstSegmentIndex = 3, segmentCount = 2),
+            GeneratedAudiobookChapter(index = 1, title = "Chapter 2", firstSegmentIndex = 5, segmentCount = 3)
+        )
+        val beforeFirstBoundary = AudiobookPlaybackUiState(segmentIndex = 1, segmentCount = 8, chapterCount = 2)
+        val insideFirstChapter = AudiobookPlaybackUiState(segmentIndex = 4, segmentCount = 8, chapterCount = 2)
+        val insideLastChapter = AudiobookPlaybackUiState(segmentIndex = 6, segmentCount = 8, chapterCount = 2)
+
+        assertEquals(false, beforeFirstBoundary.canSkipPreviousChapter(chapters))
+        assertTrue(beforeFirstBoundary.canSkipNextChapter(chapters))
+        assertTrue(insideFirstChapter.canSkipPreviousChapter(chapters))
+        assertTrue(insideFirstChapter.canSkipNextChapter(chapters))
+        assertTrue(insideLastChapter.canSkipPreviousChapter(chapters))
+        assertEquals(false, insideLastChapter.canSkipNextChapter(chapters))
+    }
+
+    @Test
     fun generatedAudiobookChapterRangeLabelsUseOneBasedSegments() {
         assertEquals(
             "Segment 1",

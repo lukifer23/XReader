@@ -62,6 +62,7 @@ The app should keep the audiobook surface compact:
 - persisted progress, ETA, cancellation, resume/retry, partial playback, generated playback, chapter picker/jump controls, delete, and export
 - partial rows must explicitly say `Play partial` and `Save partial` so the user can tell incomplete generated audio apart from a completed audiobook
 - play, save, partial, and resume labels must be based on verified contiguous WAV files, not only database counters; repaired or missing audio should show missing/partial state and should not offer impossible resume positions
+- chapter jump controls must use the prepared/generated chapter sidecar boundaries instead of only current-playback metadata, so older or repaired audio never exposes a previous/next chapter action that cannot actually move
 
 Do not add placeholder model rows, fake acceleration toggles, or unsupported voice families.
 

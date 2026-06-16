@@ -119,6 +119,8 @@ import com.xreader.app.tts.generatedAudiobookChapters
 import com.xreader.app.tts.GeneratedAudiobookChapter
 import com.xreader.app.tts.playableSegmentCount
 import com.xreader.app.tts.playableSegmentFiles
+import com.xreader.app.tts.nextChapterStart
+import com.xreader.app.tts.previousChapterStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -839,8 +841,8 @@ private fun GeneratedAudiobookScreenRow(
                     TextButton(onClick = onSkipPrevious, enabled = playback.segmentIndex > 0) { Text("Previous") }
                     TextButton(onClick = onSkipNext, enabled = playback.segmentIndex < playback.segmentCount - 1) { Text("Next") }
                     if (playback.chapterCount > 1) {
-                        TextButton(onClick = onSkipPreviousChapter, enabled = playback.canSkipPreviousChapter()) { Text("Prev chapter") }
-                        TextButton(onClick = onSkipNextChapter, enabled = playback.canSkipNextChapter()) { Text("Next chapter") }
+                        TextButton(onClick = onSkipPreviousChapter, enabled = playback.canSkipPreviousChapter(chapters)) { Text("Prev chapter") }
+                        TextButton(onClick = onSkipNextChapter, enabled = playback.canSkipNextChapter(chapters)) { Text("Next chapter") }
                     }
                     TextButton(onClick = onStop) { Text("Stop") }
                 }
@@ -1032,6 +1034,12 @@ internal fun AudiobookPlaybackUiState.canSkipPreviousChapter(): Boolean =
 
 internal fun AudiobookPlaybackUiState.canSkipNextChapter(): Boolean =
     chapterCount > 1 && chapterIndex != null && chapterIndex < chapterCount - 1
+
+internal fun AudiobookPlaybackUiState.canSkipPreviousChapter(chapters: List<GeneratedAudiobookChapter>): Boolean =
+    chapters.previousChapterStart(segmentIndex) != null
+
+internal fun AudiobookPlaybackUiState.canSkipNextChapter(chapters: List<GeneratedAudiobookChapter>): Boolean =
+    chapters.nextChapterStart(segmentIndex) != null
 
 internal fun GeneratedAudiobookChapter.chapterRangeLabel(): String =
     when {
