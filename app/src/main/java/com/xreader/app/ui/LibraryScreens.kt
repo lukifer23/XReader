@@ -1873,16 +1873,21 @@ private fun AudiobookPlaybackActions(
     modifier: Modifier = Modifier,
 ) {
     val active = playback.audioId == audio.id && playback.active
-    Row(
+    FlowRow(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         if (active) {
             Text(
                 playbackProgressLabel(playback),
+                modifier = Modifier
+                    .widthIn(max = 240.dp)
+                    .align(Alignment.CenterVertically),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
         TooltipIconButton(
@@ -2000,56 +2005,66 @@ private fun GeneratedAudiobookRow(
         shape = RoundedCornerShape(8.dp),
         color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
     ) {
-        Row(
+        Column(
             modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Icon(
-                Icons.Filled.GraphicEq,
-                contentDescription = null,
-                tint = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(
-                    audioEntity.displayProfileLabel(),
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+            Row(
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Icon(
+                    Icons.Filled.GraphicEq,
+                    contentDescription = null,
+                    tint = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Text(
-                    listOf(
-                        "${audioEntity.segmentCount} segments",
-                        audio.chapters.takeIf { it.isNotEmpty() }?.let { generatedAudiobookChapterCountLabel(it.size) },
-                        generatedAudioPlayableDetail(audio),
-                        audioEntity.estimatedDurationLabel(),
-                        audioEntity.audiobookResumeLabel(prefix = "resume", playableSegmentFiles = audio.playableSegmentFiles),
-                        audioEntity.fileSizeBytes.takeIf { it > 0 }?.compactBytes(),
-                        audioEntity.generatedAt?.let { "generated ${relativeAgeLabel(it)}" }
-                    ).filterNotNull().joinToString(" • "),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        audioEntity.displayProfileLabel(),
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        listOf(
+                            "${audioEntity.segmentCount} segments",
+                            audio.chapters.takeIf { it.isNotEmpty() }?.let { generatedAudiobookChapterCountLabel(it.size) },
+                            generatedAudioPlayableDetail(audio),
+                            audioEntity.estimatedDurationLabel(),
+                            audioEntity.audiobookResumeLabel(prefix = "resume", playableSegmentFiles = audio.playableSegmentFiles),
+                            audioEntity.fileSizeBytes.takeIf { it > 0 }?.compactBytes(),
+                            audioEntity.generatedAt?.let { "generated ${relativeAgeLabel(it)}" }
+                        ).filterNotNull().joinToString(" • "),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
-            AudiobookPlaybackActions(
-                audio = audioEntity,
-                playableSegmentFiles = audio.playableSegmentFiles,
-                playback = playback,
-                onPlayAudio = onPlayAudio,
-                onPauseAudio = onPauseAudio,
-                onStopAudio = onStopAudio,
-                onExportAudio = onExportAudio,
-                onDeleteAudio = onDeleteAudio
-            )
-            if (audio.chapters.size > 1) {
-                TooltipIconButton(
-                    label = "Choose chapter",
-                    onClick = { onShowChapters(audio) },
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null)
+            FlowRow(
+                modifier = Modifier.align(Alignment.End),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                AudiobookPlaybackActions(
+                    audio = audioEntity,
+                    playableSegmentFiles = audio.playableSegmentFiles,
+                    playback = playback,
+                    onPlayAudio = onPlayAudio,
+                    onPauseAudio = onPauseAudio,
+                    onStopAudio = onStopAudio,
+                    onExportAudio = onExportAudio,
+                    onDeleteAudio = onDeleteAudio
+                )
+                if (audio.chapters.size > 1) {
+                    TooltipIconButton(
+                        label = "Choose chapter",
+                        onClick = { onShowChapters(audio) },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null)
+                    }
                 }
             }
         }
