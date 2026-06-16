@@ -880,7 +880,7 @@ private fun AudiobookInfoPill(text: String) {
     }
 }
 
-private fun BookAudioEntity.audiobookStatusDetail(
+internal fun BookAudioEntity.audiobookStatusDetail(
     activePlayback: Boolean,
     playback: AudiobookPlaybackUiState,
     playableSegmentFiles: Int = playableSegmentCount(),
@@ -900,14 +900,7 @@ private fun BookAudioEntity.audiobookStatusDetail(
         BookAudioStatus.CANCELED -> "Stopped"
         BookAudioStatus.FAILED -> error ?: "Failed"
     }
-    val playbackLabel = if (activePlayback && playback.segmentCount > 0) {
-        listOfNotNull(
-            audiobookPlaybackStateLabel(playback),
-            playback.chapterTitle
-        ).joinToString(" • ")
-    } else {
-        null
-    }
+    val playbackLabel = if (activePlayback && playback.segmentCount > 0) audiobookPlaybackStateLabel(playback) else null
     return listOfNotNull(statusLabel, progress, playbackLabel).joinToString(" • ")
 }
 

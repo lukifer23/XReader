@@ -152,6 +152,30 @@ class AudiobookUiFormattersTest {
     }
 
     @Test
+    fun audiobookStatusDetailKeepsActivePlaybackChapterOutOfCompactStatusLine() {
+        val audio = playableAudio(1)
+        val playback = AudiobookPlaybackUiState(
+            audioId = audio.id,
+            segmentIndex = 1,
+            segmentCount = 4,
+            playing = true,
+            chapterIndex = 0,
+            chapterCount = 2,
+            chapterTitle = "Chapter 1"
+        )
+
+        assertEquals(
+            "Ready • 4 segments • playing 2 / 4",
+            audio.audiobookStatusDetail(
+                activePlayback = true,
+                playback = playback,
+                playableSegmentFiles = 4
+            )
+        )
+        assertEquals("Chapter 1 • 1 / 2", playback.chapterLabel())
+    }
+
+    @Test
     fun generatedAudioActionLabelsDistinguishPartialAudio() {
         val partialGenerating = audio(1).copy(
             status = BookAudioStatus.GENERATING,
