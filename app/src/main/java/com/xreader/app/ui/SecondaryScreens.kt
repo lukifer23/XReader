@@ -118,6 +118,7 @@ import com.xreader.app.tts.generationEtaLabel
 import com.xreader.app.tts.generatedAudiobookChapters
 import com.xreader.app.tts.GeneratedAudiobookChapter
 import com.xreader.app.tts.playableSegmentCount
+import com.xreader.app.tts.playableSegmentFiles
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -489,25 +490,26 @@ data class GeneratedAudiobookUiItem(
     val book: BookEntity,
     val audio: BookAudioEntity,
     val chapters: List<GeneratedAudiobookChapter> = emptyList(),
+    val playableSegmentFiles: Int = 0,
 )
 
 internal fun List<GeneratedAudiobookUiItem>.sortedForAudiobooksScreen(
     playback: AudiobookPlaybackUiState,
 ): List<GeneratedAudiobookUiItem> =
     sortedWith(
-        compareBy<GeneratedAudiobookUiItem> { it.audio.audiobookScreenPriority(playback) }
+        compareBy<GeneratedAudiobookUiItem> { it.audiobookScreenPriority(playback) }
             .thenByDescending { it.audio.updatedAt }
             .thenBy { it.book.sortTitle.lowercase(Locale.US) }
             .thenBy { it.audio.id }
     )
 
-private fun BookAudioEntity.audiobookScreenPriority(playback: AudiobookPlaybackUiState): Int =
+private fun GeneratedAudiobookUiItem.audiobookScreenPriority(playback: AudiobookPlaybackUiState): Int =
     when {
-        playback.audioId == id && playback.active -> 0
-        status == BookAudioStatus.GENERATING -> 1
-        playableSegmentCount() > 0 -> 2
-        status == BookAudioStatus.FAILED -> 3
-        status == BookAudioStatus.CANCELED -> 4
+        playback.audioId == audio.id && playback.active -> 0
+        audio.status == BookAudioStatus.GENERATING -> 1
+        playableSegmentFiles > 0 -> 2
+        audio.status == BookAudioStatus.FAILED -> 3
+        audio.status == BookAudioStatus.CANCELED -> 4
         else -> 5
     }
 
@@ -525,13 +527,21 @@ class AudiobooksViewModel(private val container: AppContainer) : ViewModel() {
             val booksById = books.associateBy { it.id }
             val items = withContext(Dispatchers.IO) {
                 audioRows
-                    .filter { it.status == BookAudioStatus.GENERATED || it.status == BookAudioStatus.GENERATING || it.playableSegmentCount() > 0 }
                     .mapNotNull { audio ->
+                        val playableFiles = audio.playableSegmentFiles().size
+                        if (
+                            audio.status != BookAudioStatus.GENERATED &&
+                            audio.status != BookAudioStatus.GENERATING &&
+                            playableFiles <= 0
+                        ) {
+                            return@mapNotNull null
+                        }
                         booksById[audio.bookId]?.let { book ->
                             GeneratedAudiobookUiItem(
                                 book = book,
                                 audio = audio,
-                                chapters = audio.generatedAudiobookChapters()
+                                chapters = audio.generatedAudiobookChapters(),
+                                playableSegmentFiles = playableFiles
                             )
                         }
                     }
@@ -545,7 +555,7 @@ class AudiobooksViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     fun play(item: GeneratedAudiobookUiItem) {
-        if (item.audio.playableSegmentCount() <= 0) {
+        if (item.playableSegmentFiles <= 0) {
             message.value = "Generate at least one segment before playing."
             return
         }
@@ -553,7 +563,7 @@ class AudiobooksViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     fun playFromSegment(item: GeneratedAudiobookUiItem, segmentIndex: Int) {
-        if (item.audio.playableSegmentCount() <= 0) {
+        if (item.playableSegmentFiles <= 0) {
             message.value = "Generate at least one segment before playing."
             return
         }
@@ -767,7 +777,11 @@ private fun GeneratedAudiobookScreenRow(
                 TextButton(onClick = onOpenBook) { Text("Open") }
             }
             Text(
-                audio.audiobookStatusDetail(activePlayback = active, playback = playback),
+                audio.audiobookStatusDetail(
+                    activePlayback = active,
+                    playback = playback,
+                    playableSegmentFiles = item.playableSegmentFiles
+                ),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -778,7 +792,7 @@ private fun GeneratedAudiobookScreenRow(
                     AudiobookInfoPill("${chapters.size} chapters")
                 }
                 audio.estimatedDurationLabel()?.let { AudiobookInfoPill(it) }
-                audio.audiobookResumeLabel()?.let { AudiobookInfoPill(it) }
+                audio.audiobookResumeLabel(playableSegmentFiles = item.playableSegmentFiles)?.let { AudiobookInfoPill(it) }
                 audio.generatedAt?.let {
                     AudiobookInfoPill("Generated ${shortDateLabel(it)}")
                 }
@@ -806,9 +820,20 @@ private fun GeneratedAudiobookScreenRow(
             FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 TextButton(
                     onClick = if (active && playback.playing) onPause else onPlay,
-                    enabled = canPlayGeneratedAudiobookAction(active = active, playback = playback, audio = audio)
+                    enabled = canPlayGeneratedAudiobookAction(
+                        active = active,
+                        playback = playback,
+                        playableSegmentFiles = item.playableSegmentFiles
+                    )
                 ) {
-                    Text(audiobookPlaybackActionLabel(active, playback, audio))
+                    Text(
+                        audiobookPlaybackActionLabel(
+                            active = active,
+                            playback = playback,
+                            audio = audio,
+                            playableSegmentFiles = item.playableSegmentFiles
+                        )
+                    )
                 }
                 if (active) {
                     TextButton(onClick = onSkipPrevious, enabled = playback.segmentIndex > 0) { Text("Previous") }
@@ -825,8 +850,8 @@ private fun GeneratedAudiobookScreenRow(
                 if (audio.canCancelGenerationFromAudiobooksScreen()) {
                     TextButton(onClick = onCancelGeneration) { Text("Stop generation") }
                 }
-                TextButton(onClick = onExport, enabled = canExportGeneratedAudiobookAction(audio)) {
-                    Text(audiobookExportActionLabel(audio))
+                TextButton(onClick = onExport, enabled = canExportGeneratedAudiobookAction(item.playableSegmentFiles)) {
+                    Text(audiobookExportActionLabel(audio, playableSegmentFiles = item.playableSegmentFiles))
                 }
                 if (audio.canDeleteFromAudiobooksScreen()) {
                     TextButton(onClick = onDelete) { Text("Delete") }
@@ -856,12 +881,15 @@ private fun AudiobookInfoPill(text: String) {
 private fun BookAudioEntity.audiobookStatusDetail(
     activePlayback: Boolean,
     playback: AudiobookPlaybackUiState,
+    playableSegmentFiles: Int = playableSegmentCount(),
 ): String {
     val progress = when {
         segmentCount <= 0 -> null
         status == BookAudioStatus.GENERATING -> "${completedSegments.coerceAtMost(segmentCount)} / $segmentCount segments"
-        status == BookAudioStatus.GENERATED -> "$segmentCount segments"
-        playableSegmentCount() > 0 -> "${playableSegmentCount()} playable of $segmentCount segments"
+        status == BookAudioStatus.GENERATED && playableSegmentFiles >= segmentCount -> "$segmentCount segments"
+        status == BookAudioStatus.GENERATED && playableSegmentFiles <= 0 -> "Audio files missing"
+        status == BookAudioStatus.GENERATED -> "$playableSegmentFiles playable of $segmentCount segments"
+        playableSegmentFiles > 0 -> "$playableSegmentFiles playable of $segmentCount segments"
         else -> null
     }
     val statusLabel = when (status) {
@@ -885,13 +913,14 @@ internal fun audiobookPlaybackActionLabel(
     active: Boolean,
     playback: AudiobookPlaybackUiState,
     audio: BookAudioEntity? = null,
+    playableSegmentFiles: Int? = null,
 ): String =
     when {
         active && playback.preparing -> "Preparing"
         active && playback.playing -> "Pause"
         active && playback.paused -> "Resume"
-        audio?.hasAudiobookResumePosition() == true -> "Resume"
-        audio?.hasPartialGeneratedAudio() == true -> "Play partial"
+        audio?.hasAudiobookResumePosition(playableSegmentFiles) == true -> "Resume"
+        audio?.hasPartialGeneratedAudio(playableSegmentFiles) == true -> "Play partial"
         else -> "Play"
     }
 
@@ -899,8 +928,9 @@ internal fun audiobookPlaybackIconLabel(
     active: Boolean,
     playback: AudiobookPlaybackUiState,
     audio: BookAudioEntity,
+    playableSegmentFiles: Int? = null,
 ): String =
-    when (audiobookPlaybackActionLabel(active = active, playback = playback, audio = audio)) {
+    when (audiobookPlaybackActionLabel(active = active, playback = playback, audio = audio, playableSegmentFiles = playableSegmentFiles)) {
         "Preparing" -> "Preparing generated audio"
         "Pause" -> "Pause generated audio"
         "Resume" -> "Resume generated audio"
@@ -908,28 +938,42 @@ internal fun audiobookPlaybackIconLabel(
         else -> "Play generated audio"
     }
 
-internal fun audiobookExportActionLabel(audio: BookAudioEntity): String =
-    if (audio.hasPartialGeneratedAudio()) "Save partial" else "Save"
+internal fun audiobookExportActionLabel(audio: BookAudioEntity, playableSegmentFiles: Int? = null): String =
+    if (audio.hasPartialGeneratedAudio(playableSegmentFiles)) "Save partial" else "Save"
 
-internal fun audiobookExportSuccessMessage(audio: BookAudioEntity): String =
-    if (audio.hasPartialGeneratedAudio()) {
+internal fun audiobookExportSuccessMessage(audio: BookAudioEntity, playableSegmentFiles: Int? = null): String =
+    if (audio.hasPartialGeneratedAudio(playableSegmentFiles)) {
         "Saved partial generated audiobook audio."
     } else {
         "Saved generated audiobook audio."
     }
 
-private fun BookAudioEntity.hasPartialGeneratedAudio(): Boolean =
-    status != BookAudioStatus.GENERATED && playableSegmentCount() > 0
+private fun BookAudioEntity.hasPartialGeneratedAudio(playableSegmentFiles: Int? = null): Boolean =
+    status != BookAudioStatus.GENERATED && (playableSegmentFiles ?: playableSegmentCount()) > 0
 
 internal fun canPlayGeneratedAudiobookAction(
     active: Boolean,
     playback: AudiobookPlaybackUiState,
     audio: BookAudioEntity,
 ): Boolean =
-    audio.playableSegmentCount() > 0 && !(active && playback.preparing)
+    canPlayGeneratedAudiobookAction(
+        active = active,
+        playback = playback,
+        playableSegmentFiles = audio.playableSegmentCount()
+    )
+
+internal fun canPlayGeneratedAudiobookAction(
+    active: Boolean,
+    playback: AudiobookPlaybackUiState,
+    playableSegmentFiles: Int,
+): Boolean =
+    playableSegmentFiles > 0 && !(active && playback.preparing)
 
 internal fun canExportGeneratedAudiobookAction(audio: BookAudioEntity): Boolean =
-    audio.playableSegmentCount() > 0
+    canExportGeneratedAudiobookAction(audio.playableSegmentCount())
+
+internal fun canExportGeneratedAudiobookAction(playableSegmentFiles: Int): Boolean =
+    playableSegmentFiles > 0
 
 internal fun audiobookPlaybackStateLabel(playback: AudiobookPlaybackUiState): String =
     when {
@@ -946,16 +990,21 @@ private fun BookAudioEntity.audiobookDisplayProfileLabel(): String =
         "%.2fx".format(Locale.US, speed)
     ).filterNotNull().joinToString(" ")
 
-internal fun BookAudioEntity.audiobookResumeLabel(prefix: String = "Resume"): String? {
-    if (!hasAudiobookResumePosition()) return null
-    val segment = playbackSegmentIndex.coerceIn(0, segmentCount)
-    return "$prefix ${segment + 1} / $segmentCount"
+internal fun BookAudioEntity.audiobookResumeLabel(
+    prefix: String = "Resume",
+    playableSegmentFiles: Int? = null,
+): String? {
+    val playableCount = playableSegmentFiles ?: segmentCount
+    if (!hasAudiobookResumePosition(playableCount)) return null
+    val segment = playbackSegmentIndex.coerceIn(0, playableCount - 1)
+    return "$prefix ${segment + 1} / $playableCount"
 }
 
-internal fun BookAudioEntity.hasAudiobookResumePosition(): Boolean {
-    if (segmentCount <= 0) return false
-    val segment = playbackSegmentIndex.coerceIn(0, segmentCount)
-    if (segment >= segmentCount) return false
+internal fun BookAudioEntity.hasAudiobookResumePosition(playableSegmentFiles: Int? = null): Boolean {
+    val playableCount = playableSegmentFiles ?: segmentCount
+    if (playableCount <= 0) return false
+    val segment = playbackSegmentIndex.coerceIn(0, playableCount)
+    if (segment >= playableCount) return false
     return segment > 0 || playbackPositionMs > 0
 }
 

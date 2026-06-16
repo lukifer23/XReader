@@ -117,7 +117,6 @@ import com.xreader.app.tts.NeuralTtsModelCatalog
 import com.xreader.app.tts.NeuralTtsModelSpec
 import com.xreader.app.tts.canDeleteGeneratedAudiobook
 import com.xreader.app.tts.generationEtaLabel
-import com.xreader.app.tts.playableSegmentCount
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.ceil
@@ -1298,13 +1297,13 @@ internal fun BookAudiobookDialog(
                 if (selectedSpeaker in filtered) filtered else listOf(selectedSpeaker) + filtered
             }
     }
-    val selectedAudio = remember(bookAudio, settings.neuralTtsModelId, settings.neuralTtsSpeakerId, settings.neuralTtsPace, settings.neuralTtsTone) {
-        bookAudio.firstOrNull { audio ->
-            audio.modelId == settings.neuralTtsModelId &&
-                audio.speakerId == selectedSpec.normalizedSpeakerId(settings.neuralTtsSpeakerId) &&
-                abs(audio.speed - settings.neuralTtsPace.speed) < 0.001f &&
-                audio.tone == settings.neuralTtsTone.name &&
-                audio.scope == AudiobookGenerationScope.FULL_BOOK.key
+    val selectedAudioItem = remember(bookAudioItems, settings.neuralTtsModelId, settings.neuralTtsSpeakerId, settings.neuralTtsPace, settings.neuralTtsTone) {
+        bookAudioItems.firstOrNull { item ->
+            item.audio.modelId == settings.neuralTtsModelId &&
+                item.audio.speakerId == selectedSpec.normalizedSpeakerId(settings.neuralTtsSpeakerId) &&
+                abs(item.audio.speed - settings.neuralTtsPace.speed) < 0.001f &&
+                item.audio.tone == settings.neuralTtsTone.name &&
+                item.audio.scope == AudiobookGenerationScope.FULL_BOOK.key
         }
     }
     val generatingSelectedAudio = bookAudio.any { audio ->
@@ -1316,7 +1315,7 @@ internal fun BookAudiobookDialog(
     }
     val generatedAudioItems = remember(bookAudioItems) {
         bookAudioItems
-            .filter { item -> item.audio.status == BookAudioStatus.GENERATED || item.audio.playableSegmentCount() > 0 }
+            .filter { item -> item.audio.status == BookAudioStatus.GENERATED || item.playableSegmentFiles > 0 }
             .sortedByDescending { it.audio.generatedAt ?: it.audio.updatedAt }
     }
     var deleteCandidate by remember(book.id) { mutableStateOf<BookAudioEntity?>(null) }
@@ -1349,10 +1348,11 @@ internal fun BookAudiobookDialog(
                         )
                     }
                 }
-                selectedAudio?.let { audio ->
+                selectedAudioItem?.let { item ->
                     item {
                         AudiobookStatusCard(
-                            audio = audio,
+                            audio = item.audio,
+                            playableSegmentFiles = item.playableSegmentFiles,
                             onCancelGeneration = onCancelGeneration,
                             onExportAudio = onExportAudio,
                             playback = playback,
@@ -1449,7 +1449,7 @@ internal fun BookAudiobookDialog(
                     item {
                         GeneratedAudiobookList(
                             items = generatedAudioItems,
-                            selectedAudioId = selectedAudio?.id,
+                            selectedAudioId = selectedAudioItem?.audio?.id,
                             playback = playback,
                             onExportAudio = onExportAudio,
                             onPlayAudio = onPlayAudio,
@@ -1739,6 +1739,7 @@ private fun AudiobookRuntimeNote() {
 @Composable
 private fun AudiobookStatusCard(
     audio: BookAudioEntity,
+    playableSegmentFiles: Int,
     onCancelGeneration: () -> Unit,
     onExportAudio: (BookAudioEntity) -> Unit,
     playback: AudiobookPlaybackUiState,
@@ -1751,18 +1752,22 @@ private fun AudiobookStatusCard(
         audio.segmentCount <= 0 -> 0f
         else -> audio.completedSegments.toFloat() / audio.segmentCount.toFloat()
     }.coerceIn(0f, 1f)
-    val playableSegments = audio.playableSegmentCount()
+    val playableSegments = playableSegmentFiles
     val title = when (audio.status) {
-        BookAudioStatus.GENERATED -> "${audio.scopeLabel} ready"
+        BookAudioStatus.GENERATED -> if (playableSegments > 0) "${audio.scopeLabel} ready" else "${audio.scopeLabel} files missing"
         BookAudioStatus.GENERATING -> "Generating ${audio.scopeLabel.lowercase(Locale.US)}"
         BookAudioStatus.CANCELED -> "${audio.scopeLabel} generation stopped"
         BookAudioStatus.FAILED -> "${audio.scopeLabel} generation failed"
     }
     val detail = when (audio.status) {
         BookAudioStatus.GENERATED -> listOf(
-            "${audio.segmentCount} segments",
+            when {
+                playableSegments >= audio.segmentCount -> "${audio.segmentCount} segments"
+                playableSegments <= 0 -> "Audio files missing"
+                else -> "$playableSegments playable of ${audio.segmentCount} segments"
+            },
             audio.estimatedDurationLabel(),
-            audio.audiobookResumeLabel(prefix = "resume"),
+            audio.audiobookResumeLabel(prefix = "resume", playableSegmentFiles = playableSegmentFiles),
             audio.fileSizeBytes.takeIf { it > 0 }?.compactBytes()
         ).filterNotNull().joinToString(" • ")
         BookAudioStatus.GENERATING -> {
@@ -1838,6 +1843,7 @@ private fun AudiobookStatusCard(
             if (canPlay) {
                 AudiobookPlaybackActions(
                     audio = audio,
+                    playableSegmentFiles = playableSegments,
                     playback = playback,
                     onPlayAudio = onPlayAudio,
                     onPauseAudio = onPauseAudio,
@@ -1857,6 +1863,7 @@ private fun AudiobookStatusCard(
 @Composable
 private fun AudiobookPlaybackActions(
     audio: BookAudioEntity,
+    playableSegmentFiles: Int,
     playback: AudiobookPlaybackUiState,
     onPlayAudio: (BookAudioEntity) -> Unit,
     onPauseAudio: (BookAudioEntity) -> Unit,
@@ -1879,12 +1886,21 @@ private fun AudiobookPlaybackActions(
             )
         }
         TooltipIconButton(
-            label = audiobookPlaybackIconLabel(active, playback, audio),
+            label = audiobookPlaybackIconLabel(
+                active = active,
+                playback = playback,
+                audio = audio,
+                playableSegmentFiles = playableSegmentFiles
+            ),
             onClick = {
                 if (active && playback.playing) onPauseAudio(audio) else onPlayAudio(audio)
             },
             modifier = Modifier.size(40.dp),
-            enabled = canPlayGeneratedAudiobookAction(active = active, playback = playback, audio = audio)
+            enabled = canPlayGeneratedAudiobookAction(
+                active = active,
+                playback = playback,
+                playableSegmentFiles = playableSegmentFiles
+            )
         ) {
             Icon(if (active && playback.playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, contentDescription = null)
         }
@@ -1898,10 +1914,10 @@ private fun AudiobookPlaybackActions(
             }
         }
         TooltipIconButton(
-            label = "${audiobookExportActionLabel(audio)} generated audio",
+            label = "${audiobookExportActionLabel(audio, playableSegmentFiles = playableSegmentFiles)} generated audio",
             onClick = { onExportAudio(audio) },
             modifier = Modifier.size(40.dp),
-            enabled = canExportGeneratedAudiobookAction(audio)
+            enabled = canExportGeneratedAudiobookAction(playableSegmentFiles)
         ) {
             Icon(Icons.Filled.FileDownload, contentDescription = null)
         }
@@ -2005,11 +2021,9 @@ private fun GeneratedAudiobookRow(
                     listOf(
                         "${audioEntity.segmentCount} segments",
                         audio.chapters.takeIf { it.isNotEmpty() }?.let { "${it.size} chapters" },
-                        audioEntity.status.takeIf { it != BookAudioStatus.GENERATED }?.let {
-                            "${audioEntity.playableSegmentCount()} playable"
-                        },
+                        generatedAudioPlayableDetail(audio),
                         audioEntity.estimatedDurationLabel(),
-                        audioEntity.audiobookResumeLabel(prefix = "resume"),
+                        audioEntity.audiobookResumeLabel(prefix = "resume", playableSegmentFiles = audio.playableSegmentFiles),
                         audioEntity.fileSizeBytes.takeIf { it > 0 }?.compactBytes(),
                         audioEntity.generatedAt?.let { "generated ${relativeAgeLabel(it)}" }
                     ).filterNotNull().joinToString(" • "),
@@ -2021,6 +2035,7 @@ private fun GeneratedAudiobookRow(
             }
             AudiobookPlaybackActions(
                 audio = audioEntity,
+                playableSegmentFiles = audio.playableSegmentFiles,
                 playback = playback,
                 onPlayAudio = onPlayAudio,
                 onPauseAudio = onPauseAudio,
@@ -2040,6 +2055,16 @@ private fun GeneratedAudiobookRow(
         }
     }
 }
+
+private fun generatedAudioPlayableDetail(audio: BookAudiobookAudioUiItem): String? =
+    when {
+        audio.audio.status == BookAudioStatus.GENERATED && audio.playableSegmentFiles <= 0 -> "audio files missing"
+        audio.audio.status == BookAudioStatus.GENERATED && audio.playableSegmentFiles < audio.audio.segmentCount ->
+            "${audio.playableSegmentFiles} playable"
+        audio.audio.status != BookAudioStatus.GENERATED && audio.playableSegmentFiles > 0 ->
+            "${audio.playableSegmentFiles} playable"
+        else -> null
+    }
 
 @Composable
 private fun <T> AudiobookChipGroup(

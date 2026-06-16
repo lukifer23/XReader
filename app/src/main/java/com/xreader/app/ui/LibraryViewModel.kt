@@ -34,7 +34,7 @@ import com.xreader.app.tts.AudiobookPlaybackUiState
 import com.xreader.app.tts.AudiobookGenerationScope
 import com.xreader.app.tts.GeneratedAudiobookChapter
 import com.xreader.app.tts.generatedAudiobookChapters
-import com.xreader.app.tts.playableSegmentCount
+import com.xreader.app.tts.playableSegmentFiles
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -110,6 +110,7 @@ data class LibraryMessage(
 data class BookAudiobookAudioUiItem(
     val audio: BookAudioEntity,
     val chapters: List<GeneratedAudiobookChapter> = emptyList(),
+    val playableSegmentFiles: Int = 0,
 )
 
 data class LibraryUiState(
@@ -682,7 +683,8 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
                     rows.map { audio ->
                         BookAudiobookAudioUiItem(
                             audio = audio,
-                            chapters = audio.generatedAudiobookChapters()
+                            chapters = audio.generatedAudiobookChapters(),
+                            playableSegmentFiles = audio.playableSegmentFiles().size
                         )
                     }
                 }
@@ -729,7 +731,7 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     fun playAudiobookAudio(book: BookEntity, audio: BookAudioEntity) {
-        if (audio.playableSegmentCount() <= 0) {
+        if (audio.playableSegmentFiles().isEmpty()) {
             postMessage("Generate at least one audiobook segment before playing it")
             return
         }
@@ -739,7 +741,7 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     fun playAudiobookAudioFromSegment(book: BookEntity, audio: BookAudioEntity, segmentIndex: Int) {
-        if (audio.playableSegmentCount() <= 0) {
+        if (audio.playableSegmentFiles().isEmpty()) {
             postMessage("Generate at least one audiobook segment before playing it")
             return
         }

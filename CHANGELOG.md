@@ -19,6 +19,7 @@
 - Generated audiobook resume, partial-play, and playback icon labels now use shared formatting across Library and Audiobooks surfaces.
 - Per-book generated-audio controls now share the same play/save/delete enablement rules as the global Audiobooks screen, avoiding invalid actions for empty or actively generating audio.
 - Partial generated audiobooks now label global Audiobooks actions as `Play partial` and `Save partial` so incomplete output is not presented like a finished full-book audiobook.
+- Generated audiobook play, save, partial, and resume labels now use verified playable WAV files rather than stale database segment counters, so repaired or missing audio cannot surface broken controls or impossible resume positions.
 - Full-book neural generation prefers WebGPU with isolated-process runtime rotation, then XNNPACK/CPU fallback; preview generation stays on XNNPACK/CPU for stability.
 
 ## 0.1.0 - 2026-05-28

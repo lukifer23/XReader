@@ -6,6 +6,7 @@ import com.xreader.app.data.BookEntity
 import com.xreader.app.data.BookFormat
 import com.xreader.app.tts.AudiobookPlaybackUiState
 import com.xreader.app.tts.GeneratedAudiobookChapter
+import com.xreader.app.tts.playableSegmentCount
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -171,6 +172,27 @@ class AudiobookUiFormattersTest {
         assertEquals("Play partial", audiobookPlaybackActionLabel(active = false, playback = AudiobookPlaybackUiState(), audio = partialGenerating))
         assertEquals("Save partial", audiobookExportActionLabel(partialGenerating))
         assertEquals("Saved partial generated audiobook audio.", audiobookExportSuccessMessage(partialGenerating))
+        assertEquals(
+            "Play",
+            audiobookPlaybackActionLabel(
+                active = false,
+                playback = AudiobookPlaybackUiState(),
+                audio = partialGenerating,
+                playableSegmentFiles = 0
+            )
+        )
+        assertEquals("Save", audiobookExportActionLabel(partialGenerating, playableSegmentFiles = 0))
+        assertEquals("Saved generated audiobook audio.", audiobookExportSuccessMessage(partialGenerating, playableSegmentFiles = 0))
+        assertEquals(
+            "Play partial",
+            audiobookPlaybackActionLabel(
+                active = false,
+                playback = AudiobookPlaybackUiState(),
+                audio = partialGenerating,
+                playableSegmentFiles = 1
+            )
+        )
+        assertEquals("Save partial", audiobookExportActionLabel(partialGenerating, playableSegmentFiles = 1))
         assertEquals("Play partial", audiobookPlaybackActionLabel(active = false, playback = AudiobookPlaybackUiState(), audio = partialStopped))
         assertEquals("Save partial", audiobookExportActionLabel(partialStopped))
         assertEquals("Play", audiobookPlaybackActionLabel(active = false, playback = AudiobookPlaybackUiState(), audio = generated))
@@ -221,6 +243,26 @@ class AudiobookUiFormattersTest {
     }
 
     @Test
+    fun resumeLabelsClampToVerifiedPlayableAudio() {
+        val staleDeepResume = audio(1).copy(
+            status = BookAudioStatus.CANCELED,
+            segmentCount = 10,
+            completedSegments = 10,
+            playbackSegmentIndex = 7,
+            playbackPositionMs = 12_000
+        )
+        val playableResume = staleDeepResume.copy(playbackSegmentIndex = 1)
+        val firstSegmentResume = staleDeepResume.copy(playbackSegmentIndex = 0, playbackPositionMs = 8_000)
+
+        assertTrue(staleDeepResume.hasAudiobookResumePosition())
+        assertEquals("Resume 8 / 10", staleDeepResume.audiobookResumeLabel())
+        assertEquals(false, staleDeepResume.hasAudiobookResumePosition(playableSegmentFiles = 2))
+        assertNull(staleDeepResume.audiobookResumeLabel(playableSegmentFiles = 2))
+        assertEquals("Resume 2 / 2", playableResume.audiobookResumeLabel(playableSegmentFiles = 2))
+        assertEquals("Resume 1 / 2", firstSegmentResume.audiobookResumeLabel(playableSegmentFiles = 2))
+    }
+
+    @Test
     fun playbackIconLabelsUseSharedGeneratedAudioActions() {
         val partial = audio(1).copy(
             status = BookAudioStatus.CANCELED,
@@ -235,6 +277,24 @@ class AudiobookUiFormattersTest {
         val preparing = AudiobookPlaybackUiState(audioId = partial.id, preparing = true, segmentCount = 6)
 
         assertEquals("Play partial generated audio", audiobookPlaybackIconLabel(active = false, playback = AudiobookPlaybackUiState(), audio = partial))
+        assertEquals(
+            "Play generated audio",
+            audiobookPlaybackIconLabel(
+                active = false,
+                playback = AudiobookPlaybackUiState(),
+                audio = partial,
+                playableSegmentFiles = 0
+            )
+        )
+        assertEquals(
+            "Play partial generated audio",
+            audiobookPlaybackIconLabel(
+                active = false,
+                playback = AudiobookPlaybackUiState(),
+                audio = partial,
+                playableSegmentFiles = 1
+            )
+        )
         assertEquals("Resume generated audio", audiobookPlaybackIconLabel(active = false, playback = AudiobookPlaybackUiState(), audio = resumed))
         assertEquals("Pause generated audio", audiobookPlaybackIconLabel(active = true, playback = playing, audio = partial))
         assertEquals("Preparing generated audio", audiobookPlaybackIconLabel(active = true, playback = preparing, audio = partial))
@@ -259,6 +319,23 @@ class AudiobookUiFormattersTest {
         assertTrue(canPlayGeneratedAudiobookAction(active = false, playback = AudiobookPlaybackUiState(), audio = playable))
         assertTrue(canExportGeneratedAudiobookAction(playable))
         assertEquals(false, canPlayGeneratedAudiobookAction(active = true, playback = preparing, audio = playable))
+        assertEquals(
+            false,
+            canPlayGeneratedAudiobookAction(
+                active = false,
+                playback = AudiobookPlaybackUiState(),
+                playableSegmentFiles = 0
+            )
+        )
+        assertEquals(false, canExportGeneratedAudiobookAction(playableSegmentFiles = 0))
+        assertTrue(
+            canPlayGeneratedAudiobookAction(
+                active = false,
+                playback = AudiobookPlaybackUiState(),
+                playableSegmentFiles = 2
+            )
+        )
+        assertTrue(canExportGeneratedAudiobookAction(playableSegmentFiles = 2))
     }
 
     @Test
@@ -361,14 +438,15 @@ class AudiobookUiFormattersTest {
     }
 
     @Test
-    fun generatedAudiobookUiItemCarriesPreparedChapters() {
+    fun generatedAudiobookUiItemCarriesPreparedChaptersAndPlayableFileCount() {
         val chapters = listOf(
             GeneratedAudiobookChapter(index = 0, title = "Chapter 1", firstSegmentIndex = 0, segmentCount = 2)
         )
 
-        val item = item(playableAudio(1), chapters)
+        val item = item(playableAudio(1), chapters, playableSegmentFiles = 2)
 
         assertEquals(chapters, item.chapters)
+        assertEquals(2, item.playableSegmentFiles)
     }
 
     private fun audio(id: Long): BookAudioEntity =
@@ -392,6 +470,7 @@ class AudiobookUiFormattersTest {
     private fun item(
         audio: BookAudioEntity,
         chapters: List<GeneratedAudiobookChapter> = emptyList(),
+        playableSegmentFiles: Int = audio.playableSegmentCount(),
     ): GeneratedAudiobookUiItem =
         GeneratedAudiobookUiItem(
             book = BookEntity(
@@ -410,15 +489,18 @@ class AudiobookUiFormattersTest {
                 updatedAt = 1
             ),
             audio = audio,
-            chapters = chapters
+            chapters = chapters,
+            playableSegmentFiles = playableSegmentFiles
         )
 
     private fun bookAudioItem(
         audio: BookAudioEntity,
         chapters: List<GeneratedAudiobookChapter> = emptyList(),
+        playableSegmentFiles: Int = audio.playableSegmentCount(),
     ): BookAudiobookAudioUiItem =
         BookAudiobookAudioUiItem(
             audio = audio,
-            chapters = chapters
+            chapters = chapters,
+            playableSegmentFiles = playableSegmentFiles
         )
 }
