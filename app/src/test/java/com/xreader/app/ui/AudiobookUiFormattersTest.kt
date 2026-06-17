@@ -414,6 +414,42 @@ class AudiobookUiFormattersTest {
     }
 
     @Test
+    fun audiobooksScreenSearchMatchesBookAuthorVoiceScopeAndStatus() {
+        val ready = item(
+            playableAudio(1).copy(
+                modelDisplayName = "Kokoro v1.0",
+                scopeLabel = "Full book"
+            ),
+            bookTitle = "The Long Patrol",
+            author = "Brad Thor"
+        )
+        val sample = item(
+            playableAudio(2).copy(
+                modelDisplayName = "Kokoro v1.0",
+                scopeLabel = "Sample"
+            ),
+            bookTitle = "A Deepness in the Sky",
+            author = "Vernor Vinge"
+        )
+        val generating = item(
+            audio(3).copy(
+                status = BookAudioStatus.GENERATING,
+                modelDisplayName = "Kokoro v1.0",
+                scopeLabel = "First chapter"
+            ),
+            bookTitle = "Blowback",
+            author = "Brad Thor"
+        )
+
+        val rows = listOf(ready, sample, generating)
+
+        assertEquals(listOf(1L, 3L), rows.filteredForAudiobooksScreen("brad").map { it.audio.id })
+        assertEquals(listOf(2L), rows.filteredForAudiobooksScreen("deepness sample").map { it.audio.id })
+        assertEquals(listOf(3L), rows.filteredForAudiobooksScreen("generating chapter").map { it.audio.id })
+        assertEquals(listOf(1L, 2L, 3L), rows.filteredForAudiobooksScreen("kokoro").map { it.audio.id })
+    }
+
+    @Test
     fun continueReadingPrimaryActionsExposeBookMaintenanceAndAudio() {
         val actions = continueReadingPrimaryActions()
 
@@ -532,13 +568,15 @@ class AudiobookUiFormattersTest {
         audio: BookAudioEntity,
         chapters: List<GeneratedAudiobookChapter> = emptyList(),
         playableSegmentFiles: Int = audio.playableSegmentCount(),
+        bookTitle: String = "Book ${audio.id}",
+        author: String = "Author",
     ): GeneratedAudiobookUiItem =
         GeneratedAudiobookUiItem(
             book = BookEntity(
                 id = audio.bookId,
-                title = "Book ${audio.id}",
-                author = "Author",
-                sortTitle = "book ${audio.id}",
+                title = bookTitle,
+                author = author,
+                sortTitle = bookTitle.lowercase(),
                 format = BookFormat.EPUB,
                 sourceExtension = "epub",
                 fileName = "book-${audio.id}.epub",

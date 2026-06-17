@@ -505,6 +505,31 @@ internal fun List<GeneratedAudiobookUiItem>.sortedForAudiobooksScreen(
             .thenBy { it.audio.id }
     )
 
+internal fun List<GeneratedAudiobookUiItem>.filteredForAudiobooksScreen(
+    query: String,
+): List<GeneratedAudiobookUiItem> {
+    val terms = query
+        .lowercase(Locale.US)
+        .split(Regex("\\s+"))
+        .filter { it.isNotBlank() }
+    if (terms.isEmpty()) return this
+    return filter { item ->
+        val searchable = item.audiobookSearchText()
+        terms.all { term -> term in searchable }
+    }
+}
+
+private fun GeneratedAudiobookUiItem.audiobookSearchText(): String =
+    listOf(
+        book.title,
+        book.author,
+        audio.scopeLabel,
+        audio.modelDisplayName,
+        audio.audiobookDisplayProfileLabel(),
+        audio.status.name.lowercase(Locale.US),
+        audio.tone.lowercase(Locale.US)
+    ).joinToString(" ").lowercase(Locale.US)
+
 private fun GeneratedAudiobookUiItem.audiobookScreenPriority(playback: AudiobookPlaybackUiState): Int =
     when {
         playback.audioId == audio.id && playback.active -> 0
@@ -640,6 +665,10 @@ internal fun AudiobooksRoute(
     var exportTarget by remember { mutableStateOf<BookAudioEntity?>(null) }
     var deleteCandidate by remember { mutableStateOf<GeneratedAudiobookUiItem?>(null) }
     var chapterPicker by remember { mutableStateOf<GeneratedAudiobookUiItem?>(null) }
+    var searchQuery by remember { mutableStateOf("") }
+    val visibleRows = remember(state.rows, searchQuery) {
+        state.rows.filteredForAudiobooksScreen(searchQuery)
+    }
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
         val target = exportTarget
         exportTarget = null
@@ -685,7 +714,24 @@ internal fun AudiobooksRoute(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                items(state.rows, key = { "${it.book.id}:${it.audio.id}" }) { item ->
+                item {
+                    AudiobookSearchField(
+                        query = searchQuery,
+                        onQueryChange = { searchQuery = it },
+                        resultCount = visibleRows.size,
+                        totalCount = state.rows.size
+                    )
+                }
+                if (visibleRows.isEmpty()) {
+                    item {
+                        Text(
+                            "No generated audiobooks match this search.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                items(visibleRows, key = { "${it.book.id}:${it.audio.id}" }) { item ->
                     GeneratedAudiobookScreenRow(
                         item = item,
                         chapters = item.chapters,
@@ -741,6 +787,35 @@ internal fun AudiobooksRoute(
             }
         )
     }
+}
+
+@Composable
+private fun AudiobookSearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    resultCount: Int,
+    totalCount: Int,
+) {
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        modifier = Modifier.fillMaxWidth(),
+        singleLine = true,
+        label = { Text("Search audiobooks") },
+        supportingText = {
+            if (query.isNotBlank()) {
+                Text("$resultCount of $totalCount")
+            }
+        },
+        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+        trailingIcon = {
+            if (query.isNotBlank()) {
+                IconButton(onClick = { onQueryChange("") }) {
+                    Icon(Icons.Filled.Close, contentDescription = "Clear search")
+                }
+            }
+        }
+    )
 }
 
 @Composable
