@@ -269,12 +269,14 @@ class LibraryRepositoryInstrumentedTest {
         assertEquals(1, memberships.size)
         assertEquals("Sci-Fi", memberships.single().name)
         assertEquals(listOf("Sci-Fi"), repository.observeCollections().first().map { it.name })
+        assertEquals(listOf("Red Rising"), repository.observeBooks("sci-fi").first().map { it.title })
 
         val removed = repository.removeBookFromCollection(id, memberships.single().collectionId)
 
         assertEquals(true, removed.changed)
         assertEquals(emptyList<String>(), repository.observeCollections().first().map { it.name })
         assertEquals(emptyList<String>(), repository.observeBookCollectionNames().first().map { it.name })
+        assertEquals(emptyList<String>(), repository.observeBooks("sci-fi").first().map { it.title })
     }
 
     private fun book(

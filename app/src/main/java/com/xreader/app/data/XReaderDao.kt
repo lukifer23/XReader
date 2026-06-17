@@ -30,7 +30,14 @@ interface BookDao {
         WHERE (:query = '' OR title LIKE '%' || :query || '%' OR author LIKE '%' || :query || '%'
             OR IFNULL(series, '') LIKE '%' || :query || '%' OR IFNULL(genre, '') LIKE '%' || :query || '%'
             OR IFNULL(sourceExtension, '') LIKE '%' || :query || '%' OR format LIKE '%' || :query || '%'
-            OR IFNULL(fileName, '') LIKE '%' || :query || '%' OR IFNULL(CAST(year AS TEXT), '') LIKE '%' || :query || '%')
+            OR IFNULL(fileName, '') LIKE '%' || :query || '%' OR IFNULL(CAST(year AS TEXT), '') LIKE '%' || :query || '%'
+            OR EXISTS (
+                SELECT 1
+                FROM book_collections
+                INNER JOIN collections ON collections.id = book_collections.collectionId
+                WHERE book_collections.bookId = books.id
+                    AND collections.name LIKE '%' || :query || '%'
+            ))
         ORDER BY lastOpenedAt DESC, sortTitle ASC
         """
     )
