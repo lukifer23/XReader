@@ -24,6 +24,10 @@ class LibraryEmptyStateTest {
         ).emptyStateCopy()
 
         assertEquals("No matching books", copy.title)
+        assertEquals(
+            "No titles, authors, series, genres, formats, or years match \"missing title\".",
+            copy.body
+        )
         assertEquals("Show all", copy.primaryAction)
         assertFalse(copy.importsBooks)
     }

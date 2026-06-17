@@ -659,6 +659,31 @@ class ImportServiceInstrumentedTest {
     }
 
     @Test
+    fun libraryFilterMatchesSourceFormatFileNameAndYear() = runBlocking {
+        val txtSource = File(root, "source/Format Filter 1999.txt").apply {
+            parentFile?.mkdirs()
+            writeText("Format Filter 1999\n\nPlain text import for format search.")
+        }
+        val pdfSource = File(root, "source/Manual 2026.pdf").apply {
+            parentFile?.mkdirs()
+            writeSearchablePdf(this)
+        }
+        val service = ImportService(context, db)
+
+        val txtId = service.import(Uri.fromFile(txtSource)).bookId
+        val pdfId = service.import(Uri.fromFile(pdfSource)).bookId
+        val txtBook = requireNotNull(db.books().getBook(txtId))
+        val pdfBook = requireNotNull(db.books().getBook(pdfId))
+        db.books().update(txtBook.copy(year = 1999))
+        db.books().update(pdfBook.copy(year = 2026))
+
+        assertEquals(listOf("Format Filter 1999"), db.books().observeBooks("txt").first().map { it.title })
+        assertEquals(listOf("Manual 2026"), db.books().observeBooks("pdf").first().map { it.title })
+        assertEquals(listOf("Format Filter 1999"), db.books().observeBooks("1999").first().map { it.title })
+        assertEquals(listOf("Manual 2026"), db.books().observeBooks("Manual 2026.pdf").first().map { it.title })
+    }
+
+    @Test
     fun reimportRestoresMissingPrivateFileAndSearchRowsWithoutChangingBookId() = runBlocking {
         val source = File(root, "source/recoverable.txt").apply {
             parentFile?.mkdirs()
