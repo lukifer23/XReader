@@ -706,6 +706,8 @@ class ImportServiceInstrumentedTest {
                 XReader repair test
 
                 The repair action should rebuild searchable private book text.
+                It should also backfill readability for older imported books that predate readability metrics.
+                Clear sentences give the repair step enough real body text to calculate a grade level.
                 """.trimIndent()
             )
         }
@@ -718,13 +720,48 @@ class ImportServiceInstrumentedTest {
 
         db.search().deleteFtsForBook(result.bookId.toString())
         db.search().deleteForBook(result.bookId)
+        val imported = requireNotNull(db.books().getBook(result.bookId))
+        db.books().update(imported.copy(readabilityScore = null, readabilityGradeLevel = null))
         assertEquals(0, service.bookHealth(result.bookId).searchRows)
 
         val repair = service.repairBook(result.bookId)
+        val repaired = requireNotNull(db.books().getBook(result.bookId))
 
         assertFalse(repair.failed)
+        assertFalse(repair.missingFile)
         assertTrue(repair.searchRows > 0)
+        assertTrue(repair.readabilityUpdated)
+        assertTrue((repaired.readabilityScore ?: 0.0) > 0.0)
+        assertTrue((repaired.readabilityGradeLevel ?: -1.0) >= 0.0)
         assertEquals(repair.searchRows, service.bookHealth(result.bookId).searchRows)
+    }
+
+    @Test
+    fun repairBookReportsMissingPrivateFileWithoutClearingCatalogState() = runBlocking {
+        val source = File(root, "source/missing_private_copy.txt").apply {
+            parentFile?.mkdirs()
+            writeText(
+                """
+                Missing private copy
+
+                This record stays in the catalog while the stored private reader file is absent.
+                """.trimIndent()
+            )
+        }
+        val service = ImportService(context, db)
+        val result = service.import(Uri.fromFile(source))
+        val book = requireNotNull(db.books().getBook(result.bookId))
+        assertTrue(File(context.filesDir, book.filePath).delete())
+
+        val repair = service.repairBook(result.bookId)
+        val unchanged = requireNotNull(db.books().getBook(result.bookId))
+
+        assertTrue(repair.failed)
+        assertTrue(repair.missingFile)
+        assertFalse(repair.metadataUpdated)
+        assertFalse(repair.readabilityUpdated)
+        assertEquals(0, repair.searchRows)
+        assertEquals(book.title, unchanged.title)
     }
 
     @Test

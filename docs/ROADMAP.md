@@ -8,7 +8,7 @@ This is the working product roadmap for the personal APK line. Items should appe
 - Expand public-domain fixture coverage into screenshot and reader navigation QA.
 - Track startup and reader-open baseline history after each major UI, import, or Readium change.
 - Add connected-device screenshot QA for the refreshed reading-stats screen across empty, light-use, and long-history libraries.
-- Backfill readability for existing libraries through the repair flow and verify labels on real imported EPUB/PDF/TXT samples.
+- Verify readability repair labels on real imported EPUB/PDF/TXT samples during the next connected-device pass.
 - Device-profile embedded Kokoro v1.0 audiobook generation on small, medium, and long books, including model download time, generation speed, provider used, battery/thermal behavior, generated ZIP size, and retry behavior after app/process interruption.
 - Execute the audiobook acceleration timeline in [Audiobook Generation](AUDIOBOOK_GENERATION.md): XNNPACK baseline first, then a measured Qualcomm QNN/NPU prototype, then provider fallback decisions.
 

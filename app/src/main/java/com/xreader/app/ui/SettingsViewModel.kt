@@ -356,6 +356,8 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         val details = buildList {
             if (coversUpdated > 0) add("$coversUpdated covers")
             if (metadataUpdated > 0) add("$metadataUpdated metadata updates")
+            if (readabilityUpdated > 0) add("$readabilityUpdated readability updates")
+            if (missingFiles > 0) add("$missingFiles missing files")
             if (failed > 0) add("$failed failed")
         }
         val base = "Repaired $scanned ${if (scanned == 1) "book" else "books"}; rebuilt $searchRows search rows"

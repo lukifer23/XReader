@@ -52,7 +52,9 @@ class ImportService(
         val scanned: Int,
         val coversUpdated: Int,
         val metadataUpdated: Int,
+        val readabilityUpdated: Int,
         val searchRows: Int,
+        val missingFiles: Int,
         val failed: Int,
     )
 
@@ -60,7 +62,9 @@ class ImportService(
         val bookId: Long,
         val coverUpdated: Boolean,
         val metadataUpdated: Boolean,
+        val readabilityUpdated: Boolean,
         val searchRows: Int,
+        val missingFile: Boolean,
         val failed: Boolean,
     )
 
@@ -358,17 +362,21 @@ class ImportService(
         var scanned = 0
         var coversUpdated = 0
         var metadataUpdated = 0
+        var readabilityUpdated = 0
         var searchRows = 0
+        var missingFiles = 0
         var failed = 0
         bookDao.booksForMaintenance(limit).forEach { book ->
             scanned += 1
             val outcome = repairBookInternal(book)
             if (outcome.failed) {
+                if (outcome.missingFile) missingFiles += 1
                 failed += 1
                 return@forEach
             }
             if (outcome.coverUpdated) coversUpdated += 1
             if (outcome.metadataUpdated) metadataUpdated += 1
+            if (outcome.readabilityUpdated) readabilityUpdated += 1
             searchRows += outcome.searchRows
         }
         metadataUpdated += cleanupLibraryMetadataInternal()
@@ -378,7 +386,9 @@ class ImportService(
             scanned = scanned,
             coversUpdated = coversUpdated,
             metadataUpdated = metadataUpdated,
+            readabilityUpdated = readabilityUpdated,
             searchRows = searchRows,
+            missingFiles = missingFiles,
             failed = failed
         )
     }
@@ -659,7 +669,9 @@ class ImportService(
                 bookId = book.id,
                 coverUpdated = false,
                 metadataUpdated = false,
+                readabilityUpdated = false,
                 searchRows = 0,
+                missingFile = true,
                 failed = true
             )
         }
@@ -679,6 +691,8 @@ class ImportService(
             val rows = parsed.units.toSearchRows(book.id)
             val updated = book.repairedCopy(parsed, refreshedCoverPath, file.length(), metadataOptions)
             val changedMetadata = updated != book
+            val changedReadability = updated.readabilityScore != book.readabilityScore ||
+                updated.readabilityGradeLevel != book.readabilityGradeLevel
             database.withTransaction {
                 if (changedMetadata) bookDao.update(updated)
                 updated.genre?.let { bookDao.insertGenre(com.xreader.app.data.GenreEntity(name = it)) }
@@ -689,7 +703,9 @@ class ImportService(
                 bookId = book.id,
                 coverUpdated = refreshedCoverPath != null,
                 metadataUpdated = changedMetadata,
+                readabilityUpdated = changedReadability,
                 searchRows = rows.size,
+                missingFile = false,
                 failed = false
             )
         }.getOrElse {
@@ -697,7 +713,9 @@ class ImportService(
                 bookId = book.id,
                 coverUpdated = false,
                 metadataUpdated = false,
+                readabilityUpdated = false,
                 searchRows = 0,
+                missingFile = false,
                 failed = true
             )
         }

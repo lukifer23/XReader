@@ -994,10 +994,12 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         }
 
     private fun com.xreader.app.importer.ImportService.BookRepairResult.summaryMessage(book: BookEntity): String {
+        if (missingFile) return "Could not repair ${book.title}; re-import the stored file"
         if (failed) return "Could not repair ${book.title}"
         val details = buildList {
             if (coverUpdated) add("cover")
             if (metadataUpdated) add("metadata")
+            if (readabilityUpdated) add("readability")
         }
         val base = "Repaired ${book.title}; rebuilt $searchRows search rows"
         return if (details.isEmpty()) base else "$base; updated ${details.joinToString(", ")}"

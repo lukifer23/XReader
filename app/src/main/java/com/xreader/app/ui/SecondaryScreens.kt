@@ -1659,6 +1659,11 @@ internal fun SettingsRoute(
                         Spacer(Modifier.width(8.dp))
                         Text(if (maintenance.repairingLibrary) "Repairing library" else "Repair library")
                     }
+                    Text(
+                        "Rebuilds search, covers, metadata, series order, and readability for imported books.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(
                             onClick = { exportLibraryLauncher.launch("xreader-library-metadata.json") },
