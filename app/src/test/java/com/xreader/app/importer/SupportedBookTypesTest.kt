@@ -1,5 +1,6 @@
 package com.xreader.app.importer
 
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -25,5 +26,21 @@ class SupportedBookTypesTest {
                 "text/fb2"
             )
         ))
+    }
+
+    @Test
+    fun importCandidatesIncludeSupportedNamesAndSniffableExtensionlessGenericFiles() {
+        assertTrue(SupportedBookTypes.isPotentialImportCandidate("Book.epub", "application/octet-stream"))
+        assertTrue(SupportedBookTypes.isPotentialImportCandidate("Book.fb2.zip", "application/zip"))
+        assertTrue(SupportedBookTypes.isPotentialImportCandidate("generic-download", "application/octet-stream"))
+        assertTrue(SupportedBookTypes.isPotentialImportCandidate("generic-download", "application/unknown"))
+        assertTrue(SupportedBookTypes.isPotentialImportCandidate("generic-download", ""))
+    }
+
+    @Test
+    fun importCandidatesRejectExplicitUnsupportedExtensionsWithGenericMime() {
+        assertFalse(SupportedBookTypes.isPotentialImportCandidate("cover.jpg", "application/octet-stream"))
+        assertFalse(SupportedBookTypes.isPotentialImportCandidate("archive.rar", "application/octet-stream"))
+        assertFalse(SupportedBookTypes.isPotentialImportCandidate("notes.tmp", ""))
     }
 }

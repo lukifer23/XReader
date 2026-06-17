@@ -874,7 +874,7 @@ class ImportService(
                     val documentUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, documentId)
                     if (mimeType == DocumentsContract.Document.MIME_TYPE_DIR) {
                         scanDirectory(documentUri)
-                    } else if (isSupportedBook(displayName, mimeType)) {
+                    } else if (SupportedBookTypes.isPotentialImportCandidate(displayName, mimeType)) {
                         bookUris += documentUri
                     } else {
                         unsupportedFiles += 1
@@ -885,10 +885,6 @@ class ImportService(
         scanDirectory(rootDocumentUri)
         return FolderScanResult(bookUris = bookUris, unsupportedFiles = unsupportedFiles)
     }
-
-    private fun isSupportedBook(displayName: String, mimeType: String): Boolean =
-        sourceExtension(displayName, mimeType) in SupportedBookTypes.extensions ||
-            mimeType.normalizedMimeType() in SupportedBookTypes.mimeTypes
 
     private fun Throwable.isUnsupportedImport(): Boolean =
         message?.startsWith("Unsupported file type:") == true
@@ -921,9 +917,6 @@ class ImportService(
                 input.read(header) == PDF_HEADER.size && header.contentEquals(PDF_HEADER)
             }
         }.getOrDefault(false)
-
-    private fun String.normalizedMimeType(): String =
-        substringBefore(';').trim().lowercase(Locale.US)
 
     private fun sourceTitle(displayName: String, sourceExtension: String): String =
         if (displayName.endsWith(".$sourceExtension", ignoreCase = true)) {

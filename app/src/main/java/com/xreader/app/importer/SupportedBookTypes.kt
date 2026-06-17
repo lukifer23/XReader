@@ -80,4 +80,22 @@ object SupportedBookTypes {
             "application/x-fictionbook+xml", "application/fb2+xml", "application/fb2", "text/fb2+xml", "text/fb2" -> "fb2"
             else -> ""
         }
+
+    fun isPotentialImportCandidate(displayName: String, mimeType: String): Boolean {
+        val extension = when {
+            displayName.lowercase().endsWith(".fb2.zip") -> "fb2.zip"
+            else -> displayName.substringAfterLast('.', missingDelimiterValue = "").lowercase()
+        }
+        if (extension in extensions) return true
+        val normalizedMimeType = mimeType.substringBefore(';').trim().lowercase()
+        if (normalizedMimeType in mimeTypes) return true
+        return extension.isBlank() && normalizedMimeType in sniffableGenericMimeTypes
+    }
+
+    private val sniffableGenericMimeTypes: Set<String> = setOf(
+        "",
+        "application/octet-stream",
+        "binary/octet-stream",
+        "application/unknown"
+    )
 }
