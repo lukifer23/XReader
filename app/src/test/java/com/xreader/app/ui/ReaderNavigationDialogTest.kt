@@ -22,6 +22,18 @@ class ReaderNavigationDialogTest {
     }
 
     @Test
+    fun filtersContentsAcrossPunctuationBoundaries() {
+        val items = listOf(
+            navItem("Chapter 1: Mars"),
+            navItem("Chapter 2: Lunar Transfer")
+        )
+
+        val filtered = filterReaderNavigationItems(items, "chapter-1 mars")
+
+        assertEquals(listOf("Chapter 1: Mars"), filtered.map { it.title })
+    }
+
+    @Test
     fun blankNavigationQueryKeepsOriginalOrder() {
         val items = listOf(navItem("One"), navItem("Two"))
 
@@ -38,6 +50,10 @@ class ReaderNavigationDialogTest {
         assertEquals(
             listOf(2L),
             filterReaderBookmarks(bookmarks, "landing 44").map { it.id }
+        )
+        assertEquals(
+            listOf(2L),
+            filterReaderBookmarks(bookmarks, "landing-sequence 44%").map { it.id }
         )
     }
 
@@ -56,6 +72,10 @@ class ReaderNavigationDialogTest {
         assertEquals(
             listOf(2L),
             filterReaderAnnotations(annotations, "#character later").map { it.id }
+        )
+        assertEquals(
+            listOf(2L),
+            filterReaderAnnotations(annotations, "#character-later").map { it.id }
         )
     }
 

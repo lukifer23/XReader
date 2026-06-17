@@ -406,17 +406,20 @@ private fun <T> filterByNavigationQuery(
     return items.filter { item ->
         val haystack = searchableText(item)
             .joinToString(separator = " ")
-            .lowercase(Locale.ROOT)
+            .normalizedNavigationSearchText()
         terms.all { it in haystack }
     }
 }
 
 private fun String.navigationQueryTerms(): List<String> =
-    trim()
-        .lowercase(Locale.ROOT)
+    normalizedNavigationSearchText()
         .split(Regex("\\s+"))
-        .map { it.trimStart('#') }
         .filter { it.isNotBlank() }
+
+private fun String.normalizedNavigationSearchText(): String =
+    lowercase(Locale.ROOT)
+        .replace(Regex("[^\\p{L}\\p{N}%]+"), " ")
+        .trim()
 
 private fun BookmarkEntity.progressLabel(): String =
     "${(progress * 100).roundToInt()}% read"
