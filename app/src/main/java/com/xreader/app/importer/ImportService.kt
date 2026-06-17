@@ -160,42 +160,42 @@ class ImportService(
         return try {
             val convertedPageCount = when (effectiveSourceExtension) {
                 "txt" -> {
-                    txtConverter.convert(tmp, stagedFile, sourceTitle(displayName, effectiveSourceExtension))
+                    txtConverter.convert(tmp, stagedFile, importSourceTitle(displayName, effectiveSourceExtension))
                     null
                 }
                 "cbz" -> {
-                    cbzConverter.convert(tmp, stagedFile, sourceTitle(displayName, effectiveSourceExtension)).pageCount
+                    cbzConverter.convert(tmp, stagedFile, importSourceTitle(displayName, effectiveSourceExtension)).pageCount
                 }
                 "fb2", "fb2.zip" -> {
-                    fb2Converter.convert(tmp, stagedFile, sourceTitle(displayName, effectiveSourceExtension))
+                    fb2Converter.convert(tmp, stagedFile, importSourceTitle(displayName, effectiveSourceExtension))
                     null
                 }
                 "rtf" -> {
-                    rtfConverter.convert(tmp, stagedFile, sourceTitle(displayName, effectiveSourceExtension))
+                    rtfConverter.convert(tmp, stagedFile, importSourceTitle(displayName, effectiveSourceExtension))
                     null
                 }
                 "mobi", "prc" -> {
-                    mobiConverter.convert(tmp, stagedFile, sourceTitle(displayName, effectiveSourceExtension))
+                    mobiConverter.convert(tmp, stagedFile, importSourceTitle(displayName, effectiveSourceExtension))
                     null
                 }
                 "odt" -> {
-                    odtConverter.convert(tmp, stagedFile, sourceTitle(displayName, effectiveSourceExtension))
+                    odtConverter.convert(tmp, stagedFile, importSourceTitle(displayName, effectiveSourceExtension))
                     null
                 }
                 "docx" -> {
-                    docxConverter.convert(tmp, stagedFile, sourceTitle(displayName, effectiveSourceExtension))
+                    docxConverter.convert(tmp, stagedFile, importSourceTitle(displayName, effectiveSourceExtension))
                     null
                 }
                 "html", "htm", "xhtml" -> {
-                    htmlConverter.convert(tmp, stagedFile, sourceTitle(displayName, effectiveSourceExtension))
+                    htmlConverter.convert(tmp, stagedFile, importSourceTitle(displayName, effectiveSourceExtension))
                     null
                 }
                 "mhtml", "mht" -> {
-                    mhtmlConverter.convert(tmp, stagedFile, sourceTitle(displayName, effectiveSourceExtension))
+                    mhtmlConverter.convert(tmp, stagedFile, importSourceTitle(displayName, effectiveSourceExtension))
                     null
                 }
                 "md", "markdown" -> {
-                    markdownConverter.convert(tmp, stagedFile, sourceTitle(displayName, effectiveSourceExtension))
+                    markdownConverter.convert(tmp, stagedFile, importSourceTitle(displayName, effectiveSourceExtension))
                     null
                 }
                 else -> {
@@ -208,7 +208,7 @@ class ImportService(
             val parsed = parseStoredBook(
                 file = stagedFile,
                 format = storedFormat,
-                fallbackTitle = existingBook?.title ?: sourceTitle(displayName, effectiveSourceExtension),
+                fallbackTitle = existingBook?.title ?: importSourceTitle(displayName, effectiveSourceExtension),
                 fallbackAuthor = existingBook?.author ?: "Unknown Author"
             )
             val metadataOptions = metadataOptions()
@@ -934,13 +934,6 @@ class ImportService(
                 input.read(header) == PDF_HEADER.size && header.contentEquals(PDF_HEADER)
             }
         }.getOrDefault(false)
-
-    private fun sourceTitle(displayName: String, sourceExtension: String): String =
-        if (displayName.endsWith(".$sourceExtension", ignoreCase = true)) {
-            displayName.dropLast(sourceExtension.length + 1)
-        } else {
-            displayName.substringBeforeLast('.')
-        }.ifBlank { displayName }
 
     private fun sha256(file: File): String {
         val digest = MessageDigest.getInstance("SHA-256")

@@ -43,6 +43,7 @@
 - Library search now matches custom collections, file format, original extension, file name, and publication year in addition to title, author, series, and genre.
 - Extensionless imports with generic MIME types, including folder-scan candidates, now sniff PDF headers and ZIP-backed EPUB/FB2/ODT/DOCX/CBZ structure before rejecting the file.
 - Unsupported import summaries now explain modern Kindle AZW/AZW3/KF8/KFX and other deferred formats instead of reducing them to a generic unsupported count.
+- Converted imports now derive cleaner fallback titles from downloaded filenames, including URL-decoded names, underscores, paths, query strings, fragments, and full double extensions such as `.fb2.zip`.
 - Library filtering now trims and normalizes pasted whitespace, so searches such as `Red   Rising` or `  sci-fi  ` still match expected books and collections.
 - Library sorting now includes `Longest first`, using extracted word count when available and file size as a fallback for formats without reliable text counts.
 - Library repair now clearly backfills readability metrics, search rows, covers, metadata, and series order, and its result messages call out readability updates and missing private book files.
