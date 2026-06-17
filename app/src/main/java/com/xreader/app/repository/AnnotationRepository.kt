@@ -213,6 +213,7 @@ class AnnotationRepository(
     suspend fun importBackupJson(json: String): BackupImportResult {
         val root = JSONObject(json)
         require(root.optString("format") == BACKUP_FORMAT) { "This is not an XReader notes backup." }
+        val booksByChecksum = bookDao.booksForBackup().byNormalizedChecksum()
         var annotationsImported = 0
         var annotationsUpdated = 0
         var annotationsSkipped = 0
@@ -227,7 +228,9 @@ class AnnotationRepository(
                 invalidItems += 1
                 continue
             }
-            val book = bookDao.getByChecksum(item.optString("bookChecksum"))
+            val book = item.optString("bookChecksum")
+                .normalizedBackupChecksum()
+                ?.let(booksByChecksum::get)
             if (book == null) {
                 missingBooks += 1
                 continue
@@ -280,7 +283,9 @@ class AnnotationRepository(
                 invalidItems += 1
                 continue
             }
-            val book = bookDao.getByChecksum(item.optString("bookChecksum"))
+            val book = item.optString("bookChecksum")
+                .normalizedBackupChecksum()
+                ?.let(booksByChecksum::get)
             if (book == null) {
                 missingBooks += 1
                 continue

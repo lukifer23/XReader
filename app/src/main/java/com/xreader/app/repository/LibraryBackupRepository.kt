@@ -208,7 +208,7 @@ class LibraryBackupRepository(
     suspend fun importBackupJson(json: String): ImportResult {
         val root = JSONObject(json)
         require(root.optString("format") == BACKUP_FORMAT) { "This is not an XReader library backup." }
-        val booksByChecksum = bookDao.booksForBackup().associateBy { it.checksum }
+        val booksByChecksum = bookDao.booksForBackup().byNormalizedChecksum()
         val missingChecksums = mutableSetOf<String>()
         var booksUpdated = 0
         var collectionsImported = 0
@@ -230,7 +230,7 @@ class LibraryBackupRepository(
                 invalidItems += 1
                 continue
             }
-            val checksum = item.optString("checksum").takeIf { it.isNotBlank() } ?: run {
+            val checksum = item.optString("checksum").normalizedBackupChecksum() ?: run {
                 invalidItems += 1
                 continue
             }
@@ -313,7 +313,7 @@ class LibraryBackupRepository(
             }
             val matchedBooks = buildList {
                 for (checksumIndex in 0 until checksumArray.length()) {
-                    val checksum = checksumArray.optString(checksumIndex).takeIf { it.isNotBlank() } ?: run {
+                    val checksum = checksumArray.optString(checksumIndex).normalizedBackupChecksum() ?: run {
                         invalidItems += 1
                         continue
                     }
@@ -361,7 +361,7 @@ class LibraryBackupRepository(
                 invalidItems += 1
                 continue
             }
-            val checksum = item.optString("bookChecksum").takeIf { it.isNotBlank() } ?: run {
+            val checksum = item.optString("bookChecksum").normalizedBackupChecksum() ?: run {
                 invalidItems += 1
                 continue
             }
@@ -391,7 +391,7 @@ class LibraryBackupRepository(
                 invalidItems += 1
                 continue
             }
-            val checksum = item.optString("bookChecksum").takeIf { it.isNotBlank() } ?: run {
+            val checksum = item.optString("bookChecksum").normalizedBackupChecksum() ?: run {
                 invalidItems += 1
                 continue
             }
@@ -429,7 +429,7 @@ class LibraryBackupRepository(
                 invalidItems += 1
                 continue
             }
-            val checksum = item.optString("bookChecksum").takeIf { it.isNotBlank() } ?: run {
+            val checksum = item.optString("bookChecksum").normalizedBackupChecksum() ?: run {
                 invalidItems += 1
                 continue
             }
