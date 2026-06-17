@@ -31,6 +31,7 @@
 - Generated-audio rows now separate metadata from playback/export/delete controls and allow the control strip to wrap, avoiding cramped audiobook dialogs on phone-width screens.
 - The Audiobooks screen now has local search across book title, author, voice/profile, scope, and generation status so large generated-audio libraries stay navigable without extra clutter.
 - Library grouping now includes a Formats view, using original import extensions such as EPUB, PDF, TXT, MOBI, CBZ, and document conversions so mixed libraries are easier to audit.
+- Empty grouped-library views now give specific guidance for missing author, series, genre, format, and year groups instead of a generic empty message.
 - Library sorting now includes `Longest first`, using extracted word count when available and file size as a fallback for formats without reliable text counts.
 - Library repair now clearly backfills readability metrics, search rows, covers, metadata, and series order, and its result messages call out readability updates and missing private book files.
 - Markdown notes export now includes readable percent positions for highlights, notes, and bookmarks, with safer Markdown escaping for book titles, authors, tags, and bookmark labels.

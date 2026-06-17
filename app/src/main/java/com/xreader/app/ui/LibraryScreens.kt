@@ -1217,6 +1217,36 @@ internal fun LibraryUiState.emptyStateCopy(): LibraryEmptyStateCopy =
             primaryAction = "Show all",
             importsBooks = false
         )
+        group == LibraryGroup.AUTHORS -> LibraryEmptyStateCopy(
+            title = "No author groups",
+            body = "Repair the library or edit book metadata to fill in missing authors.",
+            primaryAction = "Show all",
+            importsBooks = false
+        )
+        group == LibraryGroup.SERIES -> LibraryEmptyStateCopy(
+            title = "No series yet",
+            body = "Series will appear after import metadata, title inference, or manual edits.",
+            primaryAction = "Show all",
+            importsBooks = false
+        )
+        group == LibraryGroup.GENRES -> LibraryEmptyStateCopy(
+            title = "No genre groups",
+            body = "Genres will appear after import metadata, repair, or manual edits.",
+            primaryAction = "Show all",
+            importsBooks = false
+        )
+        group == LibraryGroup.FORMATS -> LibraryEmptyStateCopy(
+            title = "No format groups",
+            body = "Imported file formats such as EPUB, PDF, TXT, MOBI, and CBZ will appear here.",
+            primaryAction = "Show all",
+            importsBooks = false
+        )
+        group == LibraryGroup.YEARS -> LibraryEmptyStateCopy(
+            title = "No years yet",
+            body = "Publication years will appear after import metadata, repair, or manual edits.",
+            primaryAction = "Show all",
+            importsBooks = false
+        )
         else -> LibraryEmptyStateCopy(
             title = "Nothing here",
             body = "Switch filters to see the rest of your library.",

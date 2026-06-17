@@ -67,4 +67,40 @@ class LibraryEmptyStateTest {
         assertEquals("Show all", copy.primaryAction)
         assertFalse(copy.importsBooks)
     }
+
+    @Test
+    fun emptyFormatViewExplainsSourceFormatGrouping() {
+        val copy = LibraryUiState(
+            group = LibraryGroup.FORMATS,
+            matchedBookCount = 3,
+            totalBookCount = 3
+        ).emptyStateCopy()
+
+        assertEquals("No format groups", copy.title)
+        assertEquals("Imported file formats such as EPUB, PDF, TXT, MOBI, and CBZ will appear here.", copy.body)
+        assertEquals("Show all", copy.primaryAction)
+        assertFalse(copy.importsBooks)
+    }
+
+    @Test
+    fun emptyMetadataGroupViewsGiveRepairOrEditGuidance() {
+        val cases = listOf(
+            LibraryGroup.AUTHORS to "Repair the library or edit book metadata to fill in missing authors.",
+            LibraryGroup.SERIES to "Series will appear after import metadata, title inference, or manual edits.",
+            LibraryGroup.GENRES to "Genres will appear after import metadata, repair, or manual edits.",
+            LibraryGroup.YEARS to "Publication years will appear after import metadata, repair, or manual edits."
+        )
+
+        cases.forEach { (group, body) ->
+            val copy = LibraryUiState(
+                group = group,
+                matchedBookCount = 3,
+                totalBookCount = 3
+            ).emptyStateCopy()
+
+            assertEquals(body, copy.body)
+            assertEquals("Show all", copy.primaryAction)
+            assertFalse(copy.importsBooks)
+        }
+    }
 }
