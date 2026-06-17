@@ -38,6 +38,7 @@
 - Library sorting now includes `Longest first`, using extracted word count when available and file size as a fallback for formats without reliable text counts.
 - Library repair now clearly backfills readability metrics, search rows, covers, metadata, and series order, and its result messages call out readability updates and missing private book files.
 - Markdown notes export now includes readable percent positions for highlights, notes, and bookmarks, with safer Markdown escaping for book titles, authors, tags, and bookmark labels.
+- Notes/bookmarks restore now counts malformed backup rows as invalid items instead of silently ignoring them.
 - Full-book neural generation prefers WebGPU with isolated-process runtime rotation, then XNNPACK/CPU fallback; preview generation stays on XNNPACK/CPU for stability.
 
 ## 0.1.0 - 2026-05-28

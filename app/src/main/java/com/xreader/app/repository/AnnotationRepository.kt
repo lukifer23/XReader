@@ -37,6 +37,7 @@ class AnnotationRepository(
         val bookmarksImported: Int,
         val bookmarksSkipped: Int,
         val missingBooks: Int,
+        val invalidItems: Int,
     )
 
     fun observeAllAnnotations(): Flow<List<AnnotationEntity>> = dao.observeAllAnnotations()
@@ -218,10 +219,14 @@ class AnnotationRepository(
         var bookmarksImported = 0
         var bookmarksSkipped = 0
         var missingBooks = 0
+        var invalidItems = 0
 
         val annotations = root.optJSONArray("annotations") ?: JSONArray()
         for (index in 0 until annotations.length()) {
-            val item = annotations.optJSONObject(index) ?: continue
+            val item = annotations.optJSONObject(index) ?: run {
+                invalidItems += 1
+                continue
+            }
             val book = bookDao.getByChecksum(item.optString("bookChecksum"))
             if (book == null) {
                 missingBooks += 1
@@ -271,7 +276,10 @@ class AnnotationRepository(
 
         val bookmarks = root.optJSONArray("bookmarks") ?: JSONArray()
         for (index in 0 until bookmarks.length()) {
-            val item = bookmarks.optJSONObject(index) ?: continue
+            val item = bookmarks.optJSONObject(index) ?: run {
+                invalidItems += 1
+                continue
+            }
             val book = bookDao.getByChecksum(item.optString("bookChecksum"))
             if (book == null) {
                 missingBooks += 1
@@ -304,7 +312,8 @@ class AnnotationRepository(
             annotationsSkipped = annotationsSkipped,
             bookmarksImported = bookmarksImported,
             bookmarksSkipped = bookmarksSkipped,
-            missingBooks = missingBooks
+            missingBooks = missingBooks,
+            invalidItems = invalidItems
         )
     }
 

@@ -372,6 +372,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
             if (annotationsUpdated > 0) add("$annotationsUpdated updated")
             if (skipped > 0) add("$skipped skipped")
             if (missingBooks > 0) add("$missingBooks missing books")
+            if (invalidItems > 0) add("$invalidItems invalid")
         }
         return if (details.isEmpty()) base else "$base; ${details.joinToString(", ")}"
     }

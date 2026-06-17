@@ -14,6 +14,8 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.json.JSONArray
+import org.json.JSONObject
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
@@ -153,6 +155,46 @@ class AnnotationRepositoryInstrumentedTest {
 
         val updated = sourceDb.annotations().allAnnotations().single { it.id == noteId }
         assertEquals("theme, Mars", updated.tags)
+    }
+
+    @Test
+    fun importCountsMalformedAnnotationBackupRowsAsInvalid() = runBlocking {
+        targetDb.books().insert(testBook(id = 0, title = "Target title"))
+        val repository = AnnotationRepository(targetDb.annotations(), targetDb.books(), clock)
+        val backup = JSONObject()
+            .put("format", "com.xreader.annotations.v1")
+            .put("version", 1)
+            .put(
+                "annotations",
+                JSONArray()
+                    .put("not an object")
+                    .put(
+                        JSONObject()
+                            .put("bookChecksum", "shared-checksum")
+                            .put("kind", "NOTE")
+                            .put("locator", "loc-1")
+                            .put("quote", "Valid quote")
+                    )
+            )
+            .put(
+                "bookmarks",
+                JSONArray()
+                    .put(42)
+                    .put(
+                        JSONObject()
+                            .put("bookChecksum", "shared-checksum")
+                            .put("locator", "loc-2")
+                            .put("label", "Valid bookmark")
+                            .put("progress", 0.5)
+                    )
+            )
+
+        val imported = repository.importBackupJson(backup.toString())
+
+        assertEquals(1, imported.annotationsImported)
+        assertEquals(1, imported.bookmarksImported)
+        assertEquals(2, imported.invalidItems)
+        assertEquals(0, imported.missingBooks)
     }
 
     private fun testBook(id: Long, title: String): BookEntity =
