@@ -54,6 +54,15 @@ Treat single-device numbers as local baselines, not universal claims. Record:
 
 ## Current Local Baseline
 
+2026-06-17 connected-device debug smoke after audiobook and reader hardening:
+
+- Device: Samsung SM-F966U, Android 16 / API 36
+- Command: `./gradlew --no-daemon clean :app:testDebugUnitTest :app:assembleDebug :app:lintDebug --console=plain`
+- Install: `adb -s RFCY90NPZBN install -r app/build/outputs/apk/debug/app-debug.apk`
+- Launch: `adb -s RFCY90NPZBN shell am start -n com.xreader.app/.MainActivity`
+- Smoke expectation: app process starts and the recent crash buffer remains empty.
+- Scope: build, unit, lint, install, and launch sanity only; this is not a replacement for the repeated startup/frame baseline below.
+
 2026-05-28 local debug baseline after reader warmup and analytics polish:
 
 - Device: Samsung SM-F966U, Android 16 / API 36

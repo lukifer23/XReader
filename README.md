@@ -78,6 +78,12 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb shell am start -n com.xreader.app/.MainActivity
 ```
 
+Current device smoke target:
+
+- Samsung SM-F966U foldable phone, Android 16 / API 36.
+- Debug APK install and launch through `adb install -r` plus explicit `MainActivity` start.
+- Crash buffer check after launch with `adb logcat -b crash`.
+
 Release builds are currently unsigned:
 
 ```bash
