@@ -223,6 +223,9 @@ internal fun groupBooks(
         LibraryGroup.GENRES -> books.groupBy { it.book.genre ?: NO_GENRE_LABEL }
             .mapValues { (_, items) -> items.sortedForLibrary(sort) }
             .sortedLibraryGroups(sort, emptyLabel = NO_GENRE_LABEL)
+        LibraryGroup.FORMATS -> books.groupBy { bookFormatLabel(it.book) }
+            .mapValues { (_, items) -> items.sortedForLibrary(sort) }
+            .sortedLibraryGroups(sort)
         LibraryGroup.YEARS -> books.groupBy { it.book.year?.toString() ?: NO_YEAR_LABEL }
             .mapValues { (_, items) -> items.sortedForLibrary(sort) }
             .sortedYearGroups(sort)

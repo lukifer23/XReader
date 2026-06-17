@@ -57,6 +57,7 @@ enum class LibraryGroup {
     AUTHORS,
     SERIES,
     GENRES,
+    FORMATS,
     YEARS,
     COLLECTIONS,
     RECENT,

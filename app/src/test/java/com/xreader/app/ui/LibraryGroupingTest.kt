@@ -131,6 +131,24 @@ class LibraryGroupingTest {
     }
 
     @Test
+    fun formatGroupsUseOriginalSourceExtensionLabels() {
+        val grouped = groupBooks(
+            LibraryGroup.FORMATS,
+            listOf(
+                item(title = "Plain", sourceExtension = "txt"),
+                item(title = "Archive", sourceExtension = "cbz"),
+                item(title = "Kindle", format = BookFormat.EPUB, sourceExtension = "mobi"),
+                item(title = "Pdf", format = BookFormat.PDF, sourceExtension = "pdf"),
+                item(title = "Novel", sourceExtension = "epub")
+            ),
+            LibrarySort.TITLE
+        )
+
+        assertEquals(listOf("CBZ", "EPUB", "MOBI", "PDF", "TXT"), grouped.keys.toList())
+        assertEquals(listOf("Kindle"), grouped.getValue("MOBI").map { it.book.title })
+    }
+
+    @Test
     fun groupedLengthSortUsesTotalKnownLengthPerGroup() {
         val grouped = groupBooks(
             LibraryGroup.AUTHORS,
@@ -223,6 +241,8 @@ class LibraryGroupingTest {
         collections: List<CollectionUiItem> = emptyList(),
         wordCount: Int = 10_000,
         fileSizeBytes: Long = 1024L,
+        format: BookFormat = BookFormat.EPUB,
+        sourceExtension: String = "epub",
     ): BookListItem =
         BookListItem(
             book = BookEntity(
@@ -234,10 +254,10 @@ class LibraryGroupingTest {
                 seriesIndex = seriesIndex,
                 genre = genre,
                 year = year,
-                format = BookFormat.EPUB,
-                sourceExtension = "epub",
-                fileName = "$title.epub",
-                filePath = "books/$title.epub",
+                format = format,
+                sourceExtension = sourceExtension,
+                fileName = "$title.$sourceExtension",
+                filePath = "books/$title.$sourceExtension",
                 checksum = "checksum-$title",
                 fileSizeBytes = fileSizeBytes,
                 wordCount = wordCount,
