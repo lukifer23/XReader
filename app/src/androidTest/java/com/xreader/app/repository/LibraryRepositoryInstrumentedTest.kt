@@ -269,7 +269,8 @@ class LibraryRepositoryInstrumentedTest {
         assertEquals(1, memberships.size)
         assertEquals("Sci-Fi", memberships.single().name)
         assertEquals(listOf("Sci-Fi"), repository.observeCollections().first().map { it.name })
-        assertEquals(listOf("Red Rising"), repository.observeBooks("sci-fi").first().map { it.title })
+        assertEquals(listOf("Red Rising"), repository.observeBooks("  sci-fi  ").first().map { it.title })
+        assertEquals(listOf("Red Rising"), repository.observeBooks("Red   Rising").first().map { it.title })
 
         val removed = repository.removeBookFromCollection(id, memberships.single().collectionId)
 

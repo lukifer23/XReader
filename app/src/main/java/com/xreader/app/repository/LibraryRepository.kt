@@ -41,7 +41,7 @@ class LibraryRepository(
     private val searchDao: SearchDao = database.search()
     private val libraryDetailsBackfillRunning = AtomicBoolean(false)
 
-    fun observeBooks(query: String): Flow<List<BookEntity>> = bookDao.observeBooks(query)
+    fun observeBooks(query: String): Flow<List<BookEntity>> = bookDao.observeBooks(query.cleanLibraryQuery())
     fun observeBook(id: Long): Flow<BookEntity?> = bookDao.observeBook(id)
     fun observeAuthors(): Flow<List<String>> = bookDao.observeAuthors()
     fun observeSeries(): Flow<List<String>> = bookDao.observeSeries()
@@ -201,6 +201,9 @@ class LibraryRepository(
         require(cleaned.length <= MAX_COLLECTION_NAME_LENGTH) { "Collection names can be up to $MAX_COLLECTION_NAME_LENGTH characters" }
         return cleaned
     }
+
+    private fun String.cleanLibraryQuery(): String =
+        trim().replace(Regex("\\s+"), " ")
 
     private companion object {
         const val MAX_COLLECTION_NAME_LENGTH = 80
