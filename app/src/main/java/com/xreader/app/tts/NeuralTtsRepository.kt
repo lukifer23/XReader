@@ -166,6 +166,15 @@ class NeuralTtsRepository(
         val root = audio.filePath?.let(::File)
         if (root == null || !root.isDirectory) {
             if (!reconcileIncomplete) return@withContext
+            audio.filePath?.takeIf { it.isNotBlank() }?.let { path ->
+                rewriteAudiobookRecoveryManifest(
+                    target = File(path),
+                    status = BookAudioStatus.FAILED,
+                    completedSegments = 0,
+                    updatedAt = clock.millis(),
+                    error = "Generated audio files are missing. Start generation again."
+                )
+            }
             markStaleGeneratingAudio(
                 audio = audio,
                 completedSegments = 0,
@@ -177,6 +186,13 @@ class NeuralTtsRepository(
         val reusableSegments = reusableGeneratedAudiobookSegments(root, audio.segmentCount)
         if (reusableSegments < audio.segmentCount) {
             if (reconcileIncomplete) {
+                rewriteAudiobookRecoveryManifest(
+                    target = root,
+                    status = BookAudioStatus.CANCELED,
+                    completedSegments = reusableSegments,
+                    updatedAt = clock.millis(),
+                    error = null
+                )
                 markStaleGeneratingAudio(
                     audio = audio,
                     completedSegments = reusableSegments,
@@ -1063,6 +1079,66 @@ internal fun prepareAudiobookGenerationTarget(target: File, canResumeExistingAud
 internal fun File.generatedAudiobookExportManifestFile(): File? =
     File(this, "manifest.txt").takeIf { it.isFile }
         ?: File(this, "manifest.in-progress.txt").takeIf { it.isFile }
+
+internal fun rewriteAudiobookRecoveryManifest(
+    target: File,
+    status: BookAudioStatus,
+    completedSegments: Int,
+    updatedAt: Long,
+    error: String?,
+): Boolean {
+    val manifest = File(target, "manifest.in-progress.txt").takeIf { it.isFile }
+        ?: File(target, "manifest.txt").takeIf { it.isFile }
+        ?: return false
+    val rewritten = rewriteAudiobookManifestText(
+        text = manifest.readText(),
+        status = status,
+        completedSegments = completedSegments,
+        updatedAt = updatedAt,
+        error = error
+    )
+    manifest.writeText(rewritten)
+    return true
+}
+
+internal fun rewriteAudiobookManifestText(
+    text: String,
+    status: BookAudioStatus,
+    completedSegments: Int,
+    updatedAt: Long,
+    error: String?,
+): String {
+    val replacements = linkedMapOf(
+        "status" to status.name.lowercase(),
+        "completed" to completedSegments.coerceAtLeast(0).toString(),
+        "updatedAt" to updatedAt.toString()
+    )
+    val seen = mutableSetOf<String>()
+    val lines = text.lineSequence()
+        .filter { it.isNotBlank() }
+        .map { line ->
+            val key = line.substringBefore('=', missingDelimiterValue = "")
+            val replacement = replacements[key]
+            if (replacement != null) {
+                seen += key
+                "$key=$replacement"
+            } else if (key == "error") {
+                seen += key
+                error?.takeIf { it.isNotBlank() }?.let { "error=${it.lineSequence().first()}" }.orEmpty()
+            } else {
+                line
+            }
+        }
+        .filter { it.isNotBlank() }
+        .toMutableList()
+    replacements.forEach { (key, value) ->
+        if (key !in seen) lines += "$key=$value"
+    }
+    if (!error.isNullOrBlank() && "error" !in seen) {
+        lines += "error=${error.lineSequence().first()}"
+    }
+    return lines.joinToString(separator = "\n", postfix = "\n")
+}
 
 private fun BookAudioEntity?.canResumeGeneration(
     target: File,

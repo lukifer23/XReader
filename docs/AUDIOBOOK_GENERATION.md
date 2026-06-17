@@ -44,6 +44,7 @@ Generation scope is persisted per voice profile:
 - Retrying the same scope/profile resumes from the first missing segment instead of overwriting completed audio.
 - Fresh generation clears stale output before writing manifest, chapter, and segment metadata so the newly generated WAV files keep matching sidecars for chapter navigation and playback cadence.
 - Generated audio writes `chapters.tsv` and `segments.tsv`; playback sanitizes chapter sidecars against the playable segment count, ignores invalid segment chapter IDs, and falls back to sanitized chapter ranges when metadata is missing or stale.
+- Interrupted generation recovery reconciles both Room state and the app-private manifest, so stale partial jobs export/debug as canceled or failed with the repaired completed count instead of continuing to advertise `generating`.
 - Older generated audio whose chapter sidecar is missing or unreadable falls back to one scope-labeled playback section when verified WAV segments exist, so partial audio remains identifiable without inventing fake chapter boundaries.
 - ZIP export preserves existing sidecars when present and writes safe fallback `chapters.tsv`/`segments.tsv` entries for older playable audio whose metadata files are missing.
 - ZIP export maps `manifest.in-progress.txt` to `manifest.txt` for partial, stopped, or failed generated audio when no final manifest exists, so exported partial audio still carries status, provider, progress, scope, and voice metadata.

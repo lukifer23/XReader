@@ -27,6 +27,7 @@
 - Partial generated audiobook ZIP exports now include the in-progress manifest as `manifest.txt` when a final manifest does not exist, preserving provider, scope, progress, and status metadata.
 - Partial generated audiobook ZIP exports now trim `segments.tsv` to verified playable segments, preserving existing metadata for playable audio without exporting future, not-yet-generated rows.
 - Generated audiobook playback now gates startup on verified contiguous WAV files instead of database progress counters, avoiding misleading preparing states when stale records reference missing audio.
+- Stale audiobook generation recovery now updates the on-disk manifest status, completed count, timestamp, and failure reason so partial exports and debugging evidence match the repaired database row.
 - Audiobook text preparation now drops standalone table-of-contents entry rows such as chapter/page listings before narration, while preserving real chapter headings.
 - Generated-audio rows now separate metadata from playback/export/delete controls and allow the control strip to wrap, avoiding cramped audiobook dialogs on phone-width screens.
 - Audiobook generation controls now explain why generation is disabled when the selected voice is missing, installing, failed, or already generating audio.

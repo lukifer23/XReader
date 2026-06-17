@@ -101,6 +101,96 @@ class GeneratedAudiobookResumeTest {
     }
 
     @Test
+    fun recoveryManifestRewriteUpdatesStatusAndPreservesMetadata() {
+        val rewritten = rewriteAudiobookManifestText(
+            text = """
+                title=Example Book
+                model=Kokoro v1.0
+                status=generating
+                segments=12
+                completed=7
+                updatedAt=100
+                error=old failure
+            """.trimIndent(),
+            status = BookAudioStatus.CANCELED,
+            completedSegments = 3,
+            updatedAt = 250,
+            error = null
+        )
+
+        assertEquals(
+            """
+            title=Example Book
+            model=Kokoro v1.0
+            status=canceled
+            segments=12
+            completed=3
+            updatedAt=250
+
+            """.trimIndent(),
+            rewritten
+        )
+    }
+
+    @Test
+    fun recoveryManifestRewriteAddsMissingFieldsAndFailureReason() {
+        val rewritten = rewriteAudiobookManifestText(
+            text = "title=Example Book\n",
+            status = BookAudioStatus.FAILED,
+            completedSegments = -4,
+            updatedAt = 300,
+            error = "Generated audio files are missing.\nTry again."
+        )
+
+        assertEquals(
+            """
+            title=Example Book
+            status=failed
+            completed=0
+            updatedAt=300
+            error=Generated audio files are missing.
+
+            """.trimIndent(),
+            rewritten
+        )
+    }
+
+    @Test
+    fun recoveryManifestRewriteUpdatesInProgressManifestFile() {
+        val dir = temporaryFolder.newFolder()
+        val manifest = File(dir, "manifest.in-progress.txt").apply {
+            writeText(
+                """
+                title=Example Book
+                status=generating
+                completed=2
+                updatedAt=100
+                """.trimIndent()
+            )
+        }
+
+        assertTrue(
+            rewriteAudiobookRecoveryManifest(
+                target = dir,
+                status = BookAudioStatus.CANCELED,
+                completedSegments = 1,
+                updatedAt = 500,
+                error = null
+            )
+        )
+        assertEquals(
+            """
+            title=Example Book
+            status=canceled
+            completed=1
+            updatedAt=500
+
+            """.trimIndent(),
+            manifest.readText()
+        )
+    }
+
+    @Test
     fun generatedAudiobookDeletePolicyProtectsActiveGeneration() {
         assertFalse(audio(filePath = null).copy(status = BookAudioStatus.GENERATING).canDeleteGeneratedAudiobook())
         assertTrue(audio(filePath = null).copy(status = BookAudioStatus.GENERATED).canDeleteGeneratedAudiobook())
