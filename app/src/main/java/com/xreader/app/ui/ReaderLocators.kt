@@ -172,8 +172,8 @@ internal fun pushReaderReturnLocator(
 ) {
     val source = visibleLocatorJson.cleanLocator() ?: fallbackUnitLocator.cleanLocator() ?: return
     val target = targetLocatorJson.cleanLocator() ?: return
-    if (source == target) return
-    if (history.lastOrNull() == source) return
+    if (source.sameReaderReturnLocationAs(target)) return
+    if (history.lastOrNull()?.sameReaderReturnLocationAs(source) == true) return
     history += source
     while (history.size > maxEntries.coerceAtLeast(1)) {
         history.removeAt(0)
@@ -224,6 +224,13 @@ private fun String.toBookmarkLocatorKey(): BookmarkLocatorKey? {
             progression = locator.locations.progression?.quantized() ?: jsonKey?.progression
         )
     } ?: jsonKey
+}
+
+private fun String.sameReaderReturnLocationAs(other: String): Boolean {
+    if (this == other) return true
+    val key = toBookmarkLocatorKey()
+    val otherKey = other.toBookmarkLocatorKey()
+    return key != null && otherKey != null && key.sameLocationAs(otherKey)
 }
 
 private fun BookmarkLocatorKey.sameLocationAs(other: BookmarkLocatorKey): Boolean {

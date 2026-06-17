@@ -219,6 +219,22 @@ class ReaderLocatorTest {
     }
 
     @Test
+    fun pushReaderReturnLocatorSkipsEquivalentReadiumTarget() {
+        val history = mutableListOf<String>()
+        val source = """{"href":"chapter.xhtml","locations":{"position":4,"totalProgression":0.25}}"""
+        val target = """{"type":"application/xhtml+xml","href":"chapter.xhtml","locations":{"totalProgression":0.25001,"position":4}}"""
+
+        pushReaderReturnLocator(
+            history = history,
+            visibleLocatorJson = source,
+            fallbackUnitLocator = null,
+            targetLocatorJson = target
+        )
+
+        assertEquals(emptyList<String>(), history)
+    }
+
+    @Test
     fun pushReaderReturnLocatorFallsBackToUnitLocatorAndAvoidsDuplicateTop() {
         val history = mutableListOf<String>()
 
@@ -236,6 +252,23 @@ class ReaderLocatorTest {
         )
 
         assertEquals(listOf("unit-4"), history)
+    }
+
+    @Test
+    fun pushReaderReturnLocatorAvoidsEquivalentReadiumDuplicateTop() {
+        val history = mutableListOf(
+            """{"href":"chapter.xhtml","locations":{"position":2}}"""
+        )
+
+        pushReaderReturnLocator(
+            history = history,
+            visibleLocatorJson = """{"type":"application/xhtml+xml","href":"chapter.xhtml","locations":{"position":2}}""",
+            fallbackUnitLocator = null,
+            targetLocatorJson = """{"href":"chapter-2.xhtml","locations":{"position":3}}"""
+        )
+
+        assertEquals(1, history.size)
+        assertEquals("""{"href":"chapter.xhtml","locations":{"position":2}}""", history.single())
     }
 
     @Test
