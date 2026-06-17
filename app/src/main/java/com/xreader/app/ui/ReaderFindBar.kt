@@ -2,11 +2,10 @@ package com.xreader.app.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
@@ -36,8 +35,9 @@ internal fun ReaderFindBar(
 ) {
     Surface(
         modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 12.dp)
+            .fillMaxWidth(0.92f)
+            .widthIn(max = 520.dp),
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 6.dp,
         shadowElevation = 6.dp,
@@ -45,13 +45,10 @@ internal fun ReaderFindBar(
     ) {
         Row(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 12.dp, top = 6.dp, end = 8.dp, bottom = 6.dp),
+                .padding(start = 12.dp, top = 4.dp, end = 6.dp, bottom = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Icon(Icons.Filled.Search, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-            Spacer(Modifier.width(2.dp))
             Text(
                 text = readerFindBarSummary(query, navigation),
                 style = MaterialTheme.typography.bodyMedium,
@@ -61,16 +58,16 @@ internal fun ReaderFindBar(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
             )
-            TooltipIconButton(label = "Previous match", onClick = onPrevious, modifier = Modifier.size(40.dp)) {
+            TooltipIconButton(label = "Previous match", onClick = onPrevious, modifier = Modifier.size(36.dp)) {
                 Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = null)
             }
-            TooltipIconButton(label = "Next match", onClick = onNext, modifier = Modifier.size(40.dp)) {
+            TooltipIconButton(label = "Next match", onClick = onNext, modifier = Modifier.size(36.dp)) {
                 Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
             }
-            TooltipIconButton(label = "Edit search", onClick = onOpenSearch, modifier = Modifier.size(40.dp)) {
+            TooltipIconButton(label = "Edit search", onClick = onOpenSearch, modifier = Modifier.size(36.dp)) {
                 Icon(Icons.Filled.Search, contentDescription = null)
             }
-            TooltipIconButton(label = "Close find", onClick = onClose, modifier = Modifier.size(40.dp)) {
+            TooltipIconButton(label = "Close find", onClick = onClose, modifier = Modifier.size(36.dp)) {
                 Icon(Icons.Filled.Close, contentDescription = null)
             }
         }
