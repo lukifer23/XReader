@@ -658,6 +658,7 @@ internal fun ReaderBottomBar(
     var sliderValue by remember(progress) { mutableFloatStateOf(progress.toFloat().coerceIn(0f, 1f)) }
     val canGoPreviousPage = readerCanGoPreviousPage(page, pageCount)
     val canGoNextPage = readerCanGoNextPage(page, pageCount)
+    val canSeekPages = readerCanSeekPages(pageCount)
     Surface(
         modifier = modifier
             .fillMaxWidth()
@@ -732,10 +733,11 @@ internal fun ReaderBottomBar(
                     value = sliderValue,
                     onValueChange = { sliderValue = it },
                     onValueChangeFinished = { onSeek(sliderValue) },
+                    enabled = canSeekPages,
                     modifier = Modifier.weight(1f)
                 )
                 Text(
-                    text = "${page + 1}/$pageCount",
+                    text = readerPageStatusLabel(page, pageCount),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

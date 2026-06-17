@@ -25,14 +25,25 @@ class ReaderControlLabelsTest {
     fun readerPageActionsRespectBounds() {
         assertFalse(readerCanGoPreviousPage(page = 0, pageCount = 1))
         assertFalse(readerCanGoNextPage(page = 0, pageCount = 1))
+        assertFalse(readerCanSeekPages(pageCount = 1))
 
         assertFalse(readerCanGoPreviousPage(page = 0, pageCount = 4))
         assertTrue(readerCanGoNextPage(page = 0, pageCount = 4))
+        assertTrue(readerCanSeekPages(pageCount = 4))
 
         assertTrue(readerCanGoPreviousPage(page = 2, pageCount = 4))
         assertTrue(readerCanGoNextPage(page = 2, pageCount = 4))
 
         assertTrue(readerCanGoPreviousPage(page = 3, pageCount = 4))
         assertFalse(readerCanGoNextPage(page = 3, pageCount = 4))
+    }
+
+    @Test
+    fun readerPageStatusLabelStaysValidForStartupAndMalformedCounts() {
+        assertEquals("Page -", readerPageStatusLabel(page = 0, pageCount = 0))
+        assertEquals("Page -", readerPageStatusLabel(page = 4, pageCount = -1))
+        assertEquals("1/4", readerPageStatusLabel(page = -3, pageCount = 4))
+        assertEquals("4/4", readerPageStatusLabel(page = 99, pageCount = 4))
+        assertEquals("3/4", readerPageStatusLabel(page = 2, pageCount = 4))
     }
 }
