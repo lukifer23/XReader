@@ -1318,7 +1318,7 @@ internal fun BookAudiobookDialog(
     val selectedSpec = NeuralTtsModelCatalog.models.firstOrNull { it.modelId == settings.neuralTtsModelId }
         ?: NeuralTtsModelCatalog.models.first()
     val selectedModel = modelsById[selectedSpec.modelId]
-    val selectedInstalled = selectedModel?.status == NeuralTtsModelStatus.INSTALLED
+    val selectedStatus = selectedModel?.status ?: NeuralTtsModelStatus.NOT_DOWNLOADED
     val selectedSpeaker = selectedSpec.speaker(settings.neuralTtsSpeakerId)
     val narratorOptions = remember(selectedSpec, settings.neuralTtsGender, selectedSpeaker) {
         selectedSpec.speakers
@@ -1343,6 +1343,11 @@ internal fun BookAudiobookDialog(
             audio.tone == settings.neuralTtsTone.name &&
             audio.status == BookAudioStatus.GENERATING
     }
+    val generationBlockedReason = audiobookGenerationBlockedReason(
+        status = selectedStatus,
+        generatingSelectedAudio = generatingSelectedAudio,
+        modelName = selectedSpec.displayName
+    )
     val generatedAudioItems = remember(bookAudioItems) {
         bookAudioItems
             .filter { item -> item.audio.status == BookAudioStatus.GENERATED || item.playableSegmentFiles > 0 }
@@ -1463,9 +1468,9 @@ internal fun BookAudiobookDialog(
                 item {
                     AudiobookSelectedVoiceModelRow(
                         spec = selectedSpec,
-                        status = selectedModel?.status ?: NeuralTtsModelStatus.NOT_DOWNLOADED,
+                        status = selectedStatus,
                         statusText = audiobookVoiceStatusText(
-                            status = selectedModel?.status ?: NeuralTtsModelStatus.NOT_DOWNLOADED,
+                            status = selectedStatus,
                             downloaded = selectedModel?.downloadedBytes ?: 0,
                             total = selectedModel?.totalBytes ?: selectedSpec.archiveBytes,
                             archiveBytes = selectedSpec.archiveBytes,
@@ -1474,6 +1479,15 @@ internal fun BookAudiobookDialog(
                         onDownload = { onDownload(selectedSpec.modelId) },
                         onPreview = { onPreview(selectedSpec.modelId) }
                     )
+                }
+                generationBlockedReason?.let { reason ->
+                    item {
+                        Text(
+                            reason,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
                 if (generatedAudioItems.isNotEmpty()) {
                     item {
@@ -1496,7 +1510,7 @@ internal fun BookAudiobookDialog(
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(
                     onClick = { onGenerate(AudiobookGenerationScope.SAMPLE) },
-                    enabled = selectedInstalled && !generatingSelectedAudio
+                    enabled = generationBlockedReason == null
                 ) {
                     Icon(Icons.Filled.PlayArrow, contentDescription = null)
                     Spacer(Modifier.width(6.dp))
@@ -1504,7 +1518,7 @@ internal fun BookAudiobookDialog(
                 }
                 OutlinedButton(
                     onClick = { onGenerate(AudiobookGenerationScope.FIRST_CHAPTER) },
-                    enabled = selectedInstalled && !generatingSelectedAudio
+                    enabled = generationBlockedReason == null
                 ) {
                     Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null)
                     Spacer(Modifier.width(6.dp))
@@ -1512,7 +1526,7 @@ internal fun BookAudiobookDialog(
                 }
                 Button(
                     onClick = { onGenerate(AudiobookGenerationScope.FULL_BOOK) },
-                    enabled = selectedInstalled && !generatingSelectedAudio
+                    enabled = generationBlockedReason == null
                 ) {
                     Icon(Icons.Filled.GraphicEq, contentDescription = null)
                     Spacer(Modifier.width(6.dp))
@@ -2201,6 +2215,21 @@ private fun audiobookVoiceStatusText(
         NeuralTtsModelStatus.EXTRACTING -> "Installing ${archiveBytes.compactBytes()} voice"
         NeuralTtsModelStatus.FAILED -> error ?: "Download failed"
         NeuralTtsModelStatus.NOT_DOWNLOADED -> "Not installed • ${archiveBytes.compactBytes()}"
+    }
+
+internal fun audiobookGenerationBlockedReason(
+    status: NeuralTtsModelStatus,
+    generatingSelectedAudio: Boolean,
+    modelName: String,
+): String? =
+    when {
+        generatingSelectedAudio -> "This voice is already generating audio. Stop it before starting another scope."
+        status == NeuralTtsModelStatus.INSTALLED -> null
+        status == NeuralTtsModelStatus.DOWNLOADING -> "$modelName is still downloading. Generation will unlock when the download finishes."
+        status == NeuralTtsModelStatus.EXTRACTING -> "$modelName is installing. Generation will unlock when setup finishes."
+        status == NeuralTtsModelStatus.FAILED -> "$modelName did not install cleanly. Retry the download before generating audio."
+        status == NeuralTtsModelStatus.NOT_DOWNLOADED -> "Download $modelName before generating audiobook audio."
+        else -> null
     }
 
 @Composable

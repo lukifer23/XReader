@@ -4,6 +4,7 @@ import com.xreader.app.data.BookAudioEntity
 import com.xreader.app.data.BookAudioStatus
 import com.xreader.app.data.BookEntity
 import com.xreader.app.data.BookFormat
+import com.xreader.app.data.NeuralTtsModelStatus
 import com.xreader.app.tts.AudiobookPlaybackUiState
 import com.xreader.app.tts.GeneratedAudiobookChapter
 import com.xreader.app.tts.playableSegmentCount
@@ -118,6 +119,33 @@ class AudiobookUiFormattersTest {
         assertEquals("Chapter", audiobookScopeActionLabel(com.xreader.app.tts.AudiobookGenerationScope.FIRST_CHAPTER, AudiobookScanUiState()))
         assertEquals("Full book", audiobookScopeActionLabel(com.xreader.app.tts.AudiobookGenerationScope.FULL_BOOK, null))
         assertNull(audiobookScopeActionMetaLabel(com.xreader.app.tts.AudiobookGenerationScope.SAMPLE, null))
+    }
+
+    @Test
+    fun generationBlockedReasonExplainsDisabledGenerationButtons() {
+        assertNull(
+            audiobookGenerationBlockedReason(
+                status = NeuralTtsModelStatus.INSTALLED,
+                generatingSelectedAudio = false,
+                modelName = "Kokoro v1.0"
+            )
+        )
+        assertEquals(
+            "Download Kokoro v1.0 before generating audiobook audio.",
+            audiobookGenerationBlockedReason(
+                status = NeuralTtsModelStatus.NOT_DOWNLOADED,
+                generatingSelectedAudio = false,
+                modelName = "Kokoro v1.0"
+            )
+        )
+        assertEquals(
+            "This voice is already generating audio. Stop it before starting another scope.",
+            audiobookGenerationBlockedReason(
+                status = NeuralTtsModelStatus.INSTALLED,
+                generatingSelectedAudio = true,
+                modelName = "Kokoro v1.0"
+            )
+        )
     }
 
     @Test

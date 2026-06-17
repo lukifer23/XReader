@@ -29,6 +29,7 @@
 - Generated audiobook playback now gates startup on verified contiguous WAV files instead of database progress counters, avoiding misleading preparing states when stale records reference missing audio.
 - Audiobook text preparation now drops standalone table-of-contents entry rows such as chapter/page listings before narration, while preserving real chapter headings.
 - Generated-audio rows now separate metadata from playback/export/delete controls and allow the control strip to wrap, avoiding cramped audiobook dialogs on phone-width screens.
+- Audiobook generation controls now explain why generation is disabled when the selected voice is missing, installing, failed, or already generating audio.
 - Reader navigation filtering now matches across punctuation boundaries, so queries like `chapter-1`, `landing-sequence`, or `#character-later` find the expected TOC entries, bookmarks, notes, and highlights.
 - The Audiobooks screen now has local search across book title, author, voice/profile, scope, and generation status so large generated-audio libraries stay navigable without extra clutter.
 - Library grouping now includes a Formats view, using original import extensions such as EPUB, PDF, TXT, MOBI, CBZ, and document conversions so mixed libraries are easier to audit.
