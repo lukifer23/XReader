@@ -33,6 +33,7 @@
 - Audiobook generation controls now explain why generation is disabled when the selected voice is missing, installing, failed, or already generating audio.
 - Reader navigation filtering now matches across punctuation boundaries, so queries like `chapter-1`, `landing-sequence`, or `#character-later` find the expected TOC entries, bookmarks, notes, and highlights.
 - The in-reader find bar is now narrower and less banner-like while keeping previous, next, edit, and close actions available.
+- Reading analytics now treats the initially visible page as a position anchor instead of words read, keeping early WPM, sessions, and ETA from inflating before actual page movement.
 - The Audiobooks screen now has local search across book title, author, voice/profile, scope, and generation status so large generated-audio libraries stay navigable without extra clutter.
 - Library grouping now includes a Formats view, using original import extensions such as EPUB, PDF, TXT, MOBI, CBZ, and document conversions so mixed libraries are easier to audit.
 - Empty grouped-library views now give specific guidance for missing author, series, genre, format, and year groups instead of a generic empty message.

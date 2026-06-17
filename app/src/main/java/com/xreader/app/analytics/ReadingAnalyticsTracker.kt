@@ -39,7 +39,7 @@ class ReadingAnalyticsTracker(
         val boundedUnit = unit.coerceIn(0, (totalUnits - 1).coerceAtLeast(0))
         if (!initialized) {
             startUnit = boundedUnit
-            countedWords = wordsForUnit(boundedUnit).coerceAtLeast(0)
+            countedWords = 0
             lastCountedUnit = boundedUnit
             initialized = true
         } else {

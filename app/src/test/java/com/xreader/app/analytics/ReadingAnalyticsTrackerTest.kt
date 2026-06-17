@@ -26,8 +26,29 @@ class ReadingAnalyticsTrackerTest {
         val session = requireNotNull(tracker.finish())
 
         assertEquals(0.3, state.progress, 0.001)
-        assertEquals(300, state.estimatedWpm)
-        assertEquals(300, session.wordsRead)
+        assertEquals(200, state.estimatedWpm)
+        assertEquals(200, session.wordsRead)
+    }
+
+    @Test
+    fun firstVisiblePageAnchorsSessionWithoutCountingWords() {
+        val clock = MutableClock()
+        val tracker = ReadingAnalyticsTracker(
+            bookId = 7L,
+            totalUnits = 10,
+            wordsForUnit = { 120 },
+            idleTimeoutMillis = 90_000L,
+            clock = clock
+        )
+
+        tracker.record(unit = 4, locator = "same-page", progressOverride = 0.5)
+        clock.advance(45_000L)
+        val flush = requireNotNull(tracker.flush())
+
+        assertEquals("same-page", flush.state.locator)
+        assertEquals(45_000L, flush.state.activeMillis)
+        assertEquals(0, flush.state.estimatedWpm)
+        assertNull(flush.session)
     }
 
     @Test
@@ -70,7 +91,8 @@ class ReadingAnalyticsTrackerTest {
 
         assertEquals("end", flush.state.locator)
         assertEquals(30_000L, flush.state.activeMillis)
-        assertEquals(300, flush.session?.wordsRead)
+        assertEquals(200, flush.session?.wordsRead)
+        assertEquals(400, flush.state.estimatedWpm)
     }
 
     @Test
@@ -131,7 +153,7 @@ class ReadingAnalyticsTrackerTest {
         tracker.record(1)
         val session = requireNotNull(tracker.finish())
 
-        assertEquals(200, session.wordsRead)
+        assertEquals(100, session.wordsRead)
         assertEquals(0, session.wpm)
     }
 
@@ -171,8 +193,8 @@ class ReadingAnalyticsTrackerTest {
         clock.advance(50_000L)
         val flush = requireNotNull(tracker.flush())
 
-        assertEquals(100, flush.session?.wordsRead)
-        assertEquals(100, flush.state.estimatedWpm)
+        assertNull(flush.session)
+        assertEquals(0, flush.state.estimatedWpm)
         assertEquals(12, flush.state.currentUnit)
     }
 
@@ -194,8 +216,8 @@ class ReadingAnalyticsTrackerTest {
         tracker.record(4)
         val flush = requireNotNull(tracker.flush())
 
-        assertEquals(300, flush.session?.wordsRead)
-        assertEquals(300, flush.state.estimatedWpm)
+        assertEquals(200, flush.session?.wordsRead)
+        assertEquals(200, flush.state.estimatedWpm)
     }
 
     private class MutableClock : Clock() {
