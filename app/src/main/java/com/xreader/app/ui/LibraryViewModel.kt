@@ -1024,6 +1024,9 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         if (imported == 0 && recovered == 0 && duplicates == 1 && unsupported == 0 && failed == 0) {
             return "Already in library"
         }
+        if (imported == 0 && recovered == 0 && duplicates == 0 && unsupported == 1 && failed == 0) {
+            return unsupportedReasons.firstOrNull() ?: "Unsupported book format"
+        }
         val parts = buildList {
             if (imported > 0) add("Imported ${bookCount(imported)}")
             if (recovered > 0) add("Restored ${bookCount(recovered)}")
@@ -1031,7 +1034,9 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
             if (unsupported > 0) add("$unsupported unsupported")
             if (failed > 0) add("$failed failed")
         }
-        return parts.ifEmpty { listOf("No books imported") }.joinToString("; ")
+        val base = parts.ifEmpty { listOf("No books imported") }.joinToString("; ")
+        val reason = unsupportedReasons.firstOrNull()
+        return if (reason == null) base else "$base; ${reason.removeSuffix(".")}"
     }
 
     private fun bookCount(count: Int): String =

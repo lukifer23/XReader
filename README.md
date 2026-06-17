@@ -39,11 +39,12 @@ Implemented:
 - Offline English dictionary backed by bundled Princeton WordNet data, with phrase, hyphenated-word, plural, possessive, comparative, superlative, adverb, and common irregular lookup.
 - Local full-text search index for imported book text where extraction is supported, including punctuation-safe queries, cleaned PDF text extraction for wrapped words, source-book labels, query-centered snippets, and expandable library search results.
 - Reading analytics for sessions, active reading time, progress, estimated WPM, reader/home ETA, 7-day/30-day/13-week/all-time activity, streaks, book/author/genre summaries, and local CSV/JSON export.
+- Clear unsupported-format feedback for modern Kindle AZW/AZW3/KF8/KFX and other deferred formats, without surfacing fake conversion controls in the app.
 - Public-domain book fixture coverage for TXT/EPUB import paths.
 
 Not implemented in the UI:
 
-- AZW3/KF8 conversion.
+- AZW/AZW3/KF8/KFX conversion.
 - CBR/DJVU/legacy binary DOC import.
 - DRM handling.
 - Cloud sync.

@@ -92,6 +92,47 @@ object SupportedBookTypes {
         return extension.isBlank() && normalizedMimeType in sniffableGenericMimeTypes
     }
 
+    fun unsupportedFileTypeMessage(
+        sourceExtension: String,
+        displayName: String = "",
+        mimeType: String = "",
+    ): String {
+        val extension = sourceExtension.trim().lowercase().ifBlank {
+            displayName.substringAfterLast('.', missingDelimiterValue = "").trim().lowercase()
+        }
+        val prefix = if (extension.isBlank()) {
+            "Unsupported file type"
+        } else {
+            "Unsupported file type: .$extension"
+        }
+        val detail = unsupportedReasonForExtension(extension) ?: unsupportedReasonForMimeType(mimeType)
+        return if (detail == null) prefix else "$prefix. $detail"
+    }
+
+    fun unsupportedReasonForName(displayName: String, mimeType: String = ""): String? {
+        val extension = displayName.substringAfterLast('.', missingDelimiterValue = "").trim().lowercase()
+        return unsupportedReasonForExtension(extension)
+            ?: unsupportedReasonForMimeType(mimeType)
+    }
+
+    private fun unsupportedReasonForExtension(extension: String): String? =
+        when (extension) {
+            "azw", "azw3", "kf8", "kfx" ->
+                "Modern Kindle AZW/KF8/KFX conversion is not implemented yet; import a DRM-free EPUB, PDF, TXT, MOBI/PRC, CBZ, FB2, RTF, ODT, DOCX, HTML, MHTML, or Markdown file."
+            "cbr", "djvu", "djv", "doc" ->
+                "This legacy format is not implemented yet; convert it to EPUB/PDF or import another supported DRM-free format."
+            else -> null
+        }
+
+    private fun unsupportedReasonForMimeType(mimeType: String): String? =
+        when (mimeType.substringBefore(';').trim().lowercase()) {
+            "application/vnd.amazon.mobi8-ebook",
+            "application/x-kindle-application",
+            "application/vnd.amazon.ebook-kf8" ->
+                "Modern Kindle AZW/KF8/KFX conversion is not implemented yet; import a DRM-free EPUB, PDF, TXT, MOBI/PRC, CBZ, FB2, RTF, ODT, DOCX, HTML, MHTML, or Markdown file."
+            else -> null
+        }
+
     private val sniffableGenericMimeTypes: Set<String> = setOf(
         "",
         "application/octet-stream",

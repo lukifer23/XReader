@@ -43,4 +43,32 @@ class SupportedBookTypesTest {
         assertFalse(SupportedBookTypes.isPotentialImportCandidate("archive.rar", "application/octet-stream"))
         assertFalse(SupportedBookTypes.isPotentialImportCandidate("notes.tmp", ""))
     }
+
+    @Test
+    fun modernKindleFormatsStayUnsupportedButExplainWhy() {
+        assertFalse(SupportedBookTypes.extensions.contains("azw3"))
+        assertFalse(SupportedBookTypes.isPotentialImportCandidate("Novel.azw3", "application/octet-stream"))
+
+        val message = SupportedBookTypes.unsupportedFileTypeMessage("azw3", "Novel.azw3")
+
+        assertTrue(message.startsWith("Unsupported file type: .azw3"))
+        assertTrue(message.contains("Modern Kindle AZW/KF8/KFX conversion is not implemented yet"))
+        assertTrue(message.contains("DRM-free EPUB"))
+    }
+
+    @Test
+    fun unsupportedReasonCanBeDetectedFromKindleMimeType() {
+        val reason = SupportedBookTypes.unsupportedReasonForName(
+            displayName = "download",
+            mimeType = "application/vnd.amazon.mobi8-ebook; charset=binary"
+        )
+        val message = SupportedBookTypes.unsupportedFileTypeMessage(
+            sourceExtension = "",
+            displayName = "download",
+            mimeType = "application/vnd.amazon.mobi8-ebook"
+        )
+
+        assertTrue(requireNotNull(reason).contains("Modern Kindle AZW/KF8/KFX"))
+        assertTrue(message.contains("Modern Kindle AZW/KF8/KFX"))
+    }
 }

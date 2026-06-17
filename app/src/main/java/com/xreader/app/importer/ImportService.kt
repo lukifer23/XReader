@@ -46,6 +46,7 @@ class ImportService(
         val unsupported: Int,
         val failed: Int,
         val primaryBookId: Long? = null,
+        val unsupportedReasons: List<String> = emptyList(),
     )
 
     data class LibraryRepairResult(
@@ -97,7 +98,10 @@ class ImportService(
         val imports = importUris(scan.bookUris.distinct())
         imports.copy(
             scanned = imports.scanned + scan.unsupportedFiles,
-            unsupported = imports.unsupported + scan.unsupportedFiles
+            unsupported = imports.unsupported + scan.unsupportedFiles,
+            unsupportedReasons = (imports.unsupportedReasons + scan.unsupportedReasons)
+                .distinct()
+                .take(MAX_UNSUPPORTED_REASON_DETAILS)
         )
     }
 
@@ -126,7 +130,7 @@ class ImportService(
     private suspend fun importCachedFile(tmp: File, displayName: String, mimeType: String): ImportResult {
         val sourceExtension = resolveSourceExtension(tmp, sourceExtension(displayName, mimeType))
         require(sourceExtension in SupportedBookTypes.extensions) {
-            "Unsupported file type: .$sourceExtension"
+            SupportedBookTypes.unsupportedFileTypeMessage(sourceExtension, displayName, mimeType)
         }
 
         val checksum = sha256(tmp)
@@ -301,6 +305,7 @@ class ImportService(
         var unsupported = 0
         var failed = 0
         val importedOrDuplicateBookIds = mutableListOf<Long>()
+        val unsupportedReasons = linkedSetOf<String>()
         uris.forEach { uri ->
             runCatching { import(uri) }
                 .onSuccess { result ->
@@ -316,6 +321,7 @@ class ImportService(
                 .onFailure { error ->
                     if (error.isUnsupportedImport()) {
                         unsupported += 1
+                        error.message?.takeIf { it.isNotBlank() }?.let { unsupportedReasons += it }
                     } else {
                         failed += 1
                     }
@@ -329,7 +335,8 @@ class ImportService(
             unsupported = unsupported,
             failed = failed,
             primaryBookId = importedOrDuplicateBookIds.singleOrNull()
-                ?.takeIf { imported + recovered + duplicates == 1 && unsupported == 0 && failed == 0 }
+                ?.takeIf { imported + recovered + duplicates == 1 && unsupported == 0 && failed == 0 },
+            unsupportedReasons = unsupportedReasons.take(MAX_UNSUPPORTED_REASON_DETAILS)
         )
     }
 
@@ -841,6 +848,7 @@ class ImportService(
     private data class FolderScanResult(
         val bookUris: List<Uri>,
         val unsupportedFiles: Int,
+        val unsupportedReasons: List<String>,
     )
 
     private fun scanTreeForBooks(treeUri: Uri): FolderScanResult {
@@ -848,6 +856,7 @@ class ImportService(
         val rootDocumentUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, rootDocumentId)
         val bookUris = mutableListOf<Uri>()
         var unsupportedFiles = 0
+        val unsupportedReasons = linkedSetOf<String>()
         val visitedDirectories = mutableSetOf<String>()
         fun scanDirectory(directoryUri: Uri) {
             val directoryId = DocumentsContract.getDocumentId(directoryUri)
@@ -878,16 +887,24 @@ class ImportService(
                         bookUris += documentUri
                     } else {
                         unsupportedFiles += 1
+                        val extension = TextTools.extension(displayName).ifBlank { "unknown" }
+                        SupportedBookTypes.unsupportedReasonForName(displayName, mimeType)?.let {
+                            unsupportedReasons += SupportedBookTypes.unsupportedFileTypeMessage(extension, displayName, mimeType)
+                        }
                     }
                 }
             }
         }
         scanDirectory(rootDocumentUri)
-        return FolderScanResult(bookUris = bookUris, unsupportedFiles = unsupportedFiles)
+        return FolderScanResult(
+            bookUris = bookUris,
+            unsupportedFiles = unsupportedFiles,
+            unsupportedReasons = unsupportedReasons.take(MAX_UNSUPPORTED_REASON_DETAILS)
+        )
     }
 
     private fun Throwable.isUnsupportedImport(): Boolean =
-        message?.startsWith("Unsupported file type:") == true
+        message?.startsWith("Unsupported file type") == true
 
     private fun sourceExtension(displayName: String, mimeType: String = ""): String {
         val lower = displayName.lowercase(Locale.US)
@@ -941,6 +958,7 @@ class ImportService(
     private companion object {
         const val CUSTOM_COVER_MAX_EDGE = 1400
         const val CUSTOM_COVER_JPEG_QUALITY = 90
+        const val MAX_UNSUPPORTED_REASON_DETAILS = 2
         val PDF_HEADER = "%PDF-".toByteArray(Charsets.US_ASCII)
     }
 }
