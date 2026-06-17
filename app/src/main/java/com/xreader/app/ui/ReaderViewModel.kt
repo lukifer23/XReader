@@ -971,7 +971,7 @@ class ReaderViewModel(
             }
             ReaderSearchResult(
                 title = row.heading,
-                snippet = row.snippet(query),
+                snippet = searchResultSnippet(row.body, query, maxLength = READER_SEARCH_SNIPPET_MAX_LENGTH),
                 locatorJson = publication.positions.getOrNull(positionIndex)?.toJSON()?.toString() ?: row.locator,
                 unitIndex = positionIndex
             )
@@ -1010,18 +1010,7 @@ class ReaderViewModel(
     }
 }
 
-private fun SearchIndexEntity.snippet(query: String): String {
-    val normalizedBody = body.replace(Regex("\\s+"), " ").trim()
-    val firstTerm = query.split(Regex("\\s+")).firstOrNull { it.isNotBlank() }
-        ?: return normalizedBody.take(220)
-    val index = normalizedBody.indexOf(firstTerm, ignoreCase = true)
-    if (index < 0) return normalizedBody.take(220)
-    val start = (index - 80).coerceAtLeast(0)
-    val end = (index + firstTerm.length + 140).coerceAtMost(normalizedBody.length)
-    val prefix = if (start > 0) "..." else ""
-    val suffix = if (end < normalizedBody.length) "..." else ""
-    return prefix + normalizedBody.substring(start, end) + suffix
-}
+private const val READER_SEARCH_SNIPPET_MAX_LENGTH = 220
 
 private fun String.selectedQuote(): String =
     replace(Regex("\\s+"), " ").trim().take(800)

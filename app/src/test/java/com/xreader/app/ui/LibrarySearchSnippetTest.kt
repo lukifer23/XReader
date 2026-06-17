@@ -60,4 +60,16 @@ class LibrarySearchSnippetTest {
 
         assertEquals("Alpha beta gamma delta...", snippet)
     }
+
+    @Test
+    fun snippetHandlesMultiTermReaderQueries() {
+        val body = "Opening status text that should not dominate the snippet. ".repeat(4) +
+            "The terraforming council gathered under the dome after the alarms. " +
+            "Closing material that should remain outside the short result. ".repeat(4)
+
+        val snippet = searchResultSnippet(body, "council terraforming", maxLength = 80)
+
+        assertTrue(snippet.contains("terraforming council"))
+        assertFalse(snippet.startsWith("Opening status"))
+    }
 }
