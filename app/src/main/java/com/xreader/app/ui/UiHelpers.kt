@@ -258,6 +258,11 @@ internal fun List<BookListItem>.sortedForLibrary(sort: LibrarySort): List<BookLi
                 .thenBy { it.book.year ?: Int.MAX_VALUE }
                 .thenBy { it.book.sortTitle.lowercase() }
         )
+        LibrarySort.LENGTH -> sortedWith(
+            compareByDescending<BookListItem> { it.libraryLengthSortValue() }
+                .thenBy { it.book.sortTitle.lowercase() }
+                .thenBy { it.book.id }
+        )
     }
 
 private fun Map<String, List<BookListItem>>.sortedLibraryGroups(
@@ -298,6 +303,9 @@ private fun LibrarySort.groupComparator(): Comparator<Map.Entry<String, List<Boo
         LibrarySort.PROGRESS -> compareByDescending<Map.Entry<String, List<BookListItem>>> {
             it.value.map { item -> item.displayLibraryProgress() }.average().takeUnless(Double::isNaN) ?: 0.0
         }.thenBy { it.key.lowercase() }
+        LibrarySort.LENGTH -> compareByDescending<Map.Entry<String, List<BookListItem>>> {
+            it.value.sumOf { item -> item.libraryLengthSortValue() }
+        }.thenBy { it.key.lowercase() }
         else -> compareBy { it.key.lowercase() }
     }
 
@@ -308,6 +316,9 @@ private fun LibrarySort.yearGroupComparator(): Comparator<Map.Entry<String, List
         }.thenByDescending { it.key.toIntOrNull() ?: Int.MIN_VALUE }
         LibrarySort.PROGRESS -> compareByDescending<Map.Entry<String, List<BookListItem>>> {
             it.value.map { item -> item.displayLibraryProgress() }.average().takeUnless(Double::isNaN) ?: 0.0
+        }.thenByDescending { it.key.toIntOrNull() ?: Int.MIN_VALUE }
+        LibrarySort.LENGTH -> compareByDescending<Map.Entry<String, List<BookListItem>>> {
+            it.value.sumOf { item -> item.libraryLengthSortValue() }
         }.thenByDescending { it.key.toIntOrNull() ?: Int.MIN_VALUE }
         else -> compareByDescending { it.key.toIntOrNull() ?: Int.MIN_VALUE }
     }
@@ -325,6 +336,12 @@ internal fun BookListItem.displayLibraryProgress(): Double =
 internal fun BookListItem.libraryRecentTimestamp(): Long =
     state?.lastReadAt ?: book.lastOpenedAt ?: book.importedAt
 
+internal fun BookListItem.libraryLengthSortValue(): Long =
+    book.wordCount
+        .takeIf { it > 0 }
+        ?.toLong()
+        ?: (book.fileSizeBytes.coerceAtLeast(0L) / LIBRARY_LENGTH_BYTES_PER_FALLBACK_WORD).coerceAtLeast(0L)
+
 internal fun BookListItem.isLibraryFinished(): Boolean =
     hasPersistedFinishedState() || rawLibraryProgress() >= LIBRARY_FINISHED_PROGRESS_THRESHOLD
 
@@ -339,6 +356,7 @@ private fun BookListItem.hasPersistedFinishedState(): Boolean =
 
 private const val LIBRARY_UNREAD_PROGRESS_THRESHOLD = 0.01
 private const val LIBRARY_FINISHED_PROGRESS_THRESHOLD = 0.995
+private const val LIBRARY_LENGTH_BYTES_PER_FALLBACK_WORD = 6L
 
 internal data class SeriesNextRecommendation(
     val series: String,
@@ -404,6 +422,7 @@ internal fun LibrarySort.label(): String =
         LibrarySort.AUTHOR -> "Author"
         LibrarySort.PROGRESS -> "Progress"
         LibrarySort.SERIES -> "Series"
+        LibrarySort.LENGTH -> "Longest first"
     }
 
 internal fun com.xreader.app.settings.LibraryDensity.label(): String =

@@ -116,6 +116,38 @@ class LibraryGroupingTest {
     }
 
     @Test
+    fun libraryLengthSortUsesWordCountThenFileSizeFallback() {
+        val sorted = listOf(
+            item(title = "Medium", wordCount = 45_000, fileSizeBytes = 2_000_000L),
+            item(title = "Fallback large PDF", wordCount = 0, fileSizeBytes = 80_000L),
+            item(title = "Long", wordCount = 120_000, fileSizeBytes = 1_000_000L),
+            item(title = "Short", wordCount = 8_000, fileSizeBytes = 10_000_000L)
+        ).sortedForLibrary(LibrarySort.LENGTH)
+
+        assertEquals(
+            listOf("Long", "Medium", "Fallback large PDF", "Short"),
+            sorted.map { it.book.title }
+        )
+    }
+
+    @Test
+    fun groupedLengthSortUsesTotalKnownLengthPerGroup() {
+        val grouped = groupBooks(
+            LibraryGroup.AUTHORS,
+            listOf(
+                item(title = "Short A", author = "Small Author", wordCount = 10_000),
+                item(title = "Long A", author = "Large Author", wordCount = 70_000),
+                item(title = "Long B", author = "Large Author", wordCount = 60_000),
+                item(title = "Medium", author = "Medium Author", wordCount = 80_000)
+            ),
+            LibrarySort.LENGTH
+        )
+
+        assertEquals(listOf("Large Author", "Medium Author", "Small Author"), grouped.keys.toList())
+        assertEquals(listOf("Long A", "Long B"), grouped.getValue("Large Author").map { it.book.title })
+    }
+
+    @Test
     fun collectionGroupsCanPlaceOneBookInMultipleCollections() {
         val grouped = groupBooks(
             LibraryGroup.COLLECTIONS,
@@ -189,6 +221,8 @@ class LibraryGroupingTest {
         lastReadAt: Long? = null,
         finished: Boolean = false,
         collections: List<CollectionUiItem> = emptyList(),
+        wordCount: Int = 10_000,
+        fileSizeBytes: Long = 1024L,
     ): BookListItem =
         BookListItem(
             book = BookEntity(
@@ -205,8 +239,8 @@ class LibraryGroupingTest {
                 fileName = "$title.epub",
                 filePath = "books/$title.epub",
                 checksum = "checksum-$title",
-                fileSizeBytes = 1024L,
-                wordCount = 10_000,
+                fileSizeBytes = fileSizeBytes,
+                wordCount = wordCount,
                 finished = finished,
                 importedAt = 1_700_000_000_000L,
                 updatedAt = 1_700_000_000_000L

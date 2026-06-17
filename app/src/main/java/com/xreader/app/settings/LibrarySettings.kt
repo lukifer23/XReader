@@ -6,6 +6,7 @@ enum class LibrarySort {
     AUTHOR,
     PROGRESS,
     SERIES,
+    LENGTH,
 }
 
 enum class LibraryDensity {
