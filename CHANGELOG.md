@@ -31,6 +31,7 @@
 - Generated-audio rows now separate metadata from playback/export/delete controls and allow the control strip to wrap, avoiding cramped audiobook dialogs on phone-width screens.
 - The Audiobooks screen now has local search across book title, author, voice/profile, scope, and generation status so large generated-audio libraries stay navigable without extra clutter.
 - Library sorting now includes `Longest first`, using extracted word count when available and file size as a fallback for formats without reliable text counts.
+- Markdown notes export now includes readable percent positions for highlights, notes, and bookmarks, with safer Markdown escaping for book titles, authors, tags, and bookmark labels.
 - Full-book neural generation prefers WebGPU with isolated-process runtime rotation, then XNNPACK/CPU fallback; preview generation stays on XNNPACK/CPU for stability.
 
 ## 0.1.0 - 2026-05-28

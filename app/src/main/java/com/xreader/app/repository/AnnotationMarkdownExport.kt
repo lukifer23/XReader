@@ -49,7 +49,13 @@ internal object AnnotationMarkdownExport {
                     appendLine("### Notes and highlights")
                     bookAnnotations.forEach { annotation ->
                         appendLine()
-                        appendLine("#### ${annotation.kind.label()} - ${Instant.ofEpochMilli(annotation.updatedAt)}")
+                        appendLine(
+                            listOfNotNull(
+                                annotation.kind.label(),
+                                annotation.locator.locatorProgressLabel(),
+                                Instant.ofEpochMilli(annotation.updatedAt).toString()
+                            ).joinToString(" - ", prefix = "#### ")
+                        )
                         appendLine()
                         appendBlockQuote(annotation.quote)
                         if (annotation.note.isNotBlank()) {
@@ -68,8 +74,7 @@ internal object AnnotationMarkdownExport {
                     appendLine()
                     appendLine("### Bookmarks")
                     bookBookmarks.forEach { bookmark ->
-                        val percent = (bookmark.progress.coerceIn(0.0, 1.0) * 100).roundToInt()
-                        appendLine("- $percent% - ${bookmark.label.markdownInline()}")
+                        appendLine("- ${bookmark.progress.progressLabel()} - ${bookmark.label.markdownInline()}")
                     }
                 }
             }
@@ -93,6 +98,25 @@ internal object AnnotationMarkdownExport {
             AnnotationKind.HIGHLIGHT -> "Highlight"
         }
 
+    private fun Double.progressLabel(): String =
+        "${(coerceIn(0.0, 1.0) * 100).roundToInt()}%"
+
+    private fun String.locatorProgressLabel(): String? =
+        (TOTAL_PROGRESSION_REGEX.find(this)?.groupValues?.getOrNull(1)?.toDoubleOrNull()
+            ?: PROGRESSION_REGEX.find(this)?.groupValues?.getOrNull(1)?.toDoubleOrNull())
+            ?.progressLabel()
+
     private fun String.markdownInline(): String =
-        replace("\n", " ").replace(Regex("\\s+"), " ").trim()
+        replace("\n", " ")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+            .replace("\\", "\\\\")
+            .replace("[", "\\[")
+            .replace("]", "\\]")
+            .replace("*", "\\*")
+            .replace("_", "\\_")
+            .replace("`", "\\`")
+
+    private val TOTAL_PROGRESSION_REGEX = Regex(""""totalProgression"\s*:\s*(-?\d+(?:\.\d+)?)""")
+    private val PROGRESSION_REGEX = Regex("""(?<!total)"progression"\s*:\s*(-?\d+(?:\.\d+)?)""")
 }
