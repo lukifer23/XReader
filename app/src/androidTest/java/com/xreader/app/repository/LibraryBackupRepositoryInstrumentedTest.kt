@@ -30,6 +30,7 @@ import com.xreader.app.settings.ReaderSettings
 import com.xreader.app.settings.ReaderTapZonePreset
 import com.xreader.app.settings.ReaderTextAlign
 import com.xreader.app.settings.SettingsRepository
+import com.xreader.app.tts.NeuralTtsModelCatalog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -137,7 +138,7 @@ class LibraryBackupRepositoryInstrumentedTest {
                 readAloudRate = 1.2f,
                 readAloudVoiceName = "local-test-voice",
                 readAloudSleepTimer = ReadAloudSleepTimer.THIRTY_MINUTES,
-                neuralTtsModelId = "vits-piper-en_US-lessac-medium",
+                neuralTtsModelId = NeuralTtsModelCatalog.DEFAULT_MODEL_ID,
                 neuralTtsGender = NeuralTtsGender.MALE,
                 neuralTtsTone = NeuralTtsTone.WARM,
                 neuralTtsPace = NeuralTtsPace.RELAXED,
@@ -250,7 +251,7 @@ class LibraryBackupRepositoryInstrumentedTest {
         assertEquals(true, restoredSettings.keepScreenAwake)
         assertEquals("local-test-voice", restoredSettings.readAloudVoiceName)
         assertEquals(ReadAloudSleepTimer.THIRTY_MINUTES, restoredSettings.readAloudSleepTimer)
-        assertEquals("vits-piper-en_US-lessac-medium", restoredSettings.neuralTtsModelId)
+        assertEquals(NeuralTtsModelCatalog.DEFAULT_MODEL_ID, restoredSettings.neuralTtsModelId)
         assertEquals(NeuralTtsGender.MALE, restoredSettings.neuralTtsGender)
         assertEquals(NeuralTtsTone.WARM, restoredSettings.neuralTtsTone)
         assertEquals(NeuralTtsPace.RELAXED, restoredSettings.neuralTtsPace)
@@ -282,6 +283,41 @@ class LibraryBackupRepositoryInstrumentedTest {
         assertEquals(1, secondImport.readingStatesSkipped)
         assertEquals(0, secondImport.readingSessionsImported)
         assertEquals(1, secondImport.readingSessionsSkipped)
+    }
+
+    @Test
+    fun importLibrarySettingsFallsBackFromUnknownNeuralModelId() = runBlocking {
+        val targetSettings = testSettingsRepository("unknown-model-target")
+        val targetRepository = LibraryBackupRepository(
+            bookDao = targetDb.books(),
+            collectionDao = targetDb.collections(),
+            readingDao = targetDb.reading(),
+            clock = clock,
+            settingsRepository = targetSettings
+        )
+        val backup = JSONObject()
+            .put("format", "com.xreader.library-metadata.v1")
+            .put("version", 1)
+            .put("books", org.json.JSONArray())
+            .put("collections", org.json.JSONArray())
+            .put("readerAppearances", org.json.JSONArray())
+            .put("readingStates", org.json.JSONArray())
+            .put("readingSessions", org.json.JSONArray())
+            .put(
+                "readerSettings",
+                JSONObject()
+                    .put("theme", ReaderTheme.OLED.name)
+                    .put("neuralTtsModelId", "removed-neural-model")
+                    .put("neuralTtsGender", NeuralTtsGender.FEMALE.name)
+            )
+
+        val imported = targetRepository.importBackupJson(backup.toString())
+
+        assertEquals(1, imported.globalSettingsImported)
+        val restored = targetSettings.settings.first()
+        assertEquals(ReaderTheme.OLED, restored.theme)
+        assertEquals(NeuralTtsModelCatalog.DEFAULT_MODEL_ID, restored.neuralTtsModelId)
+        assertEquals(NeuralTtsGender.FEMALE, restored.neuralTtsGender)
     }
 
     private fun testSettingsRepository(name: String): SettingsRepository {
