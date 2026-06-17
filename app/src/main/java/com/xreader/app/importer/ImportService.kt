@@ -902,11 +902,25 @@ class ImportService(
     }
 
     private fun resolveSourceExtension(file: File, sourceExtension: String): String =
-        if (sourceExtension == "zip") {
-            ZipBackedBookDetector.detect(file) ?: sourceExtension
-        } else {
-            sourceExtension
+        when {
+            sourceExtension == "zip" -> ZipBackedBookDetector.detect(file) ?: sourceExtension
+            sourceExtension.isBlank() -> sniffSourceExtension(file)
+            else -> sourceExtension
         }
+
+    private fun sniffSourceExtension(file: File): String =
+        when {
+            file.hasPdfHeader() -> "pdf"
+            else -> ZipBackedBookDetector.detect(file).orEmpty()
+        }
+
+    private fun File.hasPdfHeader(): Boolean =
+        runCatching {
+            inputStream().buffered().use { input ->
+                val header = ByteArray(PDF_HEADER.size)
+                input.read(header) == PDF_HEADER.size && header.contentEquals(PDF_HEADER)
+            }
+        }.getOrDefault(false)
 
     private fun String.normalizedMimeType(): String =
         substringBefore(';').trim().lowercase(Locale.US)
@@ -934,5 +948,6 @@ class ImportService(
     private companion object {
         const val CUSTOM_COVER_MAX_EDGE = 1400
         const val CUSTOM_COVER_JPEG_QUALITY = 90
+        val PDF_HEADER = "%PDF-".toByteArray(Charsets.US_ASCII)
     }
 }

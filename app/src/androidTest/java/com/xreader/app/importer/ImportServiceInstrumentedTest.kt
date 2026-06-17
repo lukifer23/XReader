@@ -123,6 +123,49 @@ class ImportServiceInstrumentedTest {
     }
 
     @Test
+    fun importsExtensionlessPdfWithGenericMimeBySniffingHeader() = runBlocking {
+        val source = File(root, "downloaded/generic-download").apply {
+            parentFile?.mkdirs()
+            writeSearchablePdf(this)
+        }
+
+        val result = ImportService(context, db).importFile(
+            file = source,
+            displayName = "generic-download",
+            mimeType = "application/octet-stream"
+        )
+
+        val book = requireNotNull(db.books().getBook(result.bookId))
+        assertFalse(result.duplicate)
+        assertEquals(BookFormat.PDF, book.format)
+        assertEquals("pdf", book.sourceExtension)
+        assertEquals("generic-download", book.title)
+        assertTrue(File(context.filesDir, book.filePath).exists())
+        assertTrue(db.search().searchBook(result.bookId, "normalizedBody:interstellar*").isNotEmpty())
+    }
+
+    @Test
+    fun importsExtensionlessEpubWithGenericMimeBySniffingZipStructure() = runBlocking {
+        val source = File(root, "downloaded/catalog-payload").apply {
+            parentFile?.mkdirs()
+            fixtures.aliceEpub().copyTo(this, overwrite = true)
+        }
+
+        val result = ImportService(context, db).importFile(
+            file = source,
+            displayName = "catalog-payload",
+            mimeType = "application/octet-stream"
+        )
+
+        val book = requireNotNull(db.books().getBook(result.bookId))
+        assertFalse(result.duplicate)
+        assertEquals(BookFormat.EPUB, book.format)
+        assertEquals("epub", book.sourceExtension)
+        assertTrue(File(context.filesDir, book.filePath).exists())
+        assertTrue(db.search().searchBook(result.bookId, "normalizedBody:alice*").isNotEmpty())
+    }
+
+    @Test
     fun importsPdfAsPrivatePdfAndIndexesCleanText() = runBlocking {
         val source = File(root, "source/Station Manual.pdf").apply {
             parentFile?.mkdirs()
