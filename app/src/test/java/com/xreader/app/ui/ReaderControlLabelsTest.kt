@@ -14,6 +14,18 @@ class ReaderControlLabelsTest {
     }
 
     @Test
+    fun readerAppearanceScopeLabelMatchesToggleState() {
+        assertEquals(
+            "Appearance changes apply to every book.",
+            readerAppearanceScopeLabel(bookAppearanceEnabled = false)
+        )
+        assertEquals(
+            "Appearance changes apply only to this book.",
+            readerAppearanceScopeLabel(bookAppearanceEnabled = true)
+        )
+    }
+
+    @Test
     fun readAloudToggleLabelMatchesPlaybackState() {
         assertEquals("Read aloud", readAloudToggleLabel(ReadAloudState()))
         assertEquals("Preparing read aloud", readAloudToggleLabel(ReadAloudState(initializing = true)))

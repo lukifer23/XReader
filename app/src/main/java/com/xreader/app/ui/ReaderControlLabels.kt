@@ -5,6 +5,13 @@ import com.xreader.app.tts.ReadAloudState
 internal fun readerBookmarkActionLabel(bookmarked: Boolean): String =
     if (bookmarked) "Remove bookmark" else "Add bookmark"
 
+internal fun readerAppearanceScopeLabel(bookAppearanceEnabled: Boolean): String =
+    if (bookAppearanceEnabled) {
+        "Appearance changes apply only to this book."
+    } else {
+        "Appearance changes apply to every book."
+    }
+
 internal fun readerCanGoPreviousPage(page: Int, pageCount: Int): Boolean =
     pageCount > 1 && page > 0
 

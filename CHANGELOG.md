@@ -37,6 +37,7 @@
 - Reader bottom chrome now clamps page labels and disables the progress scrubber until multiple pages are available, avoiding impossible page counts during reader startup or reflow.
 - In-reader return history now de-duplicates equivalent Readium locations, so search, TOC, bookmark, and scrubber jumps do not create redundant return targets.
 - In-reader fallback search results now use the same word-safe, multi-term snippet builder as library search, producing cleaner previews when Readium search is unavailable or times out.
+- Reader quick settings now clearly state whether appearance changes apply globally or only to the current book.
 - The Audiobooks screen now has local search across book title, author, voice/profile, scope, and generation status so large generated-audio libraries stay navigable without extra clutter.
 - Library grouping now includes a Formats view, using original import extensions such as EPUB, PDF, TXT, MOBI, CBZ, and document conversions so mixed libraries are easier to audit.
 - Empty grouped-library views now give specific guidance for missing author, series, genre, format, and year groups instead of a generic empty message.

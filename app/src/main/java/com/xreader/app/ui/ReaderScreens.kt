@@ -828,6 +828,11 @@ internal fun ReaderQuickSettingsDialog(
                     Text("Book-specific appearance", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
                     Switch(checked = bookAppearanceEnabled, onCheckedChange = onBookAppearanceEnabled)
                 }
+                Text(
+                    text = readerAppearanceScopeLabel(bookAppearanceEnabled),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Text("Spacing preset", style = MaterialTheme.typography.titleMedium)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     val selectedPreset = settings.spacingPresetOrNull()
