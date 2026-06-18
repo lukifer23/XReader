@@ -2,6 +2,7 @@ package com.xreader.app.settings
 
 enum class LibrarySort {
     RECENT,
+    DATE_ADDED,
     TITLE,
     AUTHOR,
     PROGRESS,

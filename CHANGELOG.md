@@ -10,6 +10,7 @@
 ### Changed
 
 - Documentation now records the current connected-device debug smoke path and the next audiobook QA targets.
+- Library sorting now includes `Date added`, using import time independently from reading activity and honoring the option in grouped views.
 - Notes now normalize pasted whitespace before saving, reject empty note annotations at the repository boundary, and keep highlight notes optional.
 - Audiobook text preparation now uses anchored chapter detection, normalized chapter labels, shorter Kokoro-safe prompts, paragraph/question/chapter pause metadata, and prepared-chapter scoped first-chapter generation so scan estimates match generated output.
 - Audiobook text preparation now preserves extractor-provided numeric and roman numeral chapter headings while still dropping ordinary body page markers.

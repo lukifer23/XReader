@@ -82,6 +82,33 @@ class LibraryGroupingTest {
     }
 
     @Test
+    fun libraryDateAddedSortUsesImportTimeNotReadingActivity() {
+        val sorted = listOf(
+            item(title = "Read recently", importedAt = 10L, lastReadAt = 300L),
+            item(title = "Imported newest", importedAt = 30L, lastReadAt = 100L),
+            item(title = "Imported middle", importedAt = 20L, lastReadAt = 200L)
+        ).sortedForLibrary(LibrarySort.DATE_ADDED)
+
+        assertEquals(listOf("Imported newest", "Imported middle", "Read recently"), sorted.map { it.book.title })
+    }
+
+    @Test
+    fun groupedDateAddedSortUsesNewestImportInEachGroup() {
+        val grouped = groupBooks(
+            LibraryGroup.AUTHORS,
+            listOf(
+                item(title = "Old A", author = "Alpha", importedAt = 10L),
+                item(title = "Newest B", author = "Beta", importedAt = 40L),
+                item(title = "New A", author = "Alpha", importedAt = 30L)
+            ),
+            LibrarySort.DATE_ADDED
+        )
+
+        assertEquals(listOf("Beta", "Alpha"), grouped.keys.toList())
+        assertEquals(listOf("New A", "Old A"), grouped.getValue("Alpha").map { it.book.title })
+    }
+
+    @Test
     fun genreGroupsCanSortByAverageProgress() {
         val grouped = groupBooks(
             LibraryGroup.GENRES,
@@ -243,6 +270,7 @@ class LibraryGroupingTest {
         fileSizeBytes: Long = 1024L,
         format: BookFormat = BookFormat.EPUB,
         sourceExtension: String = "epub",
+        importedAt: Long = 1_700_000_000_000L,
     ): BookListItem =
         BookListItem(
             book = BookEntity(
@@ -262,7 +290,7 @@ class LibraryGroupingTest {
                 fileSizeBytes = fileSizeBytes,
                 wordCount = wordCount,
                 finished = finished,
-                importedAt = 1_700_000_000_000L,
+                importedAt = importedAt,
                 updatedAt = 1_700_000_000_000L
             ),
             state = if (progress == null && lastReadAt == null) {

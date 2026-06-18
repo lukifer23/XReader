@@ -243,6 +243,11 @@ internal fun List<BookListItem>.sortedForLibrary(sort: LibrarySort): List<BookLi
             compareByDescending<BookListItem> { it.libraryRecentTimestamp() }
                 .thenBy { it.book.sortTitle.lowercase() }
         )
+        LibrarySort.DATE_ADDED -> sortedWith(
+            compareByDescending<BookListItem> { it.book.importedAt }
+                .thenBy { it.book.sortTitle.lowercase() }
+                .thenBy { it.book.id }
+        )
         LibrarySort.TITLE -> sortedWith(
             compareBy<BookListItem> { it.book.sortTitle.lowercase() }
                 .thenBy { it.book.author.lowercase() }
@@ -303,6 +308,9 @@ private fun LibrarySort.groupComparator(): Comparator<Map.Entry<String, List<Boo
         LibrarySort.RECENT -> compareByDescending<Map.Entry<String, List<BookListItem>>> {
             it.value.maxOfOrNull { item -> item.libraryRecentTimestamp() } ?: Long.MIN_VALUE
         }.thenBy { it.key.lowercase() }
+        LibrarySort.DATE_ADDED -> compareByDescending<Map.Entry<String, List<BookListItem>>> {
+            it.value.maxOfOrNull { item -> item.book.importedAt } ?: Long.MIN_VALUE
+        }.thenBy { it.key.lowercase() }
         LibrarySort.PROGRESS -> compareByDescending<Map.Entry<String, List<BookListItem>>> {
             it.value.map { item -> item.displayLibraryProgress() }.average().takeUnless(Double::isNaN) ?: 0.0
         }.thenBy { it.key.lowercase() }
@@ -316,6 +324,9 @@ private fun LibrarySort.yearGroupComparator(): Comparator<Map.Entry<String, List
     when (this) {
         LibrarySort.RECENT -> compareByDescending<Map.Entry<String, List<BookListItem>>> {
             it.value.maxOfOrNull { item -> item.libraryRecentTimestamp() } ?: Long.MIN_VALUE
+        }.thenByDescending { it.key.toIntOrNull() ?: Int.MIN_VALUE }
+        LibrarySort.DATE_ADDED -> compareByDescending<Map.Entry<String, List<BookListItem>>> {
+            it.value.maxOfOrNull { item -> item.book.importedAt } ?: Long.MIN_VALUE
         }.thenByDescending { it.key.toIntOrNull() ?: Int.MIN_VALUE }
         LibrarySort.PROGRESS -> compareByDescending<Map.Entry<String, List<BookListItem>>> {
             it.value.map { item -> item.displayLibraryProgress() }.average().takeUnless(Double::isNaN) ?: 0.0
@@ -421,6 +432,7 @@ internal fun LibraryGroup.label(): String =
 internal fun LibrarySort.label(): String =
     when (this) {
         LibrarySort.RECENT -> "Recent first"
+        LibrarySort.DATE_ADDED -> "Date added"
         LibrarySort.TITLE -> "Title"
         LibrarySort.AUTHOR -> "Author"
         LibrarySort.PROGRESS -> "Progress"
