@@ -199,6 +199,55 @@ class ReaderLocatorTest {
     }
 
     @Test
+    fun bookmarkLabelUsesLocatorTitleAndProgressPercent() {
+        assertEquals(
+            "Chapter Two - 42%",
+            bookmarkLabelForReaderLocation(
+                locatorTitle = "  Chapter   Two  ",
+                unitHeading = "Fallback",
+                unitIndex = 3,
+                progress = 0.424
+            )
+        )
+    }
+
+    @Test
+    fun bookmarkLabelFallsBackToHeadingThenPosition() {
+        assertEquals(
+            "A quiet landing - 10%",
+            bookmarkLabelForReaderLocation(
+                locatorTitle = null,
+                unitHeading = " A quiet\nlanding ",
+                unitIndex = 1,
+                progress = 0.1
+            )
+        )
+        assertEquals(
+            "Position 5 - 100%",
+            bookmarkLabelForReaderLocation(
+                locatorTitle = " ",
+                unitHeading = " ",
+                unitIndex = 4,
+                progress = 1.4
+            )
+        )
+    }
+
+    @Test
+    fun bookmarkLabelCompactsLongTitlesButKeepsPercent() {
+        val label = bookmarkLabelForReaderLocation(
+            locatorTitle = "A very long chapter title ".repeat(8),
+            unitHeading = "Fallback",
+            unitIndex = 0,
+            progress = 0.333
+        )
+
+        assertEquals(80, label.length)
+        assertEquals(true, label.endsWith(" - 33%"))
+        assertEquals(true, label.contains("..."))
+    }
+
+    @Test
     fun pushReaderReturnLocatorUsesVisibleLocatorAndSkipsSameTarget() {
         val history = mutableListOf<String>()
 

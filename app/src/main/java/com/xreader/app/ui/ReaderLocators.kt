@@ -163,6 +163,26 @@ internal fun List<BookmarkEntity>.bookmarkAtReaderLocation(
         }
 }
 
+internal fun bookmarkLabelForReaderLocation(
+    locatorTitle: String?,
+    unitHeading: String,
+    unitIndex: Int,
+    progress: Double,
+): String {
+    val base = locatorTitle.cleanBookmarkLabel()
+        ?: unitHeading.cleanBookmarkLabel()
+        ?: "Position ${unitIndex + 1}"
+    val percent = (progress.coerceIn(0.0, 1.0) * 100).roundToInt()
+    val suffix = " - $percent%"
+    val maxBaseLength = (MAX_BOOKMARK_LABEL_LENGTH - suffix.length).coerceAtLeast(12)
+    val compactBase = if (base.length <= maxBaseLength) {
+        base
+    } else {
+        base.take(maxBaseLength - 3).trimEnd() + "..."
+    }
+    return compactBase + suffix
+}
+
 internal fun pushReaderReturnLocator(
     history: MutableList<String>,
     visibleLocatorJson: String?,
@@ -212,6 +232,14 @@ private fun locatorToUnitOrNull(locator: String, units: List<ReadingUnit>): Int?
 
 private fun String?.cleanLocator(): String? =
     this?.trim()?.takeIf { it.isNotBlank() }
+
+private fun String?.cleanBookmarkLabel(): String? =
+    this
+        ?.trim()
+        ?.replace(Regex("\\s+"), " ")
+        ?.takeIf { it.isNotBlank() }
+
+private const val MAX_BOOKMARK_LABEL_LENGTH = 80
 
 private fun String.toBookmarkLocatorKey(): BookmarkLocatorKey? {
     val jsonKey = jsonBookmarkLocatorKey() ?: rawBookmarkLocatorKey()

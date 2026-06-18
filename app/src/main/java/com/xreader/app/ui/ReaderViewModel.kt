@@ -862,8 +862,12 @@ class ReaderViewModel(
         }
         val progress = target.position.readiumLocator?.locations?.totalProgression
             ?: if (total <= 1) 1.0 else target.position.unitIndex.toDouble() / (total - 1).toDouble()
-        val label = target.position.readiumLocator?.title
-            ?: target.unit.heading.ifBlank { "Position ${target.position.unitIndex + 1}" }
+        val label = bookmarkLabelForReaderLocation(
+            locatorTitle = target.position.readiumLocator?.title,
+            unitHeading = target.unit.heading,
+            unitIndex = target.position.unitIndex,
+            progress = progress
+        )
         viewModelScope.launch {
             container.annotationRepository.toggleBookmark(
                 bookId = bookId,
