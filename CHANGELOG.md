@@ -6,6 +6,7 @@
 
 - Embedded Kokoro v1.0 audiobook generation with model download/install/delete controls, narrator selection, narration style, pacing, scan summaries, sample/first-chapter/full-book scopes, persisted progress/ETA, partial playback, generated-audio resume, chapter picker/jump controls, delete, and ZIP export.
 - Global Audiobooks screen for completed, partial, active, failed, and generated audio rows, with compact playback controls and chapter navigation.
+- Collection additions can now be applied to every book in the same-author series from the existing book collections dialog.
 
 ### Changed
 
@@ -15,6 +16,11 @@
 - Library search now normalizes pasted punctuation, separators, and accents, so queries like `red-rising`, `sci_fi`, or `cafe` match clean book metadata.
 - Collections can now be renamed from the book collections dialog, merging into an existing collection when names collide.
 - Notes now normalize pasted whitespace before saving, reject empty note annotations at the repository boundary, and keep highlight notes optional.
+- Audiobook generation dialogs now surface active sample, chapter, and full-book generation rows consistently, so stuck or running selected-profile jobs expose their stop/recovery controls instead of leaving generation actions disabled without context.
+- Neural voice downloads can now be stopped from Library audiobook dialogs and Settings, and canceled downloads are moved into a retryable failed state instead of leaving generation locked behind an indefinite spinner.
+- Audiobook text segmentation now coalesces adjacent tiny extracted passages into Kokoro-safe prompts and batches manifest checkpoints, reducing full-book generation segment counts and disk churn while preserving chapter and emphasis pauses.
+- Audiobook recovery now verifies generated WAV files directly instead of trusting stale database progress, so partial full-book generations show playable segment counts after crashes or interrupted runs.
+- Audiobook UI state now snapshots generated files once per row and neural voice previews prepare asynchronously, reducing repeated filesystem work and avoiding preview-playback UI hitches.
 - New bookmarks now save compact chapter/heading labels with percent-read context, making in-book bookmark lists easier to scan.
 - Audiobook text preparation now uses anchored chapter detection, normalized chapter labels, shorter Kokoro-safe prompts, paragraph/question/chapter pause metadata, and prepared-chapter scoped first-chapter generation so scan estimates match generated output.
 - Audiobook text preparation now preserves extractor-provided numeric and roman numeral chapter headings while still dropping ordinary body page markers.

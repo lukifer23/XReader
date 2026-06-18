@@ -341,6 +341,32 @@ class ReaderLocatorTest {
         assertNull(popReaderReturnLocator(history))
     }
 
+    @Test
+    fun readerStatePersistenceSkipsOnlyExactDuplicates() {
+        val state = readingState(locator = "locator-3", currentUnit = 3)
+
+        assertTrue(shouldPersistReaderState(lastPersisted = null, next = state))
+        assertFalse(shouldPersistReaderState(lastPersisted = state, next = state.copy()))
+        assertTrue(
+            shouldPersistReaderState(
+                lastPersisted = state,
+                next = state.copy(activeMillis = state.activeMillis + 1)
+            )
+        )
+        assertTrue(
+            shouldPersistReaderState(
+                lastPersisted = state,
+                next = state.copy(locator = "locator-4", currentUnit = 4)
+            )
+        )
+        assertTrue(
+            shouldPersistReaderState(
+                lastPersisted = state,
+                next = state.copy(finishedAt = state.lastReadAt)
+            )
+        )
+    }
+
     private fun unit(
         index: Int,
         locator: String = "locator-$index",

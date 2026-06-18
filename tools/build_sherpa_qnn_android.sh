@@ -28,7 +28,9 @@ if [[ ! -d "$SHERPA_DIR/.git" ]]; then
 fi
 
 cd "$SHERPA_DIR"
-git fetch --tags --quiet
+if [[ "${SHERPA_SKIP_FETCH:-0}" != "1" ]]; then
+  git fetch --tags --quiet
+fi
 
 if [[ -f "$SHERPA_PATCH" ]] && ! git apply --check "$SHERPA_PATCH" >/dev/null 2>&1; then
   if ! git apply --reverse --check "$SHERPA_PATCH" >/dev/null 2>&1; then

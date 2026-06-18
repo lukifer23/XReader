@@ -317,6 +317,46 @@ class LibraryRepositoryInstrumentedTest {
         assertEquals(1, memberships.map { it.collectionId }.distinct().size)
     }
 
+    @Test
+    fun addingCollectionCanApplyToSameAuthorSeries() = runBlocking {
+        val redId = db.books().insert(
+            book(
+                title = "Red Rising",
+                author = "Pierce Brown",
+                series = "Red Rising",
+                seriesIndex = 1.0,
+                genre = "Science Fiction"
+            )
+        )
+        val goldenId = db.books().insert(
+            book(
+                title = "Golden Son",
+                author = "Pierce Brown",
+                series = "Red Rising",
+                seriesIndex = 2.0,
+                genre = "Science Fiction"
+            )
+        )
+        db.books().insert(
+            book(
+                title = "Morning Star",
+                author = "Different Author",
+                series = "Red Rising",
+                seriesIndex = 3.0,
+                genre = "Science Fiction"
+            )
+        )
+
+        val result = repository.addBookToCollection(redId, "Sci-Fi shelf", applyToSeries = true)
+        val memberships = repository.observeBookCollectionNames().first()
+
+        assertEquals(true, result.changed)
+        assertEquals(2, result.changedBooks)
+        assertEquals(2, result.targetBooks)
+        assertEquals(listOf(redId, goldenId), memberships.map { it.bookId }.sorted())
+        assertEquals(listOf("Sci-Fi shelf"), memberships.map { it.name }.distinct())
+    }
+
     private fun book(
         title: String,
         author: String,

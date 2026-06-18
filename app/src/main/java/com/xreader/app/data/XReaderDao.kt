@@ -74,6 +74,18 @@ interface BookDao {
         targetSeries: String,
     ): List<BookEntity>
 
+    @Query(
+        """
+        SELECT * FROM books
+        WHERE series IS NOT NULL
+            AND series != ''
+            AND LOWER(series) = LOWER(:series)
+            AND LOWER(author) = LOWER(:author)
+        ORDER BY seriesIndex ASC, year ASC, sortTitle ASC
+        """
+    )
+    suspend fun booksInAuthorSeries(author: String, series: String): List<BookEntity>
+
     @Query("SELECT * FROM books ORDER BY updatedAt DESC LIMIT :limit")
     suspend fun booksForMaintenance(limit: Int): List<BookEntity>
 
@@ -339,11 +351,39 @@ interface NeuralTtsDao {
     @Query(
         """
         UPDATE book_audio
-        SET playbackSegmentIndex = :segmentIndex, playbackPositionMs = :positionMs
-        WHERE id = :id
+        SET completedSegments = :completedSegments,
+            generationProvider = :generationProvider,
+            generationAudioMillis = :generationAudioMillis,
+            generationComputeMillis = :generationComputeMillis,
+            sampleRate = :sampleRate,
+            updatedAt = :updatedAt
+        WHERE bookId = :bookId AND modelId = :modelId AND speakerId = :speakerId AND speed = :speed AND tone = :tone AND scope = :scope
         """
     )
-    suspend fun updateBookAudioPlayback(id: Long, segmentIndex: Int, positionMs: Int)
+    suspend fun updateBookAudioGenerationMetrics(
+        bookId: Long,
+        modelId: String,
+        speakerId: Int,
+        speed: Float,
+        tone: String,
+        scope: String,
+        completedSegments: Int,
+        generationProvider: String?,
+        generationAudioMillis: Long,
+        generationComputeMillis: Long,
+        sampleRate: Int,
+        updatedAt: Long,
+    )
+
+    @Query(
+        """
+        UPDATE book_audio
+        SET playbackSegmentIndex = :segmentIndex, playbackPositionMs = :positionMs
+        WHERE id = :id
+            AND (playbackSegmentIndex != :segmentIndex OR playbackPositionMs != :positionMs)
+        """
+    )
+    suspend fun updateBookAudioPlayback(id: Long, segmentIndex: Int, positionMs: Int): Int
 
     @Query("DELETE FROM book_audio WHERE id = :id")
     suspend fun deleteBookAudio(id: Long)

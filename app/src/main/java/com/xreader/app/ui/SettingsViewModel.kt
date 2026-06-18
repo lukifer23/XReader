@@ -1,6 +1,5 @@
 package com.xreader.app.ui
 
-import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.net.Uri
 import androidx.lifecycle.ViewModel
@@ -27,6 +26,8 @@ import com.xreader.app.settings.ReaderTapZonePreset
 import com.xreader.app.settings.ReaderTextAlign
 import com.xreader.app.tts.ReadAloudEngineOption
 import com.xreader.app.tts.ReadAloudVoiceOption
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -45,6 +46,7 @@ data class SettingsMaintenanceUiState(
 
 class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     private var neuralPreviewPlayer: MediaPlayer? = null
+    private var neuralPreviewJob: Job? = null
 
     val settings: StateFlow<ReaderSettings> =
         container.settingsRepository.settings
@@ -163,6 +165,17 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    fun cancelNeuralTtsModelInstall(modelId: String) {
+        viewModelScope.launch {
+            val message = runCatching { container.neuralTtsRepository.cancelModelInstall(modelId) }
+                .fold(
+                    onSuccess = { "Stopped neural voice download" },
+                    onFailure = { it.message ?: "Could not stop neural voice download" }
+                )
+            _maintenance.update { it.copy(message = message) }
+        }
+    }
+
     fun deleteNeuralTtsModel(modelId: String) {
         viewModelScope.launch {
             runCatching { container.neuralTtsRepository.deleteModel(modelId) }
@@ -193,7 +206,9 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     fun previewNeuralTtsModel(modelId: String) {
-        viewModelScope.launch {
+        neuralPreviewJob?.cancel()
+        neuralPreviewPlayer = releaseNeuralPreviewPlayback(neuralPreviewPlayer)
+        neuralPreviewJob = viewModelScope.launch {
             runCatching {
                 val currentSettings = settings.value
                 val file = container.neuralTtsRepository.generatePreviewAudio(
@@ -202,29 +217,17 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
                     pace = currentSettings.neuralTtsPace,
                     tone = currentSettings.neuralTtsTone
                 )
-                neuralPreviewPlayer?.release()
-                neuralPreviewPlayer = MediaPlayer().apply {
-                    setAudioAttributes(
-                        AudioAttributes.Builder()
-                            .setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
-                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                            .build()
-                    )
-                    setDataSource(file.absolutePath)
-                    setOnCompletionListener {
-                        it.release()
-                        if (neuralPreviewPlayer === it) neuralPreviewPlayer = null
-                    }
-                    setOnErrorListener { player, _, _ ->
-                        player.release()
+                neuralPreviewPlayer = startNeuralPreviewPlayback(
+                    file = file,
+                    previousPlayer = neuralPreviewPlayer,
+                    onCleared = { player ->
                         if (neuralPreviewPlayer === player) neuralPreviewPlayer = null
-                        true
                     }
-                    prepare()
-                    start()
-                }
+                )
             }.onFailure { error ->
-                _maintenance.update { it.copy(message = error.message ?: "Neural voice preview failed") }
+                if (error !is CancellationException) {
+                    _maintenance.update { it.copy(message = error.message ?: "Neural voice preview failed") }
+                }
             }
         }
     }
@@ -409,8 +412,8 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     override fun onCleared() {
-        neuralPreviewPlayer?.release()
-        neuralPreviewPlayer = null
+        neuralPreviewJob?.cancel()
+        neuralPreviewPlayer = releaseNeuralPreviewPlayback(neuralPreviewPlayer)
         super.onCleared()
     }
 }

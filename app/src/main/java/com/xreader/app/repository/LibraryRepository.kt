@@ -29,6 +29,8 @@ data class MetadataUpdateResult(
 data class CollectionUpdateResult(
     val collectionName: String,
     val changed: Boolean,
+    val changedBooks: Int = if (changed) 1 else 0,
+    val targetBooks: Int = 1,
 )
 
 data class CollectionRenameResult(
@@ -83,8 +85,8 @@ class LibraryRepository(
     suspend fun setFinished(bookId: Long, finished: Boolean) =
         bookDao.setFinished(bookId, finished, clock.millis())
 
-    suspend fun addBookToCollection(bookId: Long, rawName: String): CollectionUpdateResult = database.withTransaction {
-        requireNotNull(bookDao.getBook(bookId)) { "Book not found" }
+    suspend fun addBookToCollection(bookId: Long, rawName: String, applyToSeries: Boolean = false): CollectionUpdateResult = database.withTransaction {
+        val book = requireNotNull(bookDao.getBook(bookId)) { "Book not found" }
         val name = rawName.cleanCollectionName()
         val now = clock.millis()
         val existing = collectionDao.collectionByName(name)
@@ -97,15 +99,25 @@ class LibraryRepository(
                 )
             ).takeIf { it > 0 }
             ?: requireNotNull(collectionDao.collectionByName(name)?.id) { "Could not create collection" }
-        val changed = collectionDao.insertBookCollection(
-            BookCollectionEntity(
-                bookId = bookId,
-                collectionId = collectionId,
-                addedAt = now
-            )
-        ) > 0
+        val targetBookIds = collectionTargetBookIds(book, applyToSeries)
+        var changedBooks = 0
+        targetBookIds.forEach { targetBookId ->
+            val changed = collectionDao.insertBookCollection(
+                BookCollectionEntity(
+                    bookId = targetBookId,
+                    collectionId = collectionId,
+                    addedAt = now
+                )
+            ) > 0
+            if (changed) changedBooks += 1
+        }
         collectionDao.touchCollection(collectionId, now)
-        CollectionUpdateResult(collectionName = existing?.name ?: name, changed = changed)
+        CollectionUpdateResult(
+            collectionName = existing?.name ?: name,
+            changed = changedBooks > 0,
+            changedBooks = changedBooks,
+            targetBooks = targetBookIds.size
+        )
     }
 
     suspend fun removeBookFromCollection(bookId: Long, collectionId: Long): CollectionUpdateResult = database.withTransaction {
@@ -250,6 +262,13 @@ class LibraryRepository(
 
     private fun String.cleanLibraryQuery(): String =
         trim().replace(Regex("\\s+"), " ")
+
+    private suspend fun collectionTargetBookIds(book: BookEntity, applyToSeries: Boolean): List<Long> {
+        if (!applyToSeries) return listOf(book.id)
+        val series = book.series.cleanMetadataValue() ?: return listOf(book.id)
+        val peers = bookDao.booksInAuthorSeries(author = book.author, series = series)
+        return peers.map { it.id }.distinct().ifEmpty { listOf(book.id) }
+    }
 
     private companion object {
         const val MAX_COLLECTION_NAME_LENGTH = 80

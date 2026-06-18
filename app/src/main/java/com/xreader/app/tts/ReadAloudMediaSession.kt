@@ -23,6 +23,7 @@ internal class ReadAloudMediaSessionController(
     context: Context,
     callbacks: ReadAloudMediaSessionCallbacks,
 ) {
+    private var lastMetadataKey: ReadAloudMetadataKey? = null
     private val session = MediaSession(context.applicationContext, "XReader read aloud").apply {
         @Suppress("DEPRECATION")
         setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS or MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS)
@@ -57,7 +58,11 @@ internal class ReadAloudMediaSessionController(
             stop()
             return
         }
-        session.setMetadata(readAloudMediaMetadata(bookTitle = bookTitle, heading = heading))
+        val metadataKey = readAloudMetadataKey(bookTitle = bookTitle, heading = heading)
+        if (metadataKey != lastMetadataKey) {
+            session.setMetadata(readAloudMediaMetadata(bookTitle = bookTitle, heading = heading))
+            lastMetadataKey = metadataKey
+        }
         session.setPlaybackState(
             readAloudPlaybackState(
                 playing = playing,
@@ -70,6 +75,7 @@ internal class ReadAloudMediaSessionController(
     }
 
     fun stop() {
+        lastMetadataKey = null
         session.setPlaybackState(stoppedPlaybackState())
         session.isActive = false
     }
@@ -80,6 +86,20 @@ internal class ReadAloudMediaSessionController(
         session.release()
     }
 }
+
+internal data class ReadAloudMetadataKey(
+    val bookTitle: String,
+    val heading: String?,
+)
+
+internal fun readAloudMetadataKey(bookTitle: String, heading: String?): ReadAloudMetadataKey =
+    ReadAloudMetadataKey(
+        bookTitle = bookTitle,
+        heading = heading
+            ?.replace(Regex("\\s+"), " ")
+            ?.trim()
+            ?.takeIf { it.isNotBlank() },
+    )
 
 internal fun readAloudMediaActions(
     playing: Boolean,

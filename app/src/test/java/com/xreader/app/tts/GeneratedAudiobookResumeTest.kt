@@ -5,6 +5,7 @@ import com.xreader.app.data.BookAudioStatus
 import java.io.File
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -18,6 +19,7 @@ class GeneratedAudiobookResumeTest {
     fun segmentNamesAreOneBasedAndStable() {
         assertEquals("segment-00001.wav", generatedAudiobookSegmentFileName(0))
         assertEquals("segment-00012.wav", generatedAudiobookSegmentFileName(11))
+        assertEquals("segment-00012.wav.tmp", generatedAudiobookTempSegmentFileName(11))
     }
 
     @Test
@@ -36,6 +38,15 @@ class GeneratedAudiobookResumeTest {
         File(dir, generatedAudiobookSegmentFileName(0)).writeBytes(ByteArray(44))
 
         assertEquals(0, reusableGeneratedAudiobookSegments(dir, expectedSegments = 1))
+    }
+
+    @Test
+    fun reusableSegmentsIgnoreInterruptedTempSegmentFiles() {
+        val dir = temporaryFolder.newFolder()
+        writeSegment(dir, index = 0)
+        File(dir, generatedAudiobookTempSegmentFileName(1)).writeBytes(ByteArray(4096) { 1 })
+
+        assertEquals(1, reusableGeneratedAudiobookSegments(dir, expectedSegments = 3))
     }
 
     @Test
@@ -68,21 +79,25 @@ class GeneratedAudiobookResumeTest {
     fun prepareAudiobookGenerationTargetClearsOnlyFreshGeneration() {
         val freshDir = temporaryFolder.newFolder()
         writeSegment(freshDir, index = 0)
+        File(freshDir, generatedAudiobookTempSegmentFileName(1)).writeBytes(ByteArray(4096) { 1 })
         File(freshDir, "chapters.tsv").writeText("stale")
 
         prepareAudiobookGenerationTarget(target = freshDir, canResumeExistingAudio = false)
 
         assertTrue(freshDir.isDirectory)
         assertFalse(File(freshDir, generatedAudiobookSegmentFileName(0)).exists())
+        assertFalse(File(freshDir, generatedAudiobookTempSegmentFileName(1)).exists())
         assertFalse(File(freshDir, "chapters.tsv").exists())
 
         val resumeDir = temporaryFolder.newFolder()
         writeSegment(resumeDir, index = 0)
+        File(resumeDir, generatedAudiobookTempSegmentFileName(1)).writeBytes(ByteArray(4096) { 1 })
         File(resumeDir, "chapters.tsv").writeText("current")
 
         prepareAudiobookGenerationTarget(target = resumeDir, canResumeExistingAudio = true)
 
         assertTrue(File(resumeDir, generatedAudiobookSegmentFileName(0)).isFile)
+        assertFalse(File(resumeDir, generatedAudiobookTempSegmentFileName(1)).exists())
         assertTrue(File(resumeDir, "chapters.tsv").isFile)
     }
 
@@ -276,6 +291,127 @@ class GeneratedAudiobookResumeTest {
     }
 
     @Test
+    fun positionPersistCoalescingKeepsLatestPositionForSameSegment() {
+        val pending = PendingGeneratedAudiobookPositionPersist(
+            audioId = 7,
+            segmentIndex = 2,
+            positionMs = 5_000,
+            playableSegmentCount = 10
+        )
+        val newer = PendingGeneratedAudiobookPositionPersist(
+            audioId = 7,
+            segmentIndex = 2,
+            positionMs = 8_000,
+            playableSegmentCount = 10
+        )
+        val older = PendingGeneratedAudiobookPositionPersist(
+            audioId = 7,
+            segmentIndex = 2,
+            positionMs = 4_000,
+            playableSegmentCount = 10
+        )
+
+        assertEquals(newer, pending.coalescedWith(newer))
+        assertEquals(pending, pending.coalescedWith(older))
+    }
+
+    @Test
+    fun positionPersistCoalescingKeepsForwardProgressAndCurrentAudio() {
+        val pending = PendingGeneratedAudiobookPositionPersist(
+            audioId = 7,
+            segmentIndex = 2,
+            positionMs = 5_000,
+            playableSegmentCount = 10
+        )
+        val nextSegment = PendingGeneratedAudiobookPositionPersist(
+            audioId = 7,
+            segmentIndex = 3,
+            positionMs = 0,
+            playableSegmentCount = 10
+        )
+        val differentAudio = PendingGeneratedAudiobookPositionPersist(
+            audioId = 8,
+            segmentIndex = 0,
+            positionMs = 1_000,
+            playableSegmentCount = 4
+        )
+
+        assertEquals(nextSegment, pending.coalescedWith(nextSegment))
+        assertEquals(differentAudio, pending.coalescedWith(differentAudio))
+        assertEquals(pending, (null as PendingGeneratedAudiobookPositionPersist?).coalescedWith(pending))
+    }
+
+    @Test
+    fun positionPersistQueueStartsOneDrainAndDeliversLatestPendingPosition() {
+        val queue = GeneratedAudiobookPositionPersistQueue()
+        val first = PendingGeneratedAudiobookPositionPersist(
+            audioId = 7,
+            segmentIndex = 2,
+            positionMs = 5_000,
+            playableSegmentCount = 10
+        )
+        val second = first.copy(positionMs = 8_000)
+
+        assertTrue(queue.offer(first, coalesce = true))
+        assertEquals(false, queue.offer(second, coalesce = true))
+        assertEquals(second, queue.poll())
+        assertNull(queue.poll())
+        assertTrue(queue.offer(first, coalesce = true))
+    }
+
+    @Test
+    fun positionPersistQueueCanRecoverAfterCanceledDrain() {
+        val queue = GeneratedAudiobookPositionPersistQueue()
+        val first = PendingGeneratedAudiobookPositionPersist(
+            audioId = 7,
+            segmentIndex = 2,
+            positionMs = 5_000,
+            playableSegmentCount = 10
+        )
+        val second = first.copy(segmentIndex = 3, positionMs = 0)
+
+        assertTrue(queue.offer(first, coalesce = true))
+        queue.finishCanceledDrain()
+
+        assertTrue(queue.offer(second, coalesce = true))
+        assertEquals(second, queue.poll())
+    }
+
+    @Test
+    fun playbackStateEmissionSkipsIdenticalStateOnly() {
+        val current = AudiobookPlaybackUiState(
+            audioId = 7,
+            bookId = 9,
+            bookTitle = "Book",
+            playing = true,
+            segmentIndex = 1,
+            segmentCount = 4,
+            segmentPositionMs = 12_000,
+            segmentDurationMs = 60_000
+        )
+
+        assertFalse(shouldEmitAudiobookPlaybackState(current, current.copy()))
+        assertTrue(shouldEmitAudiobookPlaybackState(current, current.copy(segmentPositionMs = 13_000)))
+        assertTrue(shouldEmitAudiobookPlaybackState(current, current.copy(playing = false)))
+    }
+
+    @Test
+    fun playbackPositionPersistenceSkipsIdenticalPositionOnly() {
+        val audio = audio(filePath = null).copy(
+            playbackSegmentIndex = 2,
+            playbackPositionMs = 8_500
+        )
+        val current = GeneratedAudiobookPersistedPlaybackPosition(
+            segmentIndex = 2,
+            positionMs = 8_500
+        )
+
+        assertFalse(shouldPersistGeneratedAudiobookPlaybackPosition(audio, current))
+        assertTrue(shouldPersistGeneratedAudiobookPlaybackPosition(audio, current.copy(positionMs = 9_000)))
+        assertTrue(shouldPersistGeneratedAudiobookPlaybackPosition(audio, current.copy(segmentIndex = 3, positionMs = 0)))
+    }
+
+    @Test
     fun bookAudioPlaybackBoundingUsesVerifiedGeneratedSegments() {
         val stale = audio(filePath = null).copy(
             segmentCount = 10,
@@ -336,6 +472,63 @@ class GeneratedAudiobookResumeTest {
                 completedSegments = 4
             ).verifiedPlayableSegmentCount()
         )
+    }
+
+    @Test
+    fun verifiedGeneratedSegmentsRecoverWhenDatabaseCompletedCountIsStale() {
+        val dir = temporaryFolder.newFolder()
+        writeSegment(dir, index = 0)
+        writeSegment(dir, index = 1)
+        writeSegment(dir, index = 2)
+
+        val staleAudio = audio(filePath = dir.absolutePath).copy(
+            status = BookAudioStatus.GENERATING,
+            segmentCount = 5,
+            completedSegments = 0
+        )
+
+        assertTrue(staleAudio.playableSegmentFiles().isEmpty())
+        assertEquals(3, staleAudio.verifiedGeneratedSegmentFiles().size)
+        assertEquals(3, staleAudio.withVerifiedGeneratedProgress().completedSegments)
+        assertEquals(3, staleAudio.withVerifiedGeneratedProgress().playableSegmentFiles().size)
+    }
+
+    @Test
+    fun generatedAudiobookFileSnapshotKeepsActiveGenerationBoundedToCompletedProgress() {
+        val dir = temporaryFolder.newFolder()
+        writeSegment(dir, index = 0)
+        writeSegment(dir, index = 1)
+
+        val snapshot = audio(filePath = dir.absolutePath).copy(
+            status = BookAudioStatus.GENERATING,
+            scopeLabel = "First chapter",
+            segmentCount = 4,
+            completedSegments = 0
+        ).generatedAudiobookFileSnapshot()
+
+        assertEquals(0, snapshot.audio.completedSegments)
+        assertEquals(0, snapshot.playableSegmentCount)
+        assertTrue(snapshot.playableSegmentFiles.isEmpty())
+        assertTrue(snapshot.chapters.isEmpty())
+    }
+
+    @Test
+    fun generatedAudiobookFileSnapshotUsesVerifiedFilesAndRecoveredProgressWhenStopped() {
+        val dir = temporaryFolder.newFolder()
+        writeSegment(dir, index = 0)
+        writeSegment(dir, index = 1)
+
+        val snapshot = audio(filePath = dir.absolutePath).copy(
+            status = BookAudioStatus.CANCELED,
+            scopeLabel = "First chapter",
+            segmentCount = 4,
+            completedSegments = 0
+        ).generatedAudiobookFileSnapshot()
+
+        assertEquals(2, snapshot.audio.completedSegments)
+        assertEquals(2, snapshot.playableSegmentCount)
+        assertEquals(listOf("First chapter"), snapshot.chapters.map { it.title })
+        assertEquals(2, snapshot.chapters.single().segmentCount)
     }
 
     @Test
@@ -564,6 +757,41 @@ class GeneratedAudiobookResumeTest {
     }
 
     @Test
+    fun generatedAudiobookSegmentMetadataReadsChapterPauseAndExportRowsTogether() {
+        val dir = temporaryFolder.newFolder()
+        val sidecar = File(dir, "segments.tsv").apply {
+            writeText(
+                """
+                index	chapterIndex	pauseAfterMs	text
+                0	0	180	one
+                1	99	220	two
+                2	1	520	three
+                4	1	900	out of range
+                """.trimIndent()
+            )
+        }
+        val chapters = listOf(
+            GeneratedAudiobookChapter(index = 0, title = "Chapter 1", firstSegmentIndex = 0, segmentCount = 2),
+            GeneratedAudiobookChapter(index = 1, title = "Chapter 2", firstSegmentIndex = 2, segmentCount = 1)
+        )
+
+        val metadata = sidecar.generatedAudiobookSegmentMetadata(segmentCount = 3, chapters = chapters)
+
+        assertEquals(listOf(0, 0, 1), metadata.chapterIndexes)
+        assertEquals(listOf(180L, 220L, 520L), metadata.pauseAfterMillis)
+        assertEquals(
+            """
+            index	chapterIndex	pauseAfterMs	text
+            0	0	180	one
+            1	99	220	two
+            2	1	520	three
+
+            """.trimIndent(),
+            metadata.exportTsv
+        )
+    }
+
+    @Test
     fun generatedAudiobookChaptersReadSidecarAndNavigateBoundaries() {
         val dir = temporaryFolder.newFolder()
         repeat(5) { index -> writeSegment(dir, index) }
@@ -691,6 +919,84 @@ class GeneratedAudiobookResumeTest {
         val chapters = audio.generatedAudiobookChapters()
 
         assertEquals(listOf(0, 0, 1, 1), audio.generatedAudiobookSegmentChapterIndexes(4, chapters))
+    }
+
+    @Test
+    fun generationProgressWritesEveryNewCompletedSegment() {
+        assertTrue(
+            shouldWriteGenerationProgress(
+                completedSegments = 1,
+                totalSegments = 20,
+                lastProgressWrittenSegments = 0
+            )
+        )
+        assertTrue(
+            shouldWriteGenerationProgress(
+                completedSegments = 2,
+                totalSegments = 20,
+                lastProgressWrittenSegments = 1
+            )
+        )
+        assertTrue(
+            shouldWriteGenerationProgress(
+                completedSegments = 3,
+                totalSegments = 20,
+                lastProgressWrittenSegments = 2
+            )
+        )
+        assertTrue(
+            shouldWriteGenerationProgress(
+                completedSegments = 20,
+                totalSegments = 20,
+                lastProgressWrittenSegments = 19
+            )
+        )
+    }
+
+    @Test
+    fun generationProgressSkipsDuplicateAndInvalidUpdates() {
+        assertFalse(
+            shouldWriteGenerationProgress(
+                completedSegments = 0,
+                totalSegments = 20,
+                lastProgressWrittenSegments = 0
+            )
+        )
+        assertFalse(
+            shouldWriteGenerationProgress(
+                completedSegments = 8,
+                totalSegments = 20,
+                lastProgressWrittenSegments = 8
+            )
+        )
+        assertFalse(
+            shouldWriteGenerationProgress(
+                completedSegments = 21,
+                totalSegments = 20,
+                lastProgressWrittenSegments = 20
+            )
+        )
+    }
+
+    @Test
+    fun generatedAudiobookKnownFilesSizeCountsSegmentsAndSidecarsOnly() {
+        val dir = temporaryFolder.newFolder()
+        writeSegment(dir, index = 0)
+        writeSegment(dir, index = 1)
+        writeSegment(dir, index = 2)
+        File(dir, "manifest.txt").writeText("final")
+        File(dir, "manifest.in-progress.txt").writeText("progress")
+        File(dir, "chapters.tsv").writeText("chapters")
+        File(dir, "segments.tsv").writeText("segments")
+        File(dir, "unrelated.tmp").writeBytes(ByteArray(100))
+        temporaryFolder.newFolder("nested").also { nested ->
+            File(nested, "ignored.bin").writeBytes(ByteArray(100))
+        }
+
+        val expected = 64L + 64L + "final".length + "progress".length + "chapters".length + "segments".length
+
+        assertEquals(expected, dir.generatedAudiobookKnownFilesSizeBytes(completedSegments = 2))
+        assertEquals(expected, audio(filePath = dir.absolutePath).generatedAudiobookKnownFilesSizeBytes(completedSegments = 2))
     }
 
     private fun writeSegment(dir: File, index: Int) {

@@ -33,12 +33,6 @@ mkdir -p "$TARGET_DIR"
 install -m 0644 "$SHERPA_LIB_DIR/libsherpa-onnx-jni.so" "$TARGET_DIR/libsherpa-onnx-jni.so"
 install -m 0644 "$ONNXRUNTIME_LIB_DIR/libonnxruntime.so" "$TARGET_DIR/libonnxruntime.so"
 
-for lib in libsherpa-onnx-c-api.so libsherpa-onnx-cxx-api.so; do
-  if [[ -f "$SHERPA_LIB_DIR/$lib" ]]; then
-    install -m 0644 "$SHERPA_LIB_DIR/$lib" "$TARGET_DIR/$lib"
-  fi
-done
-
 for lib in libQnnGpu.so libQnnHtp.so libQnnHtpPrepare.so libQnnSystem.so; do
   install -m 0644 "$QNN_LIB_DIR/$lib" "$TARGET_DIR/$lib"
 done
@@ -50,7 +44,7 @@ for lib in "$QNN_LIB_DIR"/libQnnHtpV*Stub.so; do
   install -m 0644 "$lib" "$TARGET_DIR/$(basename "$lib")"
   stub_count=$((stub_count + 1))
 done
-for lib in "$QNN_LIB_DIR"/libQnnHtpV*Skel.so; do
+for lib in "$QNN_LIB_DIR"/libQnnHtpV*Skel.so "$QNN_SDK_ROOT"/lib/hexagon-v*/unsigned/libQnnHtpV*Skel.so; do
   install -m 0644 "$lib" "$TARGET_DIR/$(basename "$lib")"
   skel_count=$((skel_count + 1))
 done

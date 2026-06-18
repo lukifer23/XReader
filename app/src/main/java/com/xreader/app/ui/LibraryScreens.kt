@@ -57,6 +57,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -350,6 +351,7 @@ internal fun LibraryRoute(
             onToneSelected = viewModel::setNeuralTtsTone,
             onPaceSelected = viewModel::setNeuralTtsPace,
             onDownload = viewModel::downloadNeuralTtsModel,
+            onCancelModelInstall = viewModel::cancelNeuralTtsModelInstall,
             onPreview = viewModel::previewNeuralTtsModel
         )
     }
@@ -470,7 +472,7 @@ internal fun LibraryScreen(
     onOpenSearchResult: (Long, String?) -> Unit,
     onToggleFavorite: (BookListItem) -> Unit,
     onSetFinished: (BookListItem, Boolean) -> Unit,
-    onAddToCollection: (BookListItem, String) -> Unit,
+    onAddToCollection: (BookListItem, String, Boolean) -> Unit,
     onRemoveFromCollection: (BookListItem, CollectionUiItem) -> Unit,
     onRenameCollection: (CollectionUiItem, String) -> Unit,
     onShowAll: () -> Unit,
@@ -668,7 +670,7 @@ internal fun LibraryScreen(
             item = item,
             allCollections = state.collections,
             onDismiss = { collectionsTarget = null },
-            onAdd = { name -> onAddToCollection(item, name) },
+            onAdd = { name, applyToSeries -> onAddToCollection(item, name, applyToSeries) },
             onRemove = { collection -> onRemoveFromCollection(item, collection) },
             onRename = onRenameCollection
         )
@@ -1315,6 +1317,7 @@ internal fun BookAudiobookDialog(
     onToneSelected: (NeuralTtsTone) -> Unit,
     onPaceSelected: (NeuralTtsPace) -> Unit,
     onDownload: (String) -> Unit,
+    onCancelModelInstall: (String) -> Unit,
     onPreview: (String) -> Unit,
 ) {
     val bookAudio = remember(bookAudioItems) { bookAudioItems.map { it.audio } }
@@ -1332,20 +1335,24 @@ internal fun BookAudiobookDialog(
             }
     }
     val selectedAudioItem = remember(bookAudioItems, settings.neuralTtsModelId, settings.neuralTtsSpeakerId, settings.neuralTtsPace, settings.neuralTtsTone) {
-        bookAudioItems.firstOrNull { item ->
-            item.audio.modelId == settings.neuralTtsModelId &&
-                item.audio.speakerId == selectedSpec.normalizedSpeakerId(settings.neuralTtsSpeakerId) &&
-                abs(item.audio.speed - settings.neuralTtsPace.speed) < 0.001f &&
-                item.audio.tone == settings.neuralTtsTone.name &&
-                item.audio.scope == AudiobookGenerationScope.FULL_BOOK.key
-        }
+        selectedAudiobookStatusItem(
+            items = bookAudioItems,
+            modelId = settings.neuralTtsModelId,
+            speakerId = selectedSpec.normalizedSpeakerId(settings.neuralTtsSpeakerId),
+            speed = settings.neuralTtsPace.speed,
+            tone = settings.neuralTtsTone.name
+        )
     }
-    val generatingSelectedAudio = bookAudio.any { audio ->
-        audio.modelId == settings.neuralTtsModelId &&
-            audio.speakerId == selectedSpec.normalizedSpeakerId(settings.neuralTtsSpeakerId) &&
-            abs(audio.speed - settings.neuralTtsPace.speed) < 0.001f &&
-            audio.tone == settings.neuralTtsTone.name &&
-            audio.status == BookAudioStatus.GENERATING
+    val selectedProfileSpeakerId = selectedSpec.normalizedSpeakerId(settings.neuralTtsSpeakerId)
+    val generatingSelectedAudio = remember(bookAudio, settings.neuralTtsModelId, selectedProfileSpeakerId, settings.neuralTtsPace, settings.neuralTtsTone) {
+        bookAudio.any { audio ->
+            audio.matchesAudiobookProfile(
+                modelId = settings.neuralTtsModelId,
+                speakerId = selectedProfileSpeakerId,
+                speed = settings.neuralTtsPace.speed,
+                tone = settings.neuralTtsTone.name
+            ) && audio.status == BookAudioStatus.GENERATING
+        }
     }
     val generationBlockedReason = audiobookGenerationBlockedReason(
         status = selectedStatus,
@@ -1473,7 +1480,7 @@ internal fun BookAudiobookDialog(
                     AudiobookSelectedVoiceModelRow(
                         spec = selectedSpec,
                         status = selectedStatus,
-                        statusText = audiobookVoiceStatusText(
+                        statusText = neuralTtsStatusText(
                             status = selectedStatus,
                             downloaded = selectedModel?.downloadedBytes ?: 0,
                             total = selectedModel?.totalBytes ?: selectedSpec.archiveBytes,
@@ -1481,6 +1488,7 @@ internal fun BookAudiobookDialog(
                             error = selectedModel?.error
                         ),
                         onDownload = { onDownload(selectedSpec.modelId) },
+                        onCancel = { onCancelModelInstall(selectedSpec.modelId) },
                         onPreview = { onPreview(selectedSpec.modelId) }
                     )
                 }
@@ -1814,6 +1822,7 @@ private fun AudiobookStatusCard(
                 playableSegments <= 0 -> "Audio files missing"
                 else -> "$playableSegments playable of ${audio.segmentCount} segments"
             },
+            audio.audiobookPerformanceLabel(),
             audio.estimatedDurationLabel(),
             audio.audiobookResumeLabel(prefix = "resume", playableSegmentFiles = playableSegmentFiles),
             audio.fileSizeBytes.takeIf { it > 0 }?.compactBytes()
@@ -1824,6 +1833,7 @@ private fun AudiobookStatusCard(
                     "${audio.completedSegments.coerceAtMost(audio.segmentCount)} of ${audio.segmentCount} segments",
                     "${(progress * 100).roundToInt()}%",
                     audio.generationEtaLabel(),
+                    audio.audiobookPerformanceLabel(),
                     audio.estimatedDurationLabel()
                 ).filterNotNull().joinToString(" • ")
             } else {
@@ -1834,6 +1844,7 @@ private fun AudiobookStatusCard(
             if (audio.segmentCount > 0) {
                 listOf(
                     "${audio.completedSegments.coerceAtMost(audio.segmentCount)} of ${audio.segmentCount} segments completed",
+                    audio.audiobookPerformanceLabel(),
                     audio.estimatedDurationLabel()
                 ).filterNotNull().joinToString(" • ")
             } else {
@@ -1921,6 +1932,12 @@ private fun AudiobookPlaybackActions(
     modifier: Modifier = Modifier,
 ) {
     val active = playback.audioId == audio.id && playback.active
+    val actions = generatedAudiobookActionState(
+        active = active,
+        playback = playback,
+        audio = audio,
+        playableSegmentFiles = playableSegmentFiles
+    )
     FlowRow(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -1939,21 +1956,12 @@ private fun AudiobookPlaybackActions(
             )
         }
         TooltipIconButton(
-            label = audiobookPlaybackIconLabel(
-                active = active,
-                playback = playback,
-                audio = audio,
-                playableSegmentFiles = playableSegmentFiles
-            ),
+            label = actions.playIconLabel,
             onClick = {
                 if (active && playback.playing) onPauseAudio(audio) else onPlayAudio(audio)
             },
             modifier = Modifier.size(40.dp),
-            enabled = canPlayGeneratedAudiobookAction(
-                active = active,
-                playback = playback,
-                playableSegmentFiles = playableSegmentFiles
-            )
+            enabled = actions.canPlay
         ) {
             Icon(if (active && playback.playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, contentDescription = null)
         }
@@ -1967,10 +1975,10 @@ private fun AudiobookPlaybackActions(
             }
         }
         TooltipIconButton(
-            label = "${audiobookExportActionLabel(audio, playableSegmentFiles = playableSegmentFiles)} generated audio",
+            label = "${actions.exportLabel} generated audio",
             onClick = { onExportAudio(audio) },
             modifier = Modifier.size(40.dp),
-            enabled = canExportGeneratedAudiobookAction(playableSegmentFiles)
+            enabled = actions.canExport
         ) {
             Icon(Icons.Filled.FileDownload, contentDescription = null)
         }
@@ -2018,7 +2026,7 @@ private fun GeneratedAudiobookList(
             GeneratedAudiobookRow(
                 audio = item,
                 selected = item.audio.id == selectedAudioId,
-                playback = playback,
+                playback = playback.forAudiobooksScreenRow(item.audio.id),
                 onExportAudio = onExportAudio,
                 onPlayAudio = onPlayAudio,
                 onPauseAudio = onPauseAudio,
@@ -2079,6 +2087,7 @@ private fun GeneratedAudiobookRow(
                             audio.chapters.takeIf { it.isNotEmpty() }?.let { generatedAudiobookChapterCountLabel(it.size) },
                             generatedAudioPlayableDetail(audio),
                             audioEntity.estimatedDurationLabel(),
+                            audioEntity.audiobookPerformanceLabel(),
                             audioEntity.audiobookResumeLabel(prefix = "resume", playableSegmentFiles = audio.playableSegmentFiles),
                             audioEntity.fileSizeBytes.takeIf { it > 0 }?.compactBytes(),
                             audioEntity.generatedAt?.let { "generated ${relativeAgeLabel(it)}" }
@@ -2162,6 +2171,7 @@ private fun AudiobookSelectedVoiceModelRow(
     status: NeuralTtsModelStatus,
     statusText: String,
     onDownload: () -> Unit,
+    onCancel: () -> Unit,
     onPreview: () -> Unit,
 ) {
     Surface(
@@ -2197,7 +2207,10 @@ private fun AudiobookSelectedVoiceModelRow(
             }
             when (status) {
                 NeuralTtsModelStatus.DOWNLOADING,
-                NeuralTtsModelStatus.EXTRACTING -> CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                NeuralTtsModelStatus.EXTRACTING -> {
+                    CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                    TextButton(onClick = onCancel) { Text("Stop") }
+                }
                 NeuralTtsModelStatus.INSTALLED -> TextButton(onClick = onPreview) { Text("Preview") }
                 NeuralTtsModelStatus.NOT_DOWNLOADED -> TextButton(onClick = onDownload) { Text("Download") }
                 NeuralTtsModelStatus.FAILED -> TextButton(onClick = onDownload) { Text("Retry") }
@@ -2205,21 +2218,6 @@ private fun AudiobookSelectedVoiceModelRow(
         }
     }
 }
-
-private fun audiobookVoiceStatusText(
-    status: NeuralTtsModelStatus,
-    downloaded: Long,
-    total: Long,
-    archiveBytes: Long,
-    error: String?,
-): String =
-    when (status) {
-        NeuralTtsModelStatus.INSTALLED -> "Installed"
-        NeuralTtsModelStatus.DOWNLOADING -> "Downloading ${downloaded.compactBytes()} of ${total.compactBytes()}"
-        NeuralTtsModelStatus.EXTRACTING -> "Installing ${archiveBytes.compactBytes()} voice"
-        NeuralTtsModelStatus.FAILED -> error ?: "Download failed"
-        NeuralTtsModelStatus.NOT_DOWNLOADED -> "Not installed • ${archiveBytes.compactBytes()}"
-    }
 
 internal fun audiobookGenerationBlockedReason(
     status: NeuralTtsModelStatus,
@@ -2236,23 +2234,49 @@ internal fun audiobookGenerationBlockedReason(
         else -> null
     }
 
+internal fun selectedAudiobookStatusItem(
+    items: List<BookAudiobookAudioUiItem>,
+    modelId: String,
+    speakerId: Int,
+    speed: Float,
+    tone: String,
+): BookAudiobookAudioUiItem? {
+    val matching = items.filter { item -> item.audio.matchesAudiobookProfile(modelId, speakerId, speed, tone) }
+    return matching.firstOrNull { it.audio.status == BookAudioStatus.GENERATING }
+        ?: matching.firstOrNull { it.audio.scope == AudiobookGenerationScope.FULL_BOOK.key }
+        ?: matching.maxByOrNull { it.audio.generatedAt ?: it.audio.updatedAt }
+}
+
+internal fun BookAudioEntity.matchesAudiobookProfile(
+    modelId: String,
+    speakerId: Int,
+    speed: Float,
+    tone: String,
+): Boolean =
+    this.modelId == modelId &&
+        this.speakerId == speakerId &&
+        abs(this.speed - speed) < AUDIOBOOK_PROFILE_SPEED_EPSILON &&
+        this.tone == tone
+
 @Composable
 internal fun BookCollectionsDialog(
     item: BookListItem,
     allCollections: List<CollectionUiItem>,
     onDismiss: () -> Unit,
-    onAdd: (String) -> Unit,
+    onAdd: (String, Boolean) -> Unit,
     onRemove: (CollectionUiItem) -> Unit,
     onRename: (CollectionUiItem, String) -> Unit,
 ) {
     var collectionName by remember(item.book.id) { mutableStateOf("") }
     var editingCollection by remember(item.book.id) { mutableStateOf<CollectionUiItem?>(null) }
+    var applyToSeries by remember(item.book.id) { mutableStateOf(false) }
+    val seriesName = item.book.series?.trim()?.takeIf { it.isNotBlank() }
     val currentIds = item.collections.mapTo(mutableSetOf()) { it.id }
     val availableCollections = allCollections.filterNot { it.id in currentIds }
     fun addCollection(name: String = collectionName) {
         val cleaned = name.trim()
         if (cleaned.isNotBlank()) {
-            onAdd(cleaned)
+            onAdd(cleaned, applyToSeries && seriesName != null)
             collectionName = ""
         }
     }
@@ -2323,6 +2347,26 @@ internal fun BookCollectionsDialog(
                                 )
                             }
                         }
+                    }
+                }
+                if (seriesName != null) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { applyToSeries = !applyToSeries },
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Checkbox(
+                            checked = applyToSeries,
+                            onCheckedChange = { applyToSeries = it }
+                        )
+                        Text(
+                            "Apply additions to $seriesName",
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }
                 Row(
@@ -2669,18 +2713,12 @@ internal fun String.fileSafeName(): String =
         .take(80)
 
 private fun BookAudioEntity.fileSafeProfileName(): String =
-    displayProfileLabel()
+    audiobookDisplayProfileLabel(includeScope = true)
         .fileSafeName()
         .take(48)
 
 private fun BookAudioEntity.displayProfileLabel(): String =
-    listOf(
-        scopeLabel.takeUnless { it.equals("Full book", ignoreCase = true) },
-        modelDisplayName,
-        "Speaker ${speakerId + 1}".takeIf { speakerId > 0 },
-        tone.lowercase(Locale.US).replaceFirstChar { it.titlecase(Locale.US) },
-        "%.2fx".format(Locale.US, speed)
-    ).filterNotNull().joinToString(" ")
+    audiobookDisplayProfileLabel(includeScope = true)
 
 internal fun visibleGeneratedAudiobooks(
     audio: List<BookAudioEntity>,
@@ -2809,7 +2847,7 @@ internal fun searchResultSnippet(
 internal fun audiobookStorageLabel(bytes: Long): String =
     "~${bytes.compactBytes()} local audio"
 
-private fun Long.compactBytes(): String =
+internal fun Long.compactBytes(): String =
     when {
         this >= 1_073_741_824L -> "%.1f GB".format(Locale.US, this / 1_073_741_824.0)
         this >= 1_048_576L -> "${(this / 1_048_576.0).roundToInt()} MB"
@@ -2819,6 +2857,7 @@ private fun Long.compactBytes(): String =
 
 private const val AUDIOBOOK_ESTIMATED_WORDS_PER_MINUTE = 150f
 private const val COLLAPSED_GENERATED_AUDIO_COUNT = 4
+private const val AUDIOBOOK_PROFILE_SPEED_EPSILON = 0.001f
 
 private val SEARCH_SNIPPET_WHITESPACE = Regex("\\s+")
 private val SEARCH_SNIPPET_TERM_PATTERN = Regex("[\\p{L}\\p{N}]+")

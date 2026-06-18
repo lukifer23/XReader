@@ -8,6 +8,26 @@ import org.junit.Test
 
 class AudiobookGenerationForegroundServiceTest {
     @Test
+    fun startGateRejectsStartsWhileCanceling() {
+        assertEquals(
+            AudiobookGenerationStartGate.CANCELING,
+            audiobookGenerationStartGate(canceling = true, jobActive = false)
+        )
+        assertEquals(
+            AudiobookGenerationStartGate.CANCELING,
+            audiobookGenerationStartGate(canceling = true, jobActive = true)
+        )
+        assertEquals(
+            AudiobookGenerationStartGate.ALREADY_RUNNING,
+            audiobookGenerationStartGate(canceling = false, jobActive = true)
+        )
+        assertEquals(
+            AudiobookGenerationStartGate.START,
+            audiobookGenerationStartGate(canceling = false, jobActive = false)
+        )
+    }
+
+    @Test
     fun statusTextHandlesPreparingRunningAndCompletion() {
         assertEquals(
             "Preparing book text",

@@ -28,6 +28,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 
 class AudiobookGenerationForegroundService : Service() {
@@ -37,6 +40,7 @@ class AudiobookGenerationForegroundService : Service() {
     private var foregroundStarted = false
     private var generationJob: Job? = null
     private var progressJob: Job? = null
+    private var cancelingGeneration = false
     private var activeBookId: Long? = null
     private var activeTitle: String = "XReader audiobook"
     private var activeModelId: String = NeuralTtsModelCatalog.DEFAULT_MODEL_ID
@@ -73,9 +77,16 @@ class AudiobookGenerationForegroundService : Service() {
             stopForegroundAndSelf(removeNotification = true)
             return
         }
-        if (generationJob?.isActive == true) {
-            updateNotification(buildNotification(title = activeTitle, audio = null, preparing = true, alreadyRunning = true))
-            return
+        when (audiobookGenerationStartGate(canceling = cancelingGeneration, jobActive = generationJob?.isActive == true)) {
+            AudiobookGenerationStartGate.START -> Unit
+            AudiobookGenerationStartGate.CANCELING -> {
+                updateNotification(buildNotification(title = activeTitle, audio = null, preparing = true, canceling = true))
+                return
+            }
+            AudiobookGenerationStartGate.ALREADY_RUNNING -> {
+                updateNotification(buildNotification(title = activeTitle, audio = null, preparing = true, alreadyRunning = true))
+                return
+            }
         }
         activeBookId = bookId
         activeModelId = intent.getStringExtra(EXTRA_MODEL_ID)?.takeIf { it.isNotBlank() }
@@ -89,18 +100,32 @@ class AudiobookGenerationForegroundService : Service() {
         updateNotification(buildNotification(title = activeTitle, audio = null, preparing = true))
         progressJob?.cancel()
         progressJob = serviceScope.launch {
-            container.neuralTtsRepository.observeBookAudio(bookId).collectLatest { rows ->
-                val audio = rows.firstOrNull { it.matchesActiveProfile() }
-                updateNotification(buildNotification(title = activeTitle, audio = audio, preparing = audio == null))
-            }
+            container.neuralTtsRepository.observeBookAudio(bookId)
+                .map { rows -> rows.firstOrNull { it.matchesActiveProfile() } }
+                .distinctUntilChanged { previous, next ->
+                    previous.generationNotificationKey() == next.generationNotificationKey()
+                }
+                .collectLatest { audio ->
+                    updateNotification(buildNotification(title = activeTitle, audio = audio, preparing = audio == null))
+                }
         }
-        generationJob = serviceScope.launch {
+        generationJob = serviceScope.launch(Dispatchers.IO) {
             runCatching {
                 val book = requireNotNull(container.libraryRepository.getBook(bookId)) {
                     "This book is no longer in the library."
                 }
                 activeTitle = book.title
-                updateNotification(buildNotification(title = activeTitle, audio = null, preparing = true))
+                withContext(Dispatchers.Main.immediate) {
+                    updateNotification(buildNotification(title = activeTitle, audio = null, preparing = true))
+                }
+                container.neuralTtsRepository.markBookAudioPreparing(
+                    bookId = book.id,
+                    modelId = activeModelId,
+                    speakerId = activeSpeakerId,
+                    pace = activePace,
+                    tone = activeTone,
+                    scope = activeScope
+                )
                 val chunks = ReadAloudPlanner.chunksFromRows(container.libraryRepository.indexedRowsForBook(bookId))
                 container.neuralTtsRepository.generateBookAudio(
                     bookId = book.id,
@@ -117,22 +142,32 @@ class AudiobookGenerationForegroundService : Service() {
                     Log.e("XReader", "Foreground audiobook generation failed for $bookId", error)
                 }
             }
-            stopForegroundAndSelf(removeNotification = false)
+            withContext(Dispatchers.Main.immediate) {
+                generationJob = null
+                cancelingGeneration = false
+                stopForegroundAndSelf(removeNotification = false)
+            }
         }
     }
 
     private fun cancelGeneration() {
         val job = generationJob
-        generationJob = null
+        if (cancelingGeneration) {
+            updateNotification(buildNotification(title = activeTitle, audio = null, preparing = true, canceling = true))
+            return
+        }
         if (job == null) {
             progressJob?.cancel()
             progressJob = null
             stopForegroundAndSelf(removeNotification = true)
             return
         }
+        cancelingGeneration = true
         updateNotification(buildNotification(title = activeTitle, audio = null, preparing = true, canceling = true))
         serviceScope.launch {
             job.cancelAndJoin()
+            generationJob = null
+            cancelingGeneration = false
             progressJob?.cancel()
             progressJob = null
             stopForegroundAndSelf(removeNotification = true)
@@ -145,6 +180,20 @@ class AudiobookGenerationForegroundService : Service() {
             kotlin.math.abs(speed - activePace.speed) < 0.001f &&
             tone == activeTone.name &&
             scope == activeScope.key
+
+    private fun BookAudioEntity?.generationNotificationKey(): GenerationNotificationKey? =
+        this?.let { audio ->
+            GenerationNotificationKey(
+                id = audio.id,
+                status = audio.status,
+                completedSegments = audio.completedSegments,
+                segmentCount = audio.segmentCount,
+                error = audio.error,
+                generationStartedAt = audio.generationStartedAt,
+                generationSessionStartCompletedSegments = audio.generationSessionStartCompletedSegments,
+                updatedMinuteBucket = audio.updatedAt / NOTIFICATION_UPDATE_BUCKET_MS
+            )
+        }
 
     private fun startForegroundIfNeeded(notification: Notification) {
         if (foregroundStarted) return
@@ -269,6 +318,30 @@ class AudiobookGenerationForegroundService : Service() {
     }
 }
 
+private data class GenerationNotificationKey(
+    val id: Long,
+    val status: BookAudioStatus,
+    val completedSegments: Int,
+    val segmentCount: Int,
+    val error: String?,
+    val generationStartedAt: Long?,
+    val generationSessionStartCompletedSegments: Int,
+    val updatedMinuteBucket: Long,
+)
+
+internal enum class AudiobookGenerationStartGate {
+    START,
+    CANCELING,
+    ALREADY_RUNNING,
+}
+
+internal fun audiobookGenerationStartGate(canceling: Boolean, jobActive: Boolean): AudiobookGenerationStartGate =
+    when {
+        canceling -> AudiobookGenerationStartGate.CANCELING
+        jobActive -> AudiobookGenerationStartGate.ALREADY_RUNNING
+        else -> AudiobookGenerationStartGate.START
+    }
+
 internal fun audiobookGenerationStatusText(
     audio: BookAudioEntity?,
     preparing: Boolean,
@@ -293,6 +366,8 @@ internal fun audiobookGenerationProgressText(audio: BookAudioEntity?): String? {
     val eta = audio.generationEtaLabel()
     return listOfNotNull("$completed/$segmentCount segments", eta).joinToString(" • ")
 }
+
+private const val NOTIFICATION_UPDATE_BUCKET_MS = 60_000L
 
 internal fun BookAudioEntity.generationEtaLabel(nowMillis: Long = System.currentTimeMillis()): String? {
     if (status != BookAudioStatus.GENERATING) return null

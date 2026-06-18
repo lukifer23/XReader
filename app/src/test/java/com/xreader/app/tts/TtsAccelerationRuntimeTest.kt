@@ -1,5 +1,6 @@
 package com.xreader.app.tts
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -7,6 +8,7 @@ import org.junit.Test
 class TtsAccelerationRuntimeTest {
     @Test
     fun stableProviderOrderExcludesExperimentalWebGpu() {
+        TtsAccelerationRuntime.clearProviderFailuresForTests()
         val providers = TtsAccelerationRuntime.providerOrder(
             installedLibraries = setOf("libonnxruntime.so", "libsherpa-onnx-jni.so"),
             hasVulkan = true,
@@ -23,6 +25,7 @@ class TtsAccelerationRuntimeTest {
 
     @Test
     fun experimentalProviderOrderCanIncludeWebGpu() {
+        TtsAccelerationRuntime.clearProviderFailuresForTests()
         val providers = TtsAccelerationRuntime.providerOrder(
             installedLibraries = setOf("libonnxruntime.so", "libsherpa-onnx-jni.so"),
             hasVulkan = true,
@@ -34,6 +37,23 @@ class TtsAccelerationRuntimeTest {
         )
 
         assertTrue(providers.first() == "webgpu")
+    }
+
+    @Test
+    fun stagedQnnProviderOrderIncludesQnnFirst() {
+        TtsAccelerationRuntime.clearProviderFailuresForTests()
+        val providers = TtsAccelerationRuntime.providerOrder(
+            installedLibraries = qnnLibraries(),
+            hasVulkan = true,
+            includeExperimentalWebGpu = true,
+            hardware = "qcom",
+            boardPlatform = "sun",
+            socManufacturer = "QTI",
+            socModel = "SM8750",
+        )
+
+        assertTrue(providers.first() == "qnn")
+        assertTrue(providers.take(3) == listOf("qnn", "webgpu", "xnnpack"))
     }
 
     @Test
@@ -74,6 +94,38 @@ class TtsAccelerationRuntimeTest {
         )
 
         assertTrue(readiness.ready)
+    }
+
+    @Test
+    fun qnnConfigTargetsKnownSm8750HtpRuntime() {
+        assertEquals(69, TtsAccelerationRuntime.qnnSocModelId("SM8750"))
+        assertEquals(81, TtsAccelerationRuntime.qnnHtpArch("SM8750"))
+    }
+
+    @Test
+    fun providerKeyRemovesConfigSuffix() {
+        assertEquals("qnn", TtsAccelerationRuntime.providerKey("qnn:/data/user/0/com.xreader.app/cache/qnn.config"))
+        assertEquals("webgpu", TtsAccelerationRuntime.providerKey("WebGPU"))
+    }
+
+    @Test
+    fun failedAcceleratorIsSkippedAfterInitializationFailure() {
+        TtsAccelerationRuntime.clearProviderFailuresForTests()
+        TtsAccelerationRuntime.recordProviderInitializationFailed("qnn:/data/user/0/com.xreader.app/cache/qnn.config")
+
+        val providers = TtsAccelerationRuntime.providerOrder(
+            installedLibraries = qnnLibraries(),
+            hasVulkan = true,
+            includeExperimentalWebGpu = true,
+            hardware = "qcom",
+            boardPlatform = "sun",
+            socManufacturer = "QTI",
+            socModel = "SM8750",
+        )
+
+        assertFalse(providers.any { TtsAccelerationRuntime.providerKey(it) == "qnn" })
+        assertTrue(providers.first() == "webgpu")
+        TtsAccelerationRuntime.clearProviderFailuresForTests()
     }
 
     private fun qnnLibraries(): Set<String> = setOf(

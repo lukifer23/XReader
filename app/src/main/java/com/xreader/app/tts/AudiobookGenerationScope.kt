@@ -45,13 +45,21 @@ internal fun BookAudioEntity.playableSegmentFiles(): List<File> {
         ?.takeIf { it.isNotBlank() }
         ?.let(::File)
         ?: return emptyList()
-    if (!root.isDirectory) return emptyList()
-    val playableCount = playableSegmentCount()
-    if (playableCount <= 0) return emptyList()
-    return (0 until playableCount).mapNotNull { index ->
-        File(root, generatedAudiobookSegmentFileName(index))
-            .takeIf { it.isFile && it.length() > WAV_HEADER_BYTES }
-    }.takeContiguousPrefix()
+    return root.contiguousGeneratedAudiobookSegmentFiles(playableSegmentCount())
+}
+
+internal fun BookAudioEntity.verifiedGeneratedSegmentFiles(): List<File> {
+    val root = filePath
+        ?.takeIf { it.isNotBlank() }
+        ?.let(::File)
+        ?: return emptyList()
+    return root.contiguousGeneratedAudiobookSegmentFiles(segmentCount)
+}
+
+internal fun BookAudioEntity.withVerifiedGeneratedProgress(): BookAudioEntity {
+    val verified = verifiedGeneratedSegmentFiles().size
+    if (verified <= completedSegments) return this
+    return copy(completedSegments = verified.coerceAtMost(segmentCount.coerceAtLeast(0)))
 }
 
 internal fun BookAudioEntity.verifiedPlayableSegmentCount(): Int =
@@ -86,16 +94,55 @@ data class GeneratedAudiobookChapter(
     val lastSegmentIndex: Int get() = firstSegmentIndex + segmentCount - 1
 }
 
-internal fun BookAudioEntity.generatedAudiobookChapters(): List<GeneratedAudiobookChapter> {
+data class GeneratedAudiobookSegmentMetadata(
+    val chapterIndexes: List<Int>,
+    val pauseAfterMillis: List<Long>,
+    val exportTsv: String,
+)
+
+data class GeneratedAudiobookFileSnapshot(
+    val audio: BookAudioEntity,
+    val playableSegmentFiles: List<File>,
+    val activeGenerationPlayableSegmentCount: Int? = null,
+    val chapters: List<GeneratedAudiobookChapter>,
+) {
+    val playableSegmentCount: Int get() = activeGenerationPlayableSegmentCount ?: playableSegmentFiles.size
+}
+
+internal fun BookAudioEntity.generatedAudiobookFileSnapshot(): GeneratedAudiobookFileSnapshot {
+    val verifiedAudio = if (status == BookAudioStatus.GENERATING) this else withVerifiedGeneratedProgress()
+    val playableFiles = if (verifiedAudio.status == BookAudioStatus.GENERATING) {
+        emptyList()
+    } else {
+        verifiedAudio.verifiedGeneratedSegmentFiles()
+    }
+    val playableCount = if (verifiedAudio.status == BookAudioStatus.GENERATING) {
+        verifiedAudio.playableSegmentCount()
+    } else {
+        playableFiles.size
+    }
+    val chapters = if (verifiedAudio.status == BookAudioStatus.GENERATING) {
+        verifiedAudio.fallbackGeneratedAudiobookChapters(playableCount)
+    } else {
+        verifiedAudio.generatedAudiobookChapters(playableCount)
+    }
+    return GeneratedAudiobookFileSnapshot(
+        audio = verifiedAudio,
+        playableSegmentFiles = playableFiles,
+        activeGenerationPlayableSegmentCount = if (verifiedAudio.status == BookAudioStatus.GENERATING) playableCount else null,
+        chapters = chapters
+    )
+}
+
+internal fun BookAudioEntity.generatedAudiobookChapters(playableSegmentCount: Int? = null): List<GeneratedAudiobookChapter> {
     val root = filePath?.takeIf { it.isNotBlank() }?.let(::File)?.takeIf { it.isDirectory }
         ?: return emptyList()
     val file = File(root, "chapters.tsv")
-    val playableCount = playableSegmentFiles().size
+    val playableCount = playableSegmentCount ?: playableSegmentFiles().size
     if (!file.isFile) return fallbackGeneratedAudiobookChapters(playableCount)
     return runCatching {
-        file.readLines()
-            .drop(1)
-            .mapNotNull { line ->
+        file.useLines { lines ->
+            lines.drop(1).mapNotNull { line ->
                 val columns = line.split('\t')
                 val index = columns.getOrNull(0)?.toIntOrNull() ?: return@mapNotNull null
                 val firstSegment = columns.getOrNull(1)?.toIntOrNull() ?: return@mapNotNull null
@@ -108,14 +155,16 @@ internal fun BookAudioEntity.generatedAudiobookChapters(): List<GeneratedAudiobo
                     segmentCount = count
                 )
             }
-            .filter { it.segmentCount > 0 && it.firstSegmentIndex >= 0 }
-            .sortedBy { it.firstSegmentIndex }
-            .sanitizeGeneratedAudiobookChapters(playableCount)
-            .ifEmpty { fallbackGeneratedAudiobookChapters(playableCount) }
+                .filter { it.segmentCount > 0 && it.firstSegmentIndex >= 0 }
+                .sortedBy { it.firstSegmentIndex }
+                .toList()
+                .sanitizeGeneratedAudiobookChapters(playableCount)
+                .ifEmpty { fallbackGeneratedAudiobookChapters(playableCount) }
+        }
     }.getOrDefault(fallbackGeneratedAudiobookChapters(playableCount))
 }
 
-private fun BookAudioEntity.fallbackGeneratedAudiobookChapters(playableCount: Int): List<GeneratedAudiobookChapter> {
+internal fun BookAudioEntity.fallbackGeneratedAudiobookChapters(playableCount: Int): List<GeneratedAudiobookChapter> {
     if (playableCount <= 0) return emptyList()
     val title = scopeLabel.takeIf { it.isNotBlank() } ?: AudiobookGenerationScope.fromKey(scope).label
     return listOf(
@@ -157,28 +206,57 @@ internal fun List<GeneratedAudiobookChapter>.chapterForSegment(segmentIndex: Int
 internal fun BookAudioEntity.generatedAudiobookSegmentChapterIndexes(
     segmentCount: Int,
     chapters: List<GeneratedAudiobookChapter>,
-): List<Int> {
-    if (segmentCount <= 0) return emptyList()
-    val fallback = List(segmentCount) { index -> chapters.chapterForSegment(index)?.index ?: 0 }
+): List<Int> =
+    generatedAudiobookSegmentMetadata(segmentCount = segmentCount, chapters = chapters).chapterIndexes
+
+internal fun BookAudioEntity.generatedAudiobookSegmentMetadata(
+    segmentCount: Int,
+    chapters: List<GeneratedAudiobookChapter>,
+): GeneratedAudiobookSegmentMetadata {
+    val fallback = generatedAudiobookFallbackSegmentMetadata(segmentCount, chapters)
+    if (segmentCount <= 0) return fallback
     val root = filePath?.takeIf { it.isNotBlank() }?.let(::File)?.takeIf { it.isDirectory }
         ?: return fallback
     val file = File(root, "segments.tsv")
     if (!file.isFile) return fallback
+    return file.generatedAudiobookSegmentMetadata(segmentCount = segmentCount, chapters = chapters)
+}
+
+internal fun File.generatedAudiobookSegmentMetadata(
+    segmentCount: Int,
+    chapters: List<GeneratedAudiobookChapter>,
+): GeneratedAudiobookSegmentMetadata {
+    val fallback = generatedAudiobookFallbackSegmentMetadata(segmentCount, chapters)
+    if (segmentCount <= 0 || !isFile) return fallback
     val validChapterIndexes = chapters.mapTo(mutableSetOf()) { it.index }
-    if (validChapterIndexes.isEmpty()) return fallback
     return runCatching {
-        val parsed = fallback.toMutableList()
-        file.readLines()
-            .drop(1)
-            .forEach { line ->
+        val chapterIndexes = fallback.chapterIndexes.toMutableList()
+        val pauses = fallback.pauseAfterMillis.toMutableList()
+        val rowsByIndex = mutableMapOf<Int, String>()
+        useLines { lines ->
+            lines.drop(1).forEach { line ->
                 val columns = line.split('\t')
                 val index = columns.getOrNull(0)?.toIntOrNull() ?: return@forEach
-                val chapter = columns.getOrNull(1)?.toIntOrNull() ?: return@forEach
-                if (index in parsed.indices && chapter in validChapterIndexes) {
-                    parsed[index] = chapter
+                if (index !in 0 until segmentCount) return@forEach
+                val chapter = columns.getOrNull(1)?.toIntOrNull()
+                if (chapter != null && (validChapterIndexes.isEmpty() || chapter in validChapterIndexes)) {
+                    chapterIndexes[index] = chapter
                 }
+                columns.getOrNull(2)?.toLongOrNull()?.let { pause ->
+                    pauses[index] = pause
+                }
+                rowsByIndex[index] = line
             }
-        parsed.toList()
+        }
+        GeneratedAudiobookSegmentMetadata(
+            chapterIndexes = chapterIndexes,
+            pauseAfterMillis = pauses,
+            exportTsv = generatedAudiobookSegmentsTsvFromRows(
+                segmentCount = segmentCount,
+                chapterIndexes = chapterIndexes,
+                rowsByIndex = rowsByIndex
+            )
+        )
     }.getOrDefault(fallback)
 }
 
@@ -203,16 +281,40 @@ internal fun generatedAudiobookFallbackSegmentsTsv(
     segmentCount: Int,
     chapterIndexes: List<Int> = List(segmentCount.coerceAtLeast(0)) { 0 },
 ): String =
+    generatedAudiobookSegmentsTsvFromRows(
+        segmentCount = segmentCount,
+        chapterIndexes = chapterIndexes,
+        rowsByIndex = emptyMap()
+    )
+
+private fun generatedAudiobookFallbackSegmentMetadata(
+    segmentCount: Int,
+    chapters: List<GeneratedAudiobookChapter>,
+): GeneratedAudiobookSegmentMetadata {
+    val boundedCount = segmentCount.coerceAtLeast(0)
+    val chapterIndexes = List(boundedCount) { index -> chapters.chapterForSegment(index)?.index ?: 0 }
+    return GeneratedAudiobookSegmentMetadata(
+        chapterIndexes = chapterIndexes,
+        pauseAfterMillis = List(boundedCount) { DEFAULT_AUDIOBOOK_SEGMENT_PAUSE_MS },
+        exportTsv = generatedAudiobookFallbackSegmentsTsv(segmentCount = boundedCount, chapterIndexes = chapterIndexes)
+    )
+}
+
+private fun generatedAudiobookSegmentsTsvFromRows(
+    segmentCount: Int,
+    chapterIndexes: List<Int>,
+    rowsByIndex: Map<Int, String>,
+): String =
     buildString {
         appendLine("index\tchapterIndex\tpauseAfterMs\ttext")
         repeat(segmentCount.coerceAtLeast(0)) { index ->
             appendLine(
-                listOf(
-                    index.toString(),
-                    chapterIndexes.getOrElse(index) { 0 }.toString(),
-                    DEFAULT_AUDIOBOOK_SEGMENT_PAUSE_MS.toString(),
-                    ""
-                ).joinToString("\t")
+                rowsByIndex[index] ?: listOf(
+                        index.toString(),
+                        chapterIndexes.getOrElse(index) { 0 }.toString(),
+                        DEFAULT_AUDIOBOOK_SEGMENT_PAUSE_MS.toString(),
+                        ""
+                    ).joinToString("\t")
             )
         }
     }
@@ -222,35 +324,27 @@ internal fun File.generatedAudiobookExportSegmentsTsv(
     chapterIndexes: List<Int> = List(segmentCount.coerceAtLeast(0)) { 0 },
 ): String {
     if (segmentCount <= 0) return generatedAudiobookFallbackSegmentsTsv(segmentCount = 0, chapterIndexes = emptyList())
-    if (!isFile) {
-        return generatedAudiobookFallbackSegmentsTsv(segmentCount = segmentCount, chapterIndexes = chapterIndexes)
-    }
-    return runCatching {
-        val rowsByIndex = readLines()
-            .drop(1)
-            .mapNotNull { line ->
-                val columns = line.split('\t')
-                val index = columns.getOrNull(0)?.toIntOrNull() ?: return@mapNotNull null
-                if (index !in 0 until segmentCount) return@mapNotNull null
-                index to line
-            }
-            .toMap()
-        buildString {
-            appendLine("index\tchapterIndex\tpauseAfterMs\ttext")
-            repeat(segmentCount) { index ->
-                appendLine(
-                    rowsByIndex[index] ?: listOf(
-                        index.toString(),
-                        chapterIndexes.getOrElse(index) { 0 }.toString(),
-                        DEFAULT_AUDIOBOOK_SEGMENT_PAUSE_MS.toString(),
-                        ""
-                    ).joinToString("\t")
-                )
-            }
+    return generatedAudiobookSegmentMetadata(
+        segmentCount = segmentCount,
+        chapters = chapterIndexes.toFallbackGeneratedAudiobookChapters(segmentCount)
+    ).exportTsv
+}
+
+private fun List<Int>.toFallbackGeneratedAudiobookChapters(segmentCount: Int): List<GeneratedAudiobookChapter> {
+    if (segmentCount <= 0 || isEmpty()) return emptyList()
+    val chapters = mutableListOf<GeneratedAudiobookChapter>()
+    var start = 0
+    var current = getOrElse(0) { 0 }
+    for (index in 1 until segmentCount) {
+        val chapter = getOrElse(index) { current }
+        if (chapter != current) {
+            chapters += GeneratedAudiobookChapter(current, "Chapter ${current + 1}", start, index - start)
+            start = index
+            current = chapter
         }
-    }.getOrElse {
-        generatedAudiobookFallbackSegmentsTsv(segmentCount = segmentCount, chapterIndexes = chapterIndexes)
     }
+    chapters += GeneratedAudiobookChapter(current, "Chapter ${current + 1}", start, segmentCount - start)
+    return chapters
 }
 
 internal fun List<GeneratedAudiobookChapter>.nextChapterStart(currentSegmentIndex: Int): Int? =
@@ -270,13 +364,18 @@ internal fun Iterable<BookAudioEntity>.bestPlayableAudiobookForProfile(
     speakerId: Int,
     speed: Float,
     tone: String,
+    verifyFiles: Boolean = true,
 ): BookAudioEntity? =
     filter { audio ->
         audio.modelId == modelId &&
             audio.speakerId == speakerId &&
             abs(audio.speed - speed) < 0.001f &&
             audio.tone == tone &&
-            audio.playableSegmentFiles().isNotEmpty()
+            if (verifyFiles) {
+                audio.playableSegmentFiles().isNotEmpty()
+            } else {
+                audio.playableSegmentCount() > 0
+            }
     }
         .sortedWith(
             compareByDescending<BookAudioEntity> { it.status == BookAudioStatus.GENERATED }
@@ -293,10 +392,12 @@ private fun BookAudioEntity.audiobookScopeRank(): Int =
         AudiobookGenerationScope.SAMPLE -> 2
     }
 
-private fun List<File>.takeContiguousPrefix(): List<File> {
-    val contiguous = ArrayList<File>(size)
-    forEachIndexed { index, file ->
-        if (file.name != generatedAudiobookSegmentFileName(index)) return contiguous
+internal fun File.contiguousGeneratedAudiobookSegmentFiles(expectedSegments: Int): List<File> {
+    if (expectedSegments <= 0 || !isDirectory) return emptyList()
+    val contiguous = ArrayList<File>(expectedSegments)
+    repeat(expectedSegments) { index ->
+        val file = File(this, generatedAudiobookSegmentFileName(index))
+        if (!file.isFile || file.length() <= WAV_HEADER_BYTES) return contiguous
         contiguous += file
     }
     return contiguous

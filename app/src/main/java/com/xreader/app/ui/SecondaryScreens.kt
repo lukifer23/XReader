@@ -114,9 +114,9 @@ import com.xreader.app.tts.ReadAloudEngineOption
 import com.xreader.app.tts.ReadAloudVoiceOption
 import com.xreader.app.tts.NeuralTtsModelCatalog
 import com.xreader.app.tts.AudiobookPlaybackUiState
+import com.xreader.app.tts.TtsAccelerationRuntime
 import com.xreader.app.tts.canDeleteGeneratedAudiobook
 import com.xreader.app.tts.generationEtaLabel
-import com.xreader.app.tts.generatedAudiobookChapters
 import com.xreader.app.tts.GeneratedAudiobookChapter
 import com.xreader.app.tts.playableSegmentCount
 import com.xreader.app.tts.playableSegmentFiles
@@ -126,6 +126,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.stateIn
@@ -496,8 +498,18 @@ data class GeneratedAudiobookUiItem(
     val playableSegmentFiles: Int = 0,
 )
 
+private data class AudiobookRowsSortKey(
+    val activeAudioId: Long?,
+    val active: Boolean,
+)
+
 internal fun List<GeneratedAudiobookUiItem>.sortedForAudiobooksScreen(
     playback: AudiobookPlaybackUiState,
+): List<GeneratedAudiobookUiItem> =
+    sortedForAudiobooksScreen(playback.toAudiobookRowsSortKey())
+
+private fun List<GeneratedAudiobookUiItem>.sortedForAudiobooksScreen(
+    playback: AudiobookRowsSortKey,
 ): List<GeneratedAudiobookUiItem> =
     sortedWith(
         compareBy<GeneratedAudiobookUiItem> { it.audiobookScreenPriority(playback) }
@@ -506,12 +518,17 @@ internal fun List<GeneratedAudiobookUiItem>.sortedForAudiobooksScreen(
             .thenBy { it.audio.id }
     )
 
+private fun AudiobookPlaybackUiState.toAudiobookRowsSortKey(): AudiobookRowsSortKey =
+    AudiobookRowsSortKey(activeAudioId = audioId, active = active)
+
+private val AUDIOBOOK_SEARCH_SPLIT_REGEX = Regex("\\s+")
+
 internal fun List<GeneratedAudiobookUiItem>.filteredForAudiobooksScreen(
     query: String,
 ): List<GeneratedAudiobookUiItem> {
     val terms = query
         .lowercase(Locale.US)
-        .split(Regex("\\s+"))
+        .split(AUDIOBOOK_SEARCH_SPLIT_REGEX)
         .filter { it.isNotBlank() }
     if (terms.isEmpty()) return this
     return filter { item ->
@@ -526,14 +543,14 @@ private fun GeneratedAudiobookUiItem.audiobookSearchText(): String =
         book.author,
         audio.scopeLabel,
         audio.modelDisplayName,
-        audio.audiobookDisplayProfileLabel(),
+        audio.audiobookDisplayProfileLabel(includeScope = false),
         audio.status.name.lowercase(Locale.US),
         audio.tone.lowercase(Locale.US)
     ).joinToString(" ").lowercase(Locale.US)
 
-private fun GeneratedAudiobookUiItem.audiobookScreenPriority(playback: AudiobookPlaybackUiState): Int =
+private fun GeneratedAudiobookUiItem.audiobookScreenPriority(playback: AudiobookRowsSortKey): Int =
     when {
-        playback.audioId == audio.id && playback.active -> 0
+        playback.activeAudioId == audio.id && playback.active -> 0
         audio.status == BookAudioStatus.GENERATING -> 1
         playableSegmentFiles > 0 -> 2
         audio.status == BookAudioStatus.FAILED -> 3
@@ -544,38 +561,52 @@ private fun GeneratedAudiobookUiItem.audiobookScreenPriority(playback: Audiobook
 class AudiobooksViewModel(private val container: AppContainer) : ViewModel() {
     private val message = MutableStateFlow<String?>(null)
     private val playback = container.generatedAudiobookPlayback.state
+    private val playbackSortKey =
+        playback
+            .map { it.toAudiobookRowsSortKey() }
+            .distinctUntilChanged()
+
+    private val audiobookRows: StateFlow<List<GeneratedAudiobookUiItem>> =
+        combine(
+            container.libraryRepository.observeBooks(""),
+            container.neuralTtsRepository.observeAllBookAudio()
+                .distinctUntilChanged { previous, next ->
+                    previous.audiobookUiInvalidationKeys() == next.audiobookUiInvalidationKeys()
+                }
+        ) { books, audioRows ->
+            val booksById = books.associateBy { it.id }
+            withContext(Dispatchers.IO) {
+                audioRows.mapNotNull { audio ->
+                    val audioItem = audio.toBookAudiobookAudioUiItem()
+                    if (!audioItem.shouldShowInGlobalAudiobooksScreen()) return@mapNotNull null
+                    booksById[audioItem.audio.bookId]?.let { book ->
+                        GeneratedAudiobookUiItem(
+                            book = book,
+                            audio = audioItem.audio,
+                            chapters = audioItem.chapters,
+                            playableSegmentFiles = audioItem.playableSegmentFiles
+                        )
+                    }
+                }
+            }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    private val sortedAudiobookRows: StateFlow<List<GeneratedAudiobookUiItem>> =
+        combine(audiobookRows, playbackSortKey) { rows, sortKey ->
+            rows.sortedForAudiobooksScreen(sortKey)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val uiState: StateFlow<AudiobooksUiState> =
         combine(
-            container.libraryRepository.observeBooks(""),
-            container.neuralTtsRepository.observeAllBookAudio(),
+            sortedAudiobookRows,
             playback,
             message
-        ) { books, audioRows, currentPlayback, currentMessage ->
-            val booksById = books.associateBy { it.id }
-            val items = withContext(Dispatchers.IO) {
-                audioRows
-                    .mapNotNull { audio ->
-                        val playableFiles = audio.playableSegmentFiles().size
-                        if (
-                            audio.status != BookAudioStatus.GENERATED &&
-                            audio.status != BookAudioStatus.GENERATING &&
-                            playableFiles <= 0
-                        ) {
-                            return@mapNotNull null
-                        }
-                        booksById[audio.bookId]?.let { book ->
-                            GeneratedAudiobookUiItem(
-                                book = book,
-                                audio = audio,
-                                chapters = audio.generatedAudiobookChapters(),
-                                playableSegmentFiles = playableFiles
-                            )
-                        }
-                    }
-                    .sortedForAudiobooksScreen(currentPlayback)
-            }
-            AudiobooksUiState(rows = items, playback = currentPlayback, message = currentMessage)
+        ) { sortedRows, currentPlayback, currentMessage ->
+            AudiobooksUiState(
+                rows = sortedRows,
+                playback = currentPlayback,
+                message = currentMessage
+            )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AudiobooksUiState())
 
     fun clearMessage() {
@@ -736,7 +767,7 @@ internal fun AudiobooksRoute(
                     GeneratedAudiobookScreenRow(
                         item = item,
                         chapters = item.chapters,
-                        playback = state.playback,
+                        playback = state.playback.forAudiobooksScreenRow(item.audio.id),
                         onOpenBook = { openReaderAt(item.book.id) },
                         onPlay = { viewModel.play(item) },
                         onPause = { viewModel.pause(item) },
@@ -762,7 +793,7 @@ internal fun AudiobooksRoute(
         AlertDialog(
             onDismissRequest = { deleteCandidate = null },
             title = { Text("Delete generated audio?") },
-            text = { Text("${item.book.title} • ${item.audio.audiobookDisplayProfileLabel()}") },
+            text = { Text("${item.book.title} • ${item.audio.audiobookDisplayProfileLabel(includeScope = false)}") },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -839,6 +870,12 @@ private fun GeneratedAudiobookScreenRow(
 ) {
     val audio = item.audio
     val active = playback.audioId == audio.id && playback.active
+    val actions = generatedAudiobookActionState(
+        active = active,
+        playback = playback,
+        audio = audio,
+        playableSegmentFiles = item.playableSegmentFiles
+    )
     Card(shape = RoundedCornerShape(8.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -865,7 +902,7 @@ private fun GeneratedAudiobookScreenRow(
             )
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 AudiobookInfoPill(audio.scopeLabel)
-                AudiobookInfoPill(audio.audiobookDisplayProfileLabel())
+                AudiobookInfoPill(audio.audiobookDisplayProfileLabel(includeScope = false))
                 if (chapters.isNotEmpty()) {
                     AudiobookInfoPill(generatedAudiobookChapterCountLabel(chapters.size))
                 }
@@ -898,20 +935,9 @@ private fun GeneratedAudiobookScreenRow(
             FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 TextButton(
                     onClick = if (active && playback.playing) onPause else onPlay,
-                    enabled = canPlayGeneratedAudiobookAction(
-                        active = active,
-                        playback = playback,
-                        playableSegmentFiles = item.playableSegmentFiles
-                    )
+                    enabled = actions.canPlay
                 ) {
-                    Text(
-                        audiobookPlaybackActionLabel(
-                            active = active,
-                            playback = playback,
-                            audio = audio,
-                            playableSegmentFiles = item.playableSegmentFiles
-                        )
-                    )
+                    Text(actions.playLabel)
                 }
                 if (active) {
                     TextButton(onClick = onSkipPrevious, enabled = playback.segmentIndex > 0) { Text("Previous") }
@@ -928,8 +954,8 @@ private fun GeneratedAudiobookScreenRow(
                 if (audio.canCancelGenerationFromAudiobooksScreen()) {
                     TextButton(onClick = onCancelGeneration) { Text("Stop generation") }
                 }
-                TextButton(onClick = onExport, enabled = canExportGeneratedAudiobookAction(item.playableSegmentFiles)) {
-                    Text(audiobookExportActionLabel(audio, playableSegmentFiles = item.playableSegmentFiles))
+                TextButton(onClick = onExport, enabled = actions.canExport) {
+                    Text(actions.exportLabel)
                 }
                 if (audio.canDeleteFromAudiobooksScreen()) {
                     TextButton(onClick = onDelete) { Text("Delete") }
@@ -972,12 +998,83 @@ internal fun BookAudioEntity.audiobookStatusDetail(
     }
     val statusLabel = when (status) {
         BookAudioStatus.GENERATED -> "Ready"
-        BookAudioStatus.GENERATING -> listOfNotNull("Generating", generationEtaLabel()).joinToString(" • ")
+        BookAudioStatus.GENERATING -> listOfNotNull(
+            "Generating",
+            generationEtaLabel(),
+            audiobookPerformanceLabel()
+        ).joinToString(" • ")
         BookAudioStatus.CANCELED -> "Stopped"
         BookAudioStatus.FAILED -> error ?: "Failed"
     }
     val playbackLabel = if (activePlayback && playback.segmentCount > 0) audiobookPlaybackStateLabel(playback) else null
-    return listOfNotNull(statusLabel, progress, playbackLabel).joinToString(" • ")
+    val performanceLabel = if (status == BookAudioStatus.GENERATING) null else audiobookPerformanceLabel()
+    return listOfNotNull(statusLabel, progress, performanceLabel, playbackLabel).joinToString(" • ")
+}
+
+internal fun BookAudioEntity.audiobookPerformanceLabel(): String? {
+    val provider = generationProvider?.takeIf { it.isNotBlank() }?.generationProviderLabel()
+    val factor = generationRealtimeFactorLabel(generationAudioMillis, generationComputeMillis)
+    return listOfNotNull(provider, factor).takeIf { it.isNotEmpty() }?.joinToString(" • ")
+}
+
+internal fun generationRealtimeFactorLabel(audioMillis: Long, computeMillis: Long): String? {
+    if (audioMillis <= 0L || computeMillis <= 0L) return null
+    val factor = computeMillis.toDouble() / audioMillis.toDouble()
+    if (!factor.isFinite()) return null
+    return when {
+        factor < 10.0 -> String.format(Locale.US, "%.1fx realtime", factor)
+        else -> "${factor.toInt()}x realtime"
+    }
+}
+
+private fun String.generationProviderLabel(): String =
+    when (TtsAccelerationRuntime.providerKey(this)) {
+        "webgpu" -> "WebGPU"
+        "qnn" -> "NPU"
+        "nnapi" -> "NNAPI"
+        "xnnpack" -> "XNNPACK"
+        "cpu" -> "CPU"
+        else -> uppercase(Locale.US)
+    }
+
+internal data class GeneratedAudiobookActionState(
+    val playLabel: String,
+    val playIconLabel: String,
+    val exportLabel: String,
+    val canPlay: Boolean,
+    val canExport: Boolean,
+)
+
+internal fun generatedAudiobookActionState(
+    active: Boolean,
+    playback: AudiobookPlaybackUiState,
+    audio: BookAudioEntity,
+    playableSegmentFiles: Int? = null,
+): GeneratedAudiobookActionState {
+    val playableFiles = playableSegmentFiles ?: audio.playableSegmentCount()
+    val playLabel = when {
+        active && playback.preparing -> "Preparing"
+        active && playback.playing -> "Pause"
+        active && playback.paused -> "Resume"
+        audio.hasAudiobookResumePosition(playableFiles) -> "Resume"
+        audio.hasPartialGeneratedAudio(playableFiles) -> "Play partial"
+        else -> "Play"
+    }
+    val playIconLabel = when (playLabel) {
+        "Preparing" -> "Preparing generated audio"
+        "Pause" -> "Pause generated audio"
+        "Resume" -> "Resume generated audio"
+        "Play partial" -> "Play partial generated audio"
+        else -> "Play generated audio"
+    }
+    val exportLabel = if (audio.hasPartialGeneratedAudio(playableFiles)) "Save partial" else "Save"
+    return GeneratedAudiobookActionState(
+        playLabel = playLabel,
+        playIconLabel = playIconLabel,
+        exportLabel = exportLabel,
+        canPlay = playableFiles > 0 && !(active && playback.preparing),
+        canExport = playableFiles > 0
+    )
 }
 
 internal fun audiobookPlaybackActionLabel(
@@ -986,13 +1083,15 @@ internal fun audiobookPlaybackActionLabel(
     audio: BookAudioEntity? = null,
     playableSegmentFiles: Int? = null,
 ): String =
-    when {
-        active && playback.preparing -> "Preparing"
-        active && playback.playing -> "Pause"
-        active && playback.paused -> "Resume"
-        audio?.hasAudiobookResumePosition(playableSegmentFiles) == true -> "Resume"
-        audio?.hasPartialGeneratedAudio(playableSegmentFiles) == true -> "Play partial"
-        else -> "Play"
+    if (audio == null) {
+        when {
+            active && playback.preparing -> "Preparing"
+            active && playback.playing -> "Pause"
+            active && playback.paused -> "Resume"
+            else -> "Play"
+        }
+    } else {
+        generatedAudiobookActionState(active, playback, audio, playableSegmentFiles).playLabel
     }
 
 internal fun audiobookPlaybackIconLabel(
@@ -1001,16 +1100,15 @@ internal fun audiobookPlaybackIconLabel(
     audio: BookAudioEntity,
     playableSegmentFiles: Int? = null,
 ): String =
-    when (audiobookPlaybackActionLabel(active = active, playback = playback, audio = audio, playableSegmentFiles = playableSegmentFiles)) {
-        "Preparing" -> "Preparing generated audio"
-        "Pause" -> "Pause generated audio"
-        "Resume" -> "Resume generated audio"
-        "Play partial" -> "Play partial generated audio"
-        else -> "Play generated audio"
-    }
+    generatedAudiobookActionState(active, playback, audio, playableSegmentFiles).playIconLabel
 
 internal fun audiobookExportActionLabel(audio: BookAudioEntity, playableSegmentFiles: Int? = null): String =
-    if (audio.hasPartialGeneratedAudio(playableSegmentFiles)) "Save partial" else "Save"
+    generatedAudiobookActionState(
+        active = false,
+        playback = AudiobookPlaybackUiState(),
+        audio = audio,
+        playableSegmentFiles = playableSegmentFiles
+    ).exportLabel
 
 internal fun audiobookExportSuccessMessage(audio: BookAudioEntity, playableSegmentFiles: Int? = null): String =
     if (audio.hasPartialGeneratedAudio(playableSegmentFiles)) {
@@ -1027,11 +1125,11 @@ internal fun canPlayGeneratedAudiobookAction(
     playback: AudiobookPlaybackUiState,
     audio: BookAudioEntity,
 ): Boolean =
-    canPlayGeneratedAudiobookAction(
+    generatedAudiobookActionState(
         active = active,
         playback = playback,
-        playableSegmentFiles = audio.playableSegmentCount()
-    )
+        audio = audio
+    ).canPlay
 
 internal fun canPlayGeneratedAudiobookAction(
     active: Boolean,
@@ -1041,7 +1139,11 @@ internal fun canPlayGeneratedAudiobookAction(
     playableSegmentFiles > 0 && !(active && playback.preparing)
 
 internal fun canExportGeneratedAudiobookAction(audio: BookAudioEntity): Boolean =
-    canExportGeneratedAudiobookAction(audio.playableSegmentCount())
+    generatedAudiobookActionState(
+        active = false,
+        playback = AudiobookPlaybackUiState(),
+        audio = audio
+    ).canExport
 
 internal fun canExportGeneratedAudiobookAction(playableSegmentFiles: Int): Boolean =
     playableSegmentFiles > 0
@@ -1053,8 +1155,9 @@ internal fun audiobookPlaybackStateLabel(playback: AudiobookPlaybackUiState): St
         else -> "ready ${(playback.segmentIndex + 1).coerceAtMost(playback.segmentCount)} / ${playback.segmentCount}"
     }
 
-private fun BookAudioEntity.audiobookDisplayProfileLabel(): String =
+internal fun BookAudioEntity.audiobookDisplayProfileLabel(includeScope: Boolean = true): String =
     listOf(
+        scopeLabel.takeIf { includeScope }?.takeUnless { it.equals("Full book", ignoreCase = true) },
         modelDisplayName,
         "Speaker ${speakerId + 1}".takeIf { speakerId > 0 },
         tone.lowercase(Locale.US).replaceFirstChar { it.titlecase(Locale.US) },
@@ -1110,6 +1213,9 @@ internal fun AudiobookPlaybackUiState.canSkipPreviousChapter(chapters: List<Gene
 internal fun AudiobookPlaybackUiState.canSkipNextChapter(chapters: List<GeneratedAudiobookChapter>): Boolean =
     chapters.nextChapterStart(segmentIndex) != null
 
+internal fun AudiobookPlaybackUiState.forAudiobooksScreenRow(audioId: Long): AudiobookPlaybackUiState =
+    if (this.audioId == audioId && active) this else AudiobookPlaybackUiState()
+
 internal fun GeneratedAudiobookChapter.chapterRangeLabel(): String =
     when {
         segmentCount <= 1 -> "Segment ${firstSegmentIndex + 1}"
@@ -1120,8 +1226,7 @@ internal fun generatedAudiobookChapterCountLabel(chapterCount: Int): String =
     if (chapterCount == 1) "1 chapter" else "$chapterCount chapters"
 
 private fun BookAudioEntity.audiobookFileSafeProfileName(): String =
-    listOf(scopeLabel, audiobookDisplayProfileLabel())
-        .joinToString(" ")
+    audiobookDisplayProfileLabel(includeScope = true)
         .fileSafeName()
         .take(56)
 
@@ -1621,6 +1726,7 @@ internal fun SettingsRoute(
                         onToneSelected = viewModel::setNeuralTtsTone,
                         onPaceSelected = viewModel::setNeuralTtsPace,
                         onDownload = viewModel::downloadNeuralTtsModel,
+                        onCancelInstall = viewModel::cancelNeuralTtsModelInstall,
                         onDelete = viewModel::deleteNeuralTtsModel,
                         onPreview = viewModel::previewNeuralTtsModel
                     )
@@ -1895,6 +2001,7 @@ private fun NeuralTtsModelSettings(
     onToneSelected: (NeuralTtsTone) -> Unit,
     onPaceSelected: (NeuralTtsPace) -> Unit,
     onDownload: (String) -> Unit,
+    onCancelInstall: (String) -> Unit,
     onDelete: (String) -> Unit,
     onPreview: (String) -> Unit,
 ) {
@@ -1952,10 +2059,13 @@ private fun NeuralTtsModelSettings(
             }
             when (status) {
                 NeuralTtsModelStatus.DOWNLOADING,
-                NeuralTtsModelStatus.EXTRACTING -> CircularProgressIndicator(
-                    modifier = Modifier.size(24.dp),
-                    strokeWidth = 2.dp
-                )
+                NeuralTtsModelStatus.EXTRACTING -> {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        strokeWidth = 2.dp
+                    )
+                    TextButton(onClick = { onCancelInstall(spec.modelId) }) { Text("Stop") }
+                }
                 else -> TextButton(onClick = { pickerOpen = true }) {
                     Text("Manage")
                 }
@@ -2010,6 +2120,7 @@ private fun NeuralTtsModelSettings(
                                 pickerOpen = false
                             },
                             onDownload = { onDownload(voice.modelId) },
+                            onCancelInstall = { onCancelInstall(voice.modelId) },
                             onDelete = { onDelete(voice.modelId) },
                             onPreview = { onPreview(voice.modelId) }
                         )
@@ -2033,6 +2144,7 @@ private fun NeuralTtsVoiceRow(
     statusText: String,
     onSelected: () -> Unit,
     onDownload: () -> Unit,
+    onCancelInstall: () -> Unit,
     onDelete: () -> Unit,
     onPreview: () -> Unit,
 ) {
@@ -2058,7 +2170,10 @@ private fun NeuralTtsVoiceRow(
             ) {
                 when (status) {
                     NeuralTtsModelStatus.DOWNLOADING,
-                    NeuralTtsModelStatus.EXTRACTING -> CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                    NeuralTtsModelStatus.EXTRACTING -> {
+                        CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                        TextButton(onClick = onCancelInstall) { Text("Stop") }
+                    }
                     NeuralTtsModelStatus.INSTALLED -> {
                         TextButton(onClick = onPreview) { Text("Preview") }
                         TextButton(onClick = onSelected, enabled = !selected) { Text("Use") }
@@ -2072,7 +2187,7 @@ private fun NeuralTtsVoiceRow(
     }
 }
 
-private fun neuralTtsStatusText(
+internal fun neuralTtsStatusText(
     status: NeuralTtsModelStatus,
     downloaded: Long,
     total: Long,
@@ -2084,7 +2199,7 @@ private fun neuralTtsStatusText(
         NeuralTtsModelStatus.DOWNLOADING -> "Downloading ${downloaded.compactBytes()} of ${total.compactBytes()}"
         NeuralTtsModelStatus.EXTRACTING -> "Installing ${archiveBytes.compactBytes()} voice"
         NeuralTtsModelStatus.FAILED -> error ?: "Download failed"
-        NeuralTtsModelStatus.NOT_DOWNLOADED -> "Not installed - ${archiveBytes.compactBytes()} download"
+        NeuralTtsModelStatus.NOT_DOWNLOADED -> "Not installed • ${archiveBytes.compactBytes()}"
     }
 
 @Composable
@@ -2149,14 +2264,6 @@ private fun selectedEngineLabel(
         "Device default"
     } else {
         engines.firstOrNull { it.name == selected }?.label ?: "Selected engine unavailable"
-    }
-
-private fun Long.compactBytes(): String =
-    when {
-        this >= 1024L * 1024L * 1024L -> String.format(Locale.US, "%.1f GB", this / 1024.0 / 1024.0 / 1024.0)
-        this >= 1024L * 1024L -> String.format(Locale.US, "%.1f MB", this / 1024.0 / 1024.0)
-        this >= 1024L -> String.format(Locale.US, "%.1f KB", this / 1024.0)
-        else -> "$this B"
     }
 
 @Composable

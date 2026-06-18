@@ -5,6 +5,7 @@ import com.xreader.app.data.BookAudioStatus
 import com.xreader.app.data.BookEntity
 import com.xreader.app.data.BookFormat
 import com.xreader.app.data.NeuralTtsModelStatus
+import com.xreader.app.tts.AudiobookGenerationScope
 import com.xreader.app.tts.AudiobookPlaybackUiState
 import com.xreader.app.tts.GeneratedAudiobookChapter
 import com.xreader.app.tts.playableSegmentCount
@@ -50,6 +51,34 @@ class AudiobookUiFormattersTest {
         )
 
         assertEquals("~1h audio", audio.estimatedDurationLabel())
+    }
+
+    @Test
+    fun audiobookPerformanceLabelShowsBackendAndRealtimeFactor() {
+        val audio = BookAudioEntity(
+            bookId = 7,
+            modelId = "voice",
+            modelDisplayName = "Voice",
+            speakerId = 0,
+            speed = 1.0f,
+            status = BookAudioStatus.GENERATING,
+            generationProvider = "webgpu",
+            generationAudioMillis = 20_000L,
+            generationComputeMillis = 50_000L,
+            updatedAt = 1L
+        )
+
+        assertEquals("WebGPU • 2.5x realtime", audio.audiobookPerformanceLabel())
+        assertEquals("13x realtime", generationRealtimeFactorLabel(audioMillis = 10_000L, computeMillis = 135_000L))
+        assertNull(generationRealtimeFactorLabel(audioMillis = 0L, computeMillis = 135_000L))
+        assertEquals(
+            "NPU",
+            audio.copy(
+                generationProvider = "qnn:/data/user/0/com.xreader.app/cache/xreader-qnn-provider.config",
+                generationAudioMillis = 0L,
+                generationComputeMillis = 0L
+            ).audiobookPerformanceLabel()
+        )
     }
 
     @Test
@@ -146,6 +175,57 @@ class AudiobookUiFormattersTest {
                 modelName = "Kokoro v1.0"
             )
         )
+    }
+
+    @Test
+    fun selectedAudiobookStatusItemPrefersActiveGenerationAcrossScopes() {
+        val fullBook = bookAudioItem(
+            audio(1).copy(
+                modelId = "kokoro",
+                speakerId = 3,
+                speed = 1.0f,
+                tone = "NATURAL",
+                scope = AudiobookGenerationScope.FULL_BOOK.key,
+                status = BookAudioStatus.GENERATED
+            )
+        )
+        val activeSample = bookAudioItem(
+            audio(2).copy(
+                modelId = "kokoro",
+                speakerId = 3,
+                speed = 1.0f,
+                tone = "NATURAL",
+                scope = AudiobookGenerationScope.SAMPLE.key,
+                status = BookAudioStatus.GENERATING
+            )
+        )
+
+        assertEquals(
+            activeSample,
+            selectedAudiobookStatusItem(
+                items = listOf(fullBook, activeSample),
+                modelId = "kokoro",
+                speakerId = 3,
+                speed = 1.0f,
+                tone = "NATURAL"
+            )
+        )
+    }
+
+    @Test
+    fun audiobookProfileMatcherUsesStableVoicePaceAndToneFields() {
+        val audio = audio(1).copy(
+            modelId = "kokoro",
+            speakerId = 3,
+            speed = 1.0005f,
+            tone = "NATURAL"
+        )
+
+        assertTrue(audio.matchesAudiobookProfile(modelId = "kokoro", speakerId = 3, speed = 1.0f, tone = "NATURAL"))
+        assertEquals(false, audio.matchesAudiobookProfile(modelId = "other", speakerId = 3, speed = 1.0f, tone = "NATURAL"))
+        assertEquals(false, audio.matchesAudiobookProfile(modelId = "kokoro", speakerId = 4, speed = 1.0f, tone = "NATURAL"))
+        assertEquals(false, audio.matchesAudiobookProfile(modelId = "kokoro", speakerId = 3, speed = 1.1f, tone = "NATURAL"))
+        assertEquals(false, audio.matchesAudiobookProfile(modelId = "kokoro", speakerId = 3, speed = 1.0f, tone = "DRAMATIC"))
     }
 
     @Test
@@ -366,6 +446,38 @@ class AudiobookUiFormattersTest {
     }
 
     @Test
+    fun generatedAudiobookActionStateCombinesLabelsAndAvailability() {
+        val partial = audio(1).copy(
+            status = BookAudioStatus.CANCELED,
+            segmentCount = 6,
+            completedSegments = 2
+        )
+        val preparing = AudiobookPlaybackUiState(audioId = partial.id, preparing = true, segmentCount = 2)
+
+        val inactive = generatedAudiobookActionState(
+            active = false,
+            playback = AudiobookPlaybackUiState(),
+            audio = partial,
+            playableSegmentFiles = 2
+        )
+        assertEquals("Play partial", inactive.playLabel)
+        assertEquals("Play partial generated audio", inactive.playIconLabel)
+        assertEquals("Save partial", inactive.exportLabel)
+        assertTrue(inactive.canPlay)
+        assertTrue(inactive.canExport)
+
+        val activePreparing = generatedAudiobookActionState(
+            active = true,
+            playback = preparing,
+            audio = partial,
+            playableSegmentFiles = 2
+        )
+        assertEquals("Preparing", activePreparing.playLabel)
+        assertEquals(false, activePreparing.canPlay)
+        assertTrue(activePreparing.canExport)
+    }
+
+    @Test
     fun generatedAudioActionEnablementRequiresPlayableAudioAndSafeState() {
         val emptyGenerated = audio(1).copy(
             status = BookAudioStatus.GENERATED,
@@ -478,6 +590,56 @@ class AudiobookUiFormattersTest {
     }
 
     @Test
+    fun audiobookDisplayProfileLabelCanIncludeOrOmitScope() {
+        val sample = audio(1).copy(
+            modelDisplayName = "Kokoro v1.0",
+            speakerId = 2,
+            tone = "WARM",
+            speed = 1.15f,
+            scopeLabel = "Sample"
+        )
+        val fullBook = sample.copy(scopeLabel = "Full book")
+
+        assertEquals("Sample Kokoro v1.0 Speaker 3 Warm 1.15x", sample.audiobookDisplayProfileLabel(includeScope = true))
+        assertEquals("Kokoro v1.0 Speaker 3 Warm 1.15x", sample.audiobookDisplayProfileLabel(includeScope = false))
+        assertEquals("Kokoro v1.0 Speaker 3 Warm 1.15x", fullBook.audiobookDisplayProfileLabel(includeScope = true))
+    }
+
+    @Test
+    fun neuralTtsStatusTextIsSharedBySettingsAndBookDialog() {
+        assertEquals(
+            "Not installed • 333 MB",
+            neuralTtsStatusText(
+                status = NeuralTtsModelStatus.NOT_DOWNLOADED,
+                downloaded = 0,
+                total = 333L * 1_048_576L,
+                archiveBytes = 333L * 1_048_576L,
+                error = null
+            )
+        )
+        assertEquals(
+            "Downloading 12 MB of 333 MB",
+            neuralTtsStatusText(
+                status = NeuralTtsModelStatus.DOWNLOADING,
+                downloaded = 12L * 1_048_576L,
+                total = 333L * 1_048_576L,
+                archiveBytes = 333L * 1_048_576L,
+                error = null
+            )
+        )
+        assertEquals(
+            "boom",
+            neuralTtsStatusText(
+                status = NeuralTtsModelStatus.FAILED,
+                downloaded = 0,
+                total = 333L * 1_048_576L,
+                archiveBytes = 333L * 1_048_576L,
+                error = "boom"
+            )
+        )
+    }
+
+    @Test
     fun continueReadingPrimaryActionsExposeBookMaintenanceAndAudio() {
         val actions = continueReadingPrimaryActions()
 
@@ -572,6 +734,144 @@ class AudiobookUiFormattersTest {
 
         assertEquals(chapters, item.chapters)
         assertEquals(2, item.playableSegmentFiles)
+    }
+
+    @Test
+    fun globalAudiobookVisibilityKeepsGeneratedActiveAndPlayablePartialRows() {
+        assertTrue(
+            bookAudioItem(audio(1).copy(status = BookAudioStatus.GENERATED), playableSegmentFiles = 0)
+                .shouldShowInGlobalAudiobooksScreen()
+        )
+        assertTrue(
+            bookAudioItem(audio(2).copy(status = BookAudioStatus.GENERATING), playableSegmentFiles = 0)
+                .shouldShowInGlobalAudiobooksScreen()
+        )
+        assertTrue(
+            bookAudioItem(audio(3).copy(status = BookAudioStatus.CANCELED), playableSegmentFiles = 2)
+                .shouldShowInGlobalAudiobooksScreen()
+        )
+    }
+
+    @Test
+    fun globalAudiobookVisibilityHidesStoppedRowsWithoutPlayableSegments() {
+        assertEquals(
+            false,
+            bookAudioItem(audio(4).copy(status = BookAudioStatus.CANCELED), playableSegmentFiles = 0)
+                .shouldShowInGlobalAudiobooksScreen()
+        )
+        assertEquals(
+            false,
+            bookAudioItem(audio(5).copy(status = BookAudioStatus.FAILED), playableSegmentFiles = 0)
+                .shouldShowInGlobalAudiobooksScreen()
+        )
+    }
+
+    @Test
+    fun libraryPlaybackChromeDropsPerSecondPositionChurn() {
+        val playback = AudiobookPlaybackUiState(
+            audioId = 10,
+            bookId = 7,
+            playing = true,
+            segmentIndex = 3,
+            segmentCount = 9,
+            chapterIndex = 1,
+            chapterCount = 4,
+            chapterTitle = "Chapter 2",
+            segmentPositionMs = 42_000,
+            segmentDurationMs = 120_000
+        )
+
+        val chrome = playback.forLibraryChrome()
+
+        assertEquals(playback.audioId, chrome.audioId)
+        assertEquals(playback.bookId, chrome.bookId)
+        assertEquals(playback.playing, chrome.playing)
+        assertEquals(playback.segmentIndex, chrome.segmentIndex)
+        assertEquals(playback.chapterTitle, chrome.chapterTitle)
+        assertEquals(0, chrome.segmentPositionMs)
+        assertEquals(0, chrome.segmentDurationMs)
+    }
+
+    @Test
+    fun audiobookRowsOnlyReceiveLivePlaybackForActiveAudio() {
+        val playback = AudiobookPlaybackUiState(
+            audioId = 10,
+            bookId = 7,
+            playing = true,
+            segmentIndex = 3,
+            segmentCount = 9,
+            segmentPositionMs = 42_000,
+            segmentDurationMs = 120_000
+        )
+
+        assertEquals(playback, playback.forAudiobooksScreenRow(audioId = 10))
+        assertEquals(AudiobookPlaybackUiState(), playback.forAudiobooksScreenRow(audioId = 11))
+        assertEquals(
+            playback.forAudiobooksScreenRow(audioId = 11),
+            playback.copy(segmentPositionMs = 65_000).forAudiobooksScreenRow(audioId = 11)
+        )
+    }
+
+    @Test
+    fun readerGeneratedReadAloudChromeIgnoresPositionOnlyPlaybackTicks() {
+        val playback = AudiobookPlaybackUiState(
+            audioId = 10,
+            bookId = 7,
+            bookTitle = "Takedown",
+            profileLabel = "Kokoro Natural",
+            playing = true,
+            segmentIndex = 3,
+            segmentCount = 9,
+            segmentPositionMs = 42_000,
+            segmentDurationMs = 120_000
+        )
+
+        assertEquals(
+            playback.toReaderGeneratedReadAloudState(bookId = 7),
+            playback.copy(segmentPositionMs = 65_000, segmentDurationMs = 120_000).toReaderGeneratedReadAloudState(bookId = 7)
+        )
+        assertTrue(
+            playback.toReaderGeneratedReadAloudState(bookId = 7) !=
+                playback.copy(segmentIndex = 4).toReaderGeneratedReadAloudState(bookId = 7)
+        )
+    }
+
+    @Test
+    fun readerGeneratedReadAloudChromeHidesUnrelatedAudiobookPlayback() {
+        val playback = AudiobookPlaybackUiState(
+            audioId = 10,
+            bookId = 9,
+            bookTitle = "Other Book",
+            playing = true,
+            segmentIndex = 1,
+            segmentCount = 4
+        )
+
+        assertEquals(
+            com.xreader.app.tts.ReadAloudState(),
+            playback.toReaderGeneratedReadAloudState(bookId = 7)
+        )
+    }
+
+    @Test
+    fun audiobookUiInvalidationKeyIgnoresPlaybackPositionOnlyChanges() {
+        val base = playableAudio(4).copy(
+            playbackSegmentIndex = 1,
+            playbackPositionMs = 2_000
+        )
+
+        assertEquals(
+            base.audiobookUiInvalidationKey(),
+            base.copy(playbackSegmentIndex = 3, playbackPositionMs = 45_000).audiobookUiInvalidationKey()
+        )
+        assertTrue(
+            base.audiobookUiInvalidationKey() !=
+                base.copy(completedSegments = 3).audiobookUiInvalidationKey()
+        )
+        assertTrue(
+            listOf(base).audiobookUiInvalidationKeys() !=
+                listOf(base.copy(status = BookAudioStatus.CANCELED)).audiobookUiInvalidationKeys()
+        )
     }
 
     private fun audio(id: Long): BookAudioEntity =

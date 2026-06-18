@@ -3,6 +3,7 @@ package com.xreader.app.tts
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import android.util.Log
 import com.k2fsa.sherpa.onnx.GenerationConfig
 import com.k2fsa.sherpa.onnx.OfflineTts
 import com.k2fsa.sherpa.onnx.getOfflineTtsConfig
@@ -15,6 +16,8 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class TtsAccelerationInstrumentedTest {
+    private val tag = "TtsAccelerationBenchmark"
+
     @Test
     fun stagedQnnRuntimeInitializesKokoroAndGeneratesSamples() {
         assumeTrue(
@@ -32,7 +35,7 @@ class TtsAccelerationInstrumentedTest {
             context = context,
             includeExperimentalWebGpu = true
         )
-        val provider = requestedProvider ?: providers.first()
+        val provider = requestedProvider?.toProviderString(context) ?: providers.first()
         assertTrue(provider in providers || requestedProvider != null)
 
         val tts = if (requestedProvider == null) {
@@ -56,6 +59,66 @@ class TtsAccelerationInstrumentedTest {
         }
     }
 
+    @Test
+    fun installedKokoroProviderBenchmark() {
+        assumeTrue(
+            "Pass -e xreader.tts.benchmark true to run the installed-model provider benchmark.",
+            InstrumentationRegistry.getArguments().getString("xreader.tts.benchmark") == "true"
+        )
+
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val spec = NeuralTtsModelCatalog.requireModel(NeuralTtsModelCatalog.DEFAULT_MODEL_ID)
+        val modelDir = File(context.filesDir, "neural-tts/models/${spec.modelId}/${spec.rootDirectory}")
+        assumeTrue("Kokoro model must be installed on this device.", File(modelDir, spec.modelFile).isFile)
+
+        val requestedProviders = InstrumentationRegistry.getArguments()
+            .getString("xreader.tts.providers")
+            ?.split(',')
+            ?.map { it.trim() }
+            ?.filter { it.isNotBlank() }
+            ?.takeIf { it.isNotEmpty() }
+            ?: TtsAccelerationRuntime.providerOrder(
+                context = context,
+                includeExperimentalWebGpu = true
+            )
+        val providers = requestedProviders.map { it.toProviderString(context) }
+
+        val text = "XReader measures local audiobook generation speed with a realistic sentence that includes punctuation, pauses, and normal narration cadence."
+        val results = mutableListOf<Pair<String, Float>>()
+        providers.forEach { provider ->
+            val runtime = runCatching { OfflineTts(config = ttsConfig(spec, modelDir, provider)) }
+                .onFailure { error -> Log.w(tag, "provider=$provider init failed", error) }
+                .getOrNull() ?: return@forEach
+            runtime.useRuntime {
+                runCatching {
+                    runtime.generateWithConfig(
+                        text = "Warm up the local narrator.",
+                        config = generationConfig(spec)
+                    )
+                    val started = System.nanoTime()
+                    val generated = runtime.generateWithConfig(
+                        text = text,
+                        config = generationConfig(spec)
+                    )
+                    val elapsedMillis = ((System.nanoTime() - started) / 1_000_000L).coerceAtLeast(1L)
+                    val audioMillis = ((generated.samples.size.toLong() * 1000L) / generated.sampleRate.coerceAtLeast(1)).coerceAtLeast(1L)
+                    val realtimeFactor = elapsedMillis.toFloat() / audioMillis.toFloat()
+                    results += provider to realtimeFactor
+                    Log.i(
+                        tag,
+                        "provider=$provider elapsedMs=$elapsedMillis audioMs=$audioMillis realtimeFactor=$realtimeFactor samples=${generated.samples.size} sampleRate=${generated.sampleRate}"
+                    )
+                }.onFailure { error ->
+                    Log.w(tag, "provider=$provider generation failed", error)
+                }
+            }
+        }
+
+        assertTrue("At least one provider must initialize and generate audio.", results.isNotEmpty())
+        val fastest = results.minBy { it.second }
+        Log.i(tag, "fastestProvider=${fastest.first} realtimeFactor=${fastest.second} all=$results")
+    }
+
     private fun ttsConfig(spec: NeuralTtsModelSpec, modelDir: File, provider: String) =
         getOfflineTtsConfig(
             modelDir = modelDir.absolutePath,
@@ -75,6 +138,21 @@ class TtsAccelerationInstrumentedTest {
             silenceScale = NeuralTtsTone.NATURAL.silenceScale
         }
 
+    private fun generationConfig(spec: NeuralTtsModelSpec) =
+        GenerationConfig(
+            sid = spec.normalizedSpeakerId(0),
+            speed = 1.0f,
+            silenceScale = NeuralTtsTone.NATURAL.silenceScale,
+        )
+
+    private inline fun OfflineTts.useRuntime(block: () -> Unit) {
+        try {
+            block()
+        } finally {
+            release()
+        }
+    }
+
     private fun createWithFallback(
         spec: NeuralTtsModelSpec,
         modelDir: File,
@@ -89,5 +167,11 @@ class TtsAccelerationInstrumentedTest {
             }
         }
         throw AssertionError("No TTS provider initialized.", lastError)
+    }
+
+    private fun String.toProviderString(context: android.content.Context): String {
+        if (this != "qnn") return this
+        return TtsAccelerationRuntime.qnnProviderString(context)
+            ?: throw AssertionError("QNN provider is unavailable on this device.")
     }
 }

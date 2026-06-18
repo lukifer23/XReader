@@ -14,40 +14,41 @@ if [[ ! -f "$QNN_AAR" ]]; then
   curl -L --fail -o "$QNN_AAR" "$QNN_URL"
 fi
 
-TMP_DIR="$(mktemp -d)"
-cleanup() {
-  rm -rf "$TMP_DIR"
-}
-trap cleanup EXIT
-
-unzip -q "$QNN_AAR" -d "$TMP_DIR"
-
-QNN_LIB_DIR="$TMP_DIR/jni/arm64-v8a"
-if [[ ! -d "$QNN_LIB_DIR" ]]; then
+if ! unzip -l "$QNN_AAR" 'jni/arm64-v8a/*.so' >/dev/null; then
   echo "QNN runtime AAR does not contain arm64-v8a native libraries: $QNN_AAR" >&2
   exit 3
 fi
+
+stage_lib() {
+  local lib="$1"
+  if ! unzip -p "$QNN_AAR" "jni/arm64-v8a/$lib" > "$TARGET_DIR/$lib"; then
+    echo "Missing QNN runtime library in $QNN_AAR: $lib" >&2
+    rm -f "$TARGET_DIR/$lib"
+    exit 3
+  fi
+  chmod 0644 "$TARGET_DIR/$lib"
+}
 
 for lib in \
   libQnnGpu.so \
   libQnnHtp.so \
   libQnnHtpPrepare.so \
   libQnnSystem.so; do
-  install -m 0644 "$QNN_LIB_DIR/$lib" "$TARGET_DIR/$lib"
+  stage_lib "$lib"
 done
 
 stub_count=0
 skel_count=0
-shopt -s nullglob
-for lib in "$QNN_LIB_DIR"/libQnnHtpV*Stub.so; do
-  install -m 0644 "$lib" "$TARGET_DIR/$(basename "$lib")"
+while IFS= read -r entry; do
+  lib="$(basename "$entry")"
+  stage_lib "$lib"
   stub_count=$((stub_count + 1))
-done
-for lib in "$QNN_LIB_DIR"/libQnnHtpV*Skel.so; do
-  install -m 0644 "$lib" "$TARGET_DIR/$(basename "$lib")"
+done < <(unzip -Z1 "$QNN_AAR" 'jni/arm64-v8a/libQnnHtpV*Stub.so')
+while IFS= read -r entry; do
+  lib="$(basename "$entry")"
+  stage_lib "$lib"
   skel_count=$((skel_count + 1))
-done
-shopt -u nullglob
+done < <(unzip -Z1 "$QNN_AAR" 'jni/arm64-v8a/libQnnHtpV*Skel.so')
 
 if [[ "$stub_count" -eq 0 || "$skel_count" -eq 0 ]]; then
   echo "No QNN HTP Stub/Skel libraries were staged from $QNN_AAR." >&2

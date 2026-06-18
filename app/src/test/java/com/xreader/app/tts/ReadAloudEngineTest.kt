@@ -123,6 +123,57 @@ class ReadAloudEngineTest {
         assertEquals(false, readAloudNotificationCanSkipNext(inactive))
     }
 
+    @Test
+    fun foregroundNotificationKeyIgnoresNonVisibleStateChangesOnly() {
+        val state = ReadAloudState(
+            activeBookId = 7,
+            bookTitle = "Takedown",
+            playing = true,
+            currentChunk = 2,
+            totalChunks = 12,
+            currentHeading = "  Chapter   Seven  ",
+            sleepTimerRemainingMillis = 60_000,
+            message = "Not shown in notification"
+        )
+
+        assertEquals(
+            state.readAloudNotificationKey(),
+            state.copy(
+                currentHeading = "Chapter Seven",
+                sleepTimerRemainingMillis = 58_000,
+                message = "Different unseen message"
+            ).readAloudNotificationKey()
+        )
+        assertTrue(
+            state.readAloudNotificationKey() !=
+                state.copy(currentChunk = 3).readAloudNotificationKey()
+        )
+        assertTrue(
+            state.readAloudNotificationKey() !=
+                state.copy(playing = false, paused = true).readAloudNotificationKey()
+        )
+        assertTrue(
+            state.readAloudNotificationKey() !=
+                state.copy(bookTitle = "Another Book").readAloudNotificationKey()
+        )
+    }
+
+    @Test
+    fun mediaSessionMetadataKeyIgnoresHeadingWhitespaceOnlyChanges() {
+        assertEquals(
+            readAloudMetadataKey(bookTitle = "Takedown", heading = "  Chapter   Seven  "),
+            readAloudMetadataKey(bookTitle = "Takedown", heading = "Chapter Seven")
+        )
+        assertEquals(
+            readAloudMetadataKey(bookTitle = "Takedown", heading = null),
+            readAloudMetadataKey(bookTitle = "Takedown", heading = "   ")
+        )
+        assertTrue(
+            readAloudMetadataKey(bookTitle = "Takedown", heading = "Chapter Seven") !=
+                readAloudMetadataKey(bookTitle = "Takedown", heading = "Chapter Eight")
+        )
+    }
+
     private fun assertHasAction(actions: Long, action: Long) {
         assertTrue(actions and action != 0L)
     }

@@ -26,13 +26,36 @@ internal fun NeuralTtsPreparedBook.forScope(scope: AudiobookGenerationScope): Ne
     val scopedPauses = segmentPauseMillis.take(scopedSegments.size)
     return copy(
         segments = scopedSegments,
-        wordCount = scopedSegments.sumOf { segment ->
-            segment.split(Regex("\\s+")).count { it.any(Char::isLetterOrDigit) }
-        },
+        wordCount = scopedSegments.sumReadableWords(),
         chapters = chapters.trimToSegmentCount(scopedSegments.size),
         segmentChapterIndexes = scopedChapterIndexes.ifEmpty { List(scopedSegments.size) { 0 } },
         segmentPauseMillis = scopedPauses.ifEmpty { List(scopedSegments.size) { DEFAULT_AUDIOBOOK_SEGMENT_PAUSE_MS } }
     )
+}
+
+private fun Iterable<String>.sumReadableWords(): Int =
+    sumOf { segment -> segment.readableWordCount() }
+
+private fun String.readableWordCount(): Int {
+    var count = 0
+    var inWord = false
+    forEach { char ->
+        if (char.isLetterOrDigit()) {
+            if (!inWord) {
+                count += 1
+                inWord = true
+            }
+        } else {
+            inWord = false
+        }
+    }
+    return count
+}
+
+private fun Iterable<Int>.countByValue(): Map<Int, Int> {
+    val counts = LinkedHashMap<Int, Int>()
+    forEach { value -> counts[value] = (counts[value] ?: 0) + 1 }
+    return counts
 }
 
 private fun NeuralTtsPreparedBook.firstChapterSegmentLimit(scope: AudiobookGenerationScope): Int {
@@ -100,17 +123,20 @@ internal object NeuralTtsText {
                         (chapterBuilders.getOrNull(chapterIndex)?.segmentCount ?: 0) + 1
                 }
         }
-        val words = segments.sumOf { segment ->
-            segment.split(Regex("\\s+")).count { it.any(Char::isLetterOrDigit) }
-        }
-        return NeuralTtsPreparedBook(
+        val coalesced = coalesceAdjacentAudiobookSegments(
             segments = segments,
+            chapterIndexes = segmentChapterIndexes,
+            pauseMillis = segmentPauseMillis
+        )
+        val words = coalesced.segments.sumReadableWords()
+        val chapterSegmentCounts = coalesced.chapterIndexes.countByValue()
+        return NeuralTtsPreparedBook(
+            segments = coalesced.segments,
             wordCount = words,
             chapters = chapterBuilders
-                .filter { it.segmentCount > 0 }
-                .map { it.toChapter() },
-            segmentChapterIndexes = segmentChapterIndexes,
-            segmentPauseMillis = segmentPauseMillis
+                .mapNotNull { it.toChapter(coalesced.chapterIndexes, chapterSegmentCounts) },
+            segmentChapterIndexes = coalesced.chapterIndexes,
+            segmentPauseMillis = coalesced.pauseMillis
         )
     }
 
@@ -132,27 +158,27 @@ internal object NeuralTtsText {
             .replace("\u00AD", "")
             .replace("\uFB01", "fi")
             .replace("\uFB02", "fl")
-            .replace(Regex("(?m)-\\s*\\R\\s*"), "")
-            .replace(Regex("https?://\\S+"), " ")
-            .replace(Regex("\\b\\S+@\\S+\\.\\S+\\b"), " ")
-            .replace(Regex("\\bISBN(?:-1[03])?:?\\s*[0-9Xx -]{10,17}\\b"), " ")
-            .replace(Regex("[“”]"), "\"")
-            .replace(Regex("[‘’]"), "'")
-            .replace(Regex("[–—]"), " - ")
-            .replace(Regex("\\.{3,}"), "...")
-            .split(Regex("\\R{2,}|\\n\\s*\\n"))
+            .replace(AUDIOBOOK_HYPHENATED_LINE_BREAK_REGEX, "")
+            .replace(AUDIOBOOK_URL_REGEX, " ")
+            .replace(AUDIOBOOK_EMAIL_REGEX, " ")
+            .replace(AUDIOBOOK_ISBN_REGEX, " ")
+            .replace(AUDIOBOOK_DOUBLE_QUOTE_REGEX, "\"")
+            .replace(AUDIOBOOK_SINGLE_QUOTE_REGEX, "'")
+            .replace(AUDIOBOOK_DASH_REGEX, " - ")
+            .replace(AUDIOBOOK_ELLIPSIS_REGEX, "...")
+            .split(AUDIOBOOK_PARAGRAPH_BREAK_REGEX)
             .map { paragraph ->
                 ReadAloudPlanner.cleanSpeechText(paragraph)
-                    .replace(Regex("\\s+([.,!?;:])"), "$1")
-                    .replace(Regex("\\.{2}(?!\\.)"), ".")
-                    .replace(Regex("([!?]){2,}"), "$1")
-                    .replace(Regex("([,;:]){2,}"), "$1")
+                    .replace(AUDIOBOOK_SPACE_BEFORE_PUNCTUATION_REGEX, "$1")
+                    .replace(AUDIOBOOK_DOUBLE_PERIOD_REGEX, ".")
+                    .replace(AUDIOBOOK_REPEATED_QUESTION_EXCLAMATION_REGEX, "$1")
+                    .replace(AUDIOBOOK_REPEATED_PUNCTUATION_REGEX, "$1")
             }
             .filter { it.isNotBlank() }
 
     private fun normalizeForAudiobookHeading(value: String): String? {
         val clean = ReadAloudPlanner.cleanSpeechText(value)
-            .replace(Regex("\\s+"), " ")
+            .replace(AUDIOBOOK_WHITESPACE_REGEX, " ")
             .trim()
         if (clean.length !in 2..96) return null
         if (clean.startsWith("Position ", ignoreCase = true)) return null
@@ -162,8 +188,8 @@ internal object NeuralTtsText {
 
     private fun String.normalizedHeadingComparisonKey(): String =
         lowercase()
-            .replace(Regex("[^a-z0-9 ]"), " ")
-            .replace(Regex("\\s+"), " ")
+            .replace(AUDIOBOOK_ALNUM_SPACE_ONLY_REGEX, " ")
+            .replace(AUDIOBOOK_WHITESPACE_REGEX, " ")
             .trim()
 
     private fun splitForAudiobook(text: String, preferShortSegments: Boolean = false): List<AudiobookPreparedSegment> {
@@ -204,7 +230,7 @@ internal object NeuralTtsText {
     }
 
     private fun String.chunkByClauseOrWords(): List<String> {
-        val clauses = split(Regex("(?<=[,;:])\\s+"))
+        val clauses = split(AUDIOBOOK_CLAUSE_BOUNDARY_REGEX)
             .map { it.trim() }
             .filter { it.isNotBlank() }
         if (clauses.size > 1) {
@@ -251,6 +277,46 @@ internal object NeuralTtsText {
         }
     }
 
+    private fun coalesceAdjacentAudiobookSegments(
+        segments: List<String>,
+        chapterIndexes: List<Int>,
+        pauseMillis: List<Long>,
+    ): CoalescedAudiobookSegments {
+        if (segments.size < 2) {
+            return CoalescedAudiobookSegments(segments, chapterIndexes, pauseMillis)
+        }
+        val mergedSegments = mutableListOf<String>()
+        val mergedChapterIndexes = mutableListOf<Int>()
+        val mergedPauses = mutableListOf<Long>()
+        segments.forEachIndexed { index, segment ->
+            val chapterIndex = chapterIndexes.getOrElse(index) { 0 }
+            val pause = pauseMillis.getOrElse(index) { DEFAULT_AUDIOBOOK_SEGMENT_PAUSE_MS }
+            val previous = mergedSegments.lastOrNull()
+            val previousChapter = mergedChapterIndexes.lastOrNull()
+            val previousPause = mergedPauses.lastOrNull()
+            val canMerge = previous != null &&
+                previousChapter == chapterIndex &&
+                previousPause != CHAPTER_HEADING_AUDIOBOOK_PAUSE_MS &&
+                previousPause != QUESTION_OR_EXCLAMATION_AUDIOBOOK_PAUSE_MS &&
+                previousPause != QUESTION_OR_EXCLAMATION_AUDIOBOOK_PAUSE_MS + 120L &&
+                pause != CHAPTER_HEADING_AUDIOBOOK_PAUSE_MS &&
+                previous.length + 1 + segment.length <= TARGET_SEGMENT_CHARS
+            if (canMerge) {
+                mergedSegments[mergedSegments.lastIndex] = "$previous $segment"
+                mergedPauses[mergedPauses.lastIndex] = pause
+            } else {
+                mergedSegments += segment
+                mergedChapterIndexes += chapterIndex
+                mergedPauses += pause
+            }
+        }
+        return CoalescedAudiobookSegments(
+            segments = mergedSegments,
+            chapterIndexes = mergedChapterIndexes,
+            pauseMillis = mergedPauses
+        )
+    }
+
     private fun List<AudiobookPassage>.dropRepeatedShortBoilerplate(): List<AudiobookPassage> {
         val repeated = groupingBy { it.text.normalizedBoilerplateKey() }
             .eachCount()
@@ -274,14 +340,17 @@ internal object NeuralTtsText {
 
     private fun String.normalizedPassageKey(): String? {
         val clean = lowercase()
-            .replace(Regex("[^a-z0-9 ]"), " ")
-            .replace(Regex("\\s+"), " ")
+            .replace(AUDIOBOOK_ALNUM_SPACE_ONLY_REGEX, " ")
+            .replace(AUDIOBOOK_WHITESPACE_REGEX, " ")
             .trim()
         return clean.takeIf { it.length >= 80 }
     }
 
     private fun String.normalizedBoilerplateKey(): String? {
-        val clean = lowercase().replace(Regex("[^a-z0-9 ]"), " ").replace(Regex("\\s+"), " ").trim()
+        val clean = lowercase()
+            .replace(AUDIOBOOK_ALNUM_SPACE_ONLY_REGEX, " ")
+            .replace(AUDIOBOOK_WHITESPACE_REGEX, " ")
+            .trim()
         val words = clean.split(' ').filter { it.isNotBlank() }
         return if (length <= 80 && words.size in 1..8) clean.takeIf { it.isNotBlank() } else null
     }
@@ -289,8 +358,8 @@ internal object NeuralTtsText {
     private fun String.isIsolatedPageMarker(): Boolean {
         val clean = trim()
         if (clean.length > 24) return false
-        return clean.matches(Regex("(?i)(page\\s+)?\\d{1,4}")) ||
-            clean.matches(Regex("(?i)[ivxlcdm]{1,8}"))
+        return clean.matches(AUDIOBOOK_PAGE_MARKER_REGEX) ||
+            clean.matches(AUDIOBOOK_ROMAN_MARKER_REGEX)
     }
 
     private fun List<AudiobookPassage>.dropIsolatedPageMarkers(): List<AudiobookPassage> =
@@ -317,8 +386,8 @@ internal object NeuralTtsText {
 
     private fun String.isPublisherBoilerplate(): Boolean {
         val clean = lowercase()
-            .replace(Regex("[^a-z0-9&' ]"), " ")
-            .replace(Regex("\\s+"), " ")
+            .replace(AUDIOBOOK_PUBLISHER_KEY_REGEX, " ")
+            .replace(AUDIOBOOK_WHITESPACE_REGEX, " ")
             .trim()
         if (clean.isBlank()) return true
         val phrases = listOf(
@@ -342,7 +411,7 @@ internal object NeuralTtsText {
             "also by",
         )
         if (phrases.any { it in clean }) return true
-        return clean.matches(Regex("""(?:isbn|ebook isbn|print isbn)\s+.*"""))
+        return clean.matches(AUDIOBOOK_PUBLISHER_ISBN_REGEX)
     }
 
     private fun String.isTableOfContentsEntry(): Boolean {
@@ -374,14 +443,23 @@ internal object NeuralTtsText {
         val firstSegmentIndex: Int,
         var segmentCount: Int = 0,
     ) {
-        fun toChapter(): AudiobookChapter =
-            AudiobookChapter(
+        fun toChapter(coalescedChapterIndexes: List<Int>, chapterSegmentCounts: Map<Int, Int>): AudiobookChapter? {
+            val first = coalescedChapterIndexes.indexOf(index).takeIf { it >= 0 } ?: return null
+            val count = chapterSegmentCounts[index] ?: 0
+            return AudiobookChapter(
                 index = index,
                 title = title,
-                firstSegmentIndex = firstSegmentIndex,
-                segmentCount = segmentCount
-            )
+                firstSegmentIndex = first,
+                segmentCount = count
+            ).takeIf { it.segmentCount > 0 }
+        }
     }
+
+    private data class CoalescedAudiobookSegments(
+        val segments: List<String>,
+        val chapterIndexes: List<Int>,
+        val pauseMillis: List<Long>,
+    )
 
     private data class AudiobookPreparedSegment(
         val text: String,
@@ -405,10 +483,10 @@ internal object NeuralTtsText {
         PART_HEADING,
     }
 
-    private const val MIN_SEGMENT_CHARS = 120
-    private const val TARGET_SEGMENT_CHARS = 560
+    private const val MIN_SEGMENT_CHARS = 220
+    private const val TARGET_SEGMENT_CHARS = 1180
     private const val HEADING_TARGET_SEGMENT_CHARS = 160
-    private const val MAX_SEGMENT_CHARS = 850
+    private const val MAX_SEGMENT_CHARS = 1600
     private const val FRONT_MATTER_SCAN_LIMIT = 48
     private val AUDIOBOOK_SENTENCE_BOUNDARY = Regex("(?<=[.!?][\"']?)\\s+")
     private val AUDIOBOOK_TOC_LEADER_ENTRY_REGEX = Regex(
@@ -444,7 +522,7 @@ private fun String.naturalPauseAfterMillis(paragraphEnd: Boolean): Long {
 private fun String.normalizedAudiobookHeading(): String =
     trim()
         .lowercase()
-        .replace(Regex("\\s+"), " ")
+        .replace(AUDIOBOOK_WHITESPACE_REGEX, " ")
 
 private fun String.looksLikeAudiobookChapterHeading(): Boolean {
     return audiobookHeadingKind() != null
@@ -466,12 +544,12 @@ private fun String.audiobookHeadingKind(): AudiobookHeadingKind? {
 }
 
 private fun String.normalizedChapterTitle(): String {
-    val clean = trim().replace(Regex("\\s+"), " ")
+    val clean = trim().replace(AUDIOBOOK_WHITESPACE_REGEX, " ")
     val normalized = clean.normalizedAudiobookHeading()
     if (
-        normalized.matches(Regex("""\d{1,3}""")) ||
-        normalized.matches(Regex("""[ivxlcdm]{1,8}""")) ||
-        normalized.matches(Regex("""(?i)$AUDIOBOOK_WORD_NUMBER_PATTERN"""))
+        normalized.matches(AUDIOBOOK_NUMBER_HEADING_REGEX) ||
+        normalized.matches(AUDIOBOOK_ROMAN_MARKER_REGEX) ||
+        normalized.matches(AUDIOBOOK_WORD_NUMBER_REGEX)
     ) {
         return "Chapter ${clean.normalizedChapterTokenTitle()}"
     }
@@ -484,9 +562,9 @@ private fun String.normalizedChapterTitle(): String {
 }
 
 private fun String.normalizedChapterTokenTitle(): String {
-    if (matches(Regex("""(?i)[ivxlcdm]{1,8}"""))) return uppercase()
+    if (matches(AUDIOBOOK_ROMAN_MARKER_REGEX)) return uppercase()
     if (length > 2 && this == uppercase() && any(Char::isLetter)) {
-        return lowercase().split(Regex("[- ]")).joinToString(" ") { word ->
+        return lowercase().split(AUDIOBOOK_CHAPTER_TOKEN_SPLIT_REGEX).joinToString(" ") { word ->
             word.replaceFirstChar { char -> char.titlecase() }
         }
     }
@@ -495,6 +573,30 @@ private fun String.normalizedChapterTokenTitle(): String {
 
 private const val AUDIOBOOK_WORD_NUMBER_PATTERN =
     """(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|twenty[- ]one|twenty[- ]two|twenty[- ]three|twenty[- ]four|twenty[- ]five|twenty[- ]six|twenty[- ]seven|twenty[- ]eight|twenty[- ]nine|thirty)"""
+
+private val AUDIOBOOK_HYPHENATED_LINE_BREAK_REGEX = Regex("(?m)-\\s*\\R\\s*")
+private val AUDIOBOOK_URL_REGEX = Regex("https?://\\S+")
+private val AUDIOBOOK_EMAIL_REGEX = Regex("\\b\\S+@\\S+\\.\\S+\\b")
+private val AUDIOBOOK_ISBN_REGEX = Regex("\\bISBN(?:-1[03])?:?\\s*[0-9Xx -]{10,17}\\b")
+private val AUDIOBOOK_DOUBLE_QUOTE_REGEX = Regex("[“”]")
+private val AUDIOBOOK_SINGLE_QUOTE_REGEX = Regex("[‘’]")
+private val AUDIOBOOK_DASH_REGEX = Regex("[–—]")
+private val AUDIOBOOK_ELLIPSIS_REGEX = Regex("\\.{3,}")
+private val AUDIOBOOK_PARAGRAPH_BREAK_REGEX = Regex("\\R{2,}|\\n\\s*\\n")
+private val AUDIOBOOK_SPACE_BEFORE_PUNCTUATION_REGEX = Regex("\\s+([.,!?;:])")
+private val AUDIOBOOK_DOUBLE_PERIOD_REGEX = Regex("\\.{2}(?!\\.)")
+private val AUDIOBOOK_REPEATED_QUESTION_EXCLAMATION_REGEX = Regex("([!?]){2,}")
+private val AUDIOBOOK_REPEATED_PUNCTUATION_REGEX = Regex("([,;:]){2,}")
+private val AUDIOBOOK_WHITESPACE_REGEX = Regex("\\s+")
+private val AUDIOBOOK_ALNUM_SPACE_ONLY_REGEX = Regex("[^a-z0-9 ]")
+private val AUDIOBOOK_CLAUSE_BOUNDARY_REGEX = Regex("(?<=[,;:])\\s+")
+private val AUDIOBOOK_PAGE_MARKER_REGEX = Regex("(?i)(page\\s+)?\\d{1,4}")
+private val AUDIOBOOK_ROMAN_MARKER_REGEX = Regex("(?i)[ivxlcdm]{1,8}")
+private val AUDIOBOOK_PUBLISHER_KEY_REGEX = Regex("[^a-z0-9&' ]")
+private val AUDIOBOOK_PUBLISHER_ISBN_REGEX = Regex("""(?:isbn|ebook isbn|print isbn)\s+.*""")
+private val AUDIOBOOK_NUMBER_HEADING_REGEX = Regex("""\d{1,3}""")
+private val AUDIOBOOK_WORD_NUMBER_REGEX = Regex("""(?i)$AUDIOBOOK_WORD_NUMBER_PATTERN""")
+private val AUDIOBOOK_CHAPTER_TOKEN_SPLIT_REGEX = Regex("[- ]")
 
 private val AUDIOBOOK_CHAPTER_HEADING_REGEX =
     Regex("""(?i)^(prologue|epilogue|chapter\s+([0-9]+|[ivxlcdm]+|$AUDIOBOOK_WORD_NUMBER_PATTERN)(\b.*)?|section\s+([0-9]+|[ivxlcdm]+|$AUDIOBOOK_WORD_NUMBER_PATTERN)(\b.*)?|episode\s+([0-9]+|[ivxlcdm]+|$AUDIOBOOK_WORD_NUMBER_PATTERN)(\b.*)?|\d{1,3}|[ivxlcdm]{1,8}|$AUDIOBOOK_WORD_NUMBER_PATTERN)$""")

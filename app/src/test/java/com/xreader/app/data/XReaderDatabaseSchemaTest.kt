@@ -9,18 +9,25 @@ import org.junit.Test
 
 class XReaderDatabaseSchemaTest {
     @Test
-    fun version11BookAudioSchemaIncludesGenerationSessionBaseline() {
-        val schema = schema(version = 11)
+    fun version12BookAudioSchemaIncludesGenerationTelemetry() {
+        val schema = schema(version = 12)
         val bookAudio = schema.entity("book_audio")
         val fields = bookAudio.getJSONArray("fields")
-        val baseline = (0 until fields.length())
+        val columns = (0 until fields.length())
             .map { fields.getJSONObject(it) }
-            .firstOrNull { it.getString("columnName") == "generationSessionStartCompletedSegments" }
+            .associateBy { it.getString("columnName") }
 
-        assertEquals(11, schema.getInt("version"))
+        assertEquals(12, schema.getInt("version"))
         assertTrue(bookAudio.getString("createSql").contains("generationSessionStartCompletedSegments"))
-        assertEquals("INTEGER", baseline?.getString("affinity"))
-        assertEquals(true, baseline?.getBoolean("notNull"))
+        assertTrue(bookAudio.getString("createSql").contains("generationProvider"))
+        assertEquals("INTEGER", columns["generationSessionStartCompletedSegments"]?.getString("affinity"))
+        assertEquals(true, columns["generationSessionStartCompletedSegments"]?.getBoolean("notNull"))
+        assertEquals("TEXT", columns["generationProvider"]?.getString("affinity"))
+        assertFalse(columns["generationProvider"]?.optBoolean("notNull", false) ?: true)
+        assertEquals("INTEGER", columns["generationAudioMillis"]?.getString("affinity"))
+        assertEquals(true, columns["generationAudioMillis"]?.getBoolean("notNull"))
+        assertEquals("INTEGER", columns["generationComputeMillis"]?.getString("affinity"))
+        assertEquals(true, columns["generationComputeMillis"]?.getBoolean("notNull"))
     }
 
     @Test
@@ -32,7 +39,7 @@ class XReaderDatabaseSchemaTest {
 
     @Test
     fun bookAudioUniqueIndexIncludesAudiobookScope() {
-        val bookAudio = schema(version = 11).entity("book_audio")
+        val bookAudio = schema(version = 12).entity("book_audio")
         val indices = bookAudio.getJSONArray("indices")
         val scopedIndex = (0 until indices.length())
             .map { indices.getJSONObject(it) }

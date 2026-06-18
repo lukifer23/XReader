@@ -15,10 +15,7 @@ class NeuralTtsTextTest {
 
         val prepared = NeuralTtsText.prepare(chunks)
 
-        assertEquals(
-            listOf("First position.", "Second position.", "Third position."),
-            prepared.segments
-        )
+        assertEquals("First position. Second position. Third position.", prepared.joinedSegments())
         assertEquals(6, prepared.wordCount)
     }
 
@@ -30,7 +27,7 @@ class NeuralTtsTextTest {
         assertTrue(prepared.segments.size > 1)
         assertEquals(1_200, prepared.wordCount)
         assertTrue(prepared.segments.last().contains("word1200"))
-        assertTrue(prepared.segments.all { it.length <= 850 || !it.contains(' ') })
+        assertTrue(prepared.segments.all { it.length <= 1600 || !it.contains(' ') })
     }
 
     @Test
@@ -47,10 +44,11 @@ class NeuralTtsTextTest {
 
         val prepared = NeuralTtsText.prepare(chunks)
 
-        assertEquals(
-            listOf("The first real paragraph stays.", "The second real paragraph stays too."),
-            prepared.segments
-        )
+        val spokenText = prepared.joinedSegments()
+        assertTrue(spokenText.contains("The first real paragraph stays."))
+        assertTrue(spokenText.contains("The second real paragraph stays too."))
+        assertTrue(!spokenText.contains("XReader Sample Novel"))
+        assertTrue(!spokenText.contains("Page 12"))
         assertEquals(11, prepared.wordCount)
     }
 
@@ -65,10 +63,10 @@ class NeuralTtsTextTest {
             )
         )
 
-        assertEquals(
-            listOf(repeated, "A unique chapter paragraph remains."),
-            prepared.segments
-        )
+        val spokenText = prepared.joinedSegments()
+        assertTrue(spokenText.contains(repeated))
+        assertTrue(spokenText.contains("A unique chapter paragraph remains."))
+        assertEquals(1, prepared.segments.sumOf { Regex(Regex.escape(repeated)).findAll(it).count() })
         assertEquals(27, prepared.wordCount)
     }
 
@@ -98,7 +96,7 @@ class NeuralTtsTextTest {
         val prepared = NeuralTtsText.prepare(listOf(chunk(text = text)))
 
         assertTrue(prepared.segments.size >= 2)
-        assertTrue(prepared.segments.all { it.length <= 850 })
+        assertTrue(prepared.segments.all { it.length <= 1600 })
         assertTrue(prepared.segments.any { it.contains("\"This is a quoted sentence,\" she said.") })
         assertTrue(prepared.segments.any { it.contains("Kokoro rush through the audiobook narration.") })
     }
@@ -111,9 +109,28 @@ class NeuralTtsTextTest {
 
         val prepared = NeuralTtsText.prepare(listOf(chunk(text = sentences)))
 
-        assertTrue("Expected fewer than one generated prompt per sentence.", prepared.segments.size < 12)
-        assertTrue(prepared.segments.all { it.length <= 850 })
+        assertTrue("Expected far fewer generated prompts than sentences.", prepared.segments.size < 8)
+        assertTrue(prepared.segments.all { it.length <= 1600 })
         assertEquals(560, prepared.wordCount)
+    }
+
+    @Test
+    fun prepareCoalescesTinyExtractorChunksIntoFewerGenerationPrompts() {
+        val chunks = (1..100).map { index ->
+            chunk(
+                unitIndex = index,
+                heading = "Chapter 1",
+                text = "Line $index keeps the scene moving with useful narration."
+            )
+        }
+
+        val prepared = NeuralTtsText.prepare(chunks)
+
+        assertTrue("Expected far fewer prompts than extracted chunks.", prepared.segments.size < 25)
+        assertTrue(prepared.segments.all { it.length <= 1600 })
+        assertEquals(900, prepared.wordCount)
+        assertTrue(prepared.joinedSegments().contains("Line 1 keeps the scene moving"))
+        assertTrue(prepared.joinedSegments().contains("Line 100 keeps the scene moving"))
     }
 
     @Test
@@ -208,11 +225,8 @@ class NeuralTtsTextTest {
         )
 
         assertEquals(
-            listOf(
-                "The actual paragraph should be the only spoken text.",
-                "A second paragraph remains."
-            ),
-            prepared.segments
+            "The actual paragraph should be the only spoken text. A second paragraph remains.",
+            prepared.joinedSegments()
         )
     }
 
@@ -290,11 +304,8 @@ class NeuralTtsTextTest {
         )
 
         assertEquals(
-            listOf(
-                "A quiet opening paragraph remains available.",
-                "A second paragraph follows without a formal chapter heading."
-            ),
-            prepared.segments
+            "A quiet opening paragraph remains available. A second paragraph follows without a formal chapter heading.",
+            prepared.joinedSegments()
         )
     }
 
@@ -412,12 +423,8 @@ class NeuralTtsTextTest {
         )
 
         assertEquals(
-            listOf(
-                "Opening paragraph remains.",
-                "Second paragraph remains.",
-                "Third paragraph remains."
-            ),
-            prepared.segments
+            "Opening paragraph remains. Second paragraph remains. Third paragraph remains.",
+            prepared.joinedSegments()
         )
     }
 
@@ -432,7 +439,7 @@ class NeuralTtsTextTest {
 
         assertEquals(listOf("Chapter 1"), prepared.chapters.map { it.title })
         assertEquals(listOf(0), prepared.segmentChapterIndexes.distinct())
-        assertTrue(prepared.segments.any { it == "This chapter matters because the signal is hidden." })
+        assertTrue(prepared.segments.any { it.contains("This chapter matters because the signal is hidden.") })
     }
 
     @Test
@@ -454,4 +461,6 @@ class NeuralTtsTextTest {
             text = text,
             wordCount = text.split(Regex("\\s+")).count { it.isNotBlank() }
         )
+
+    private fun NeuralTtsPreparedBook.joinedSegments(): String = segments.joinToString(" ")
 }

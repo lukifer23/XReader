@@ -29,6 +29,7 @@ import com.xreader.app.settings.ReaderSpacingPreset
 import com.xreader.app.settings.ReaderTapZonePreset
 import com.xreader.app.settings.ReaderTextAlign
 import com.xreader.app.settings.withBookAppearance
+import com.xreader.app.tts.AudiobookPlaybackUiState
 import com.xreader.app.tts.ReadAloudChunk
 import com.xreader.app.tts.ReadAloudPlanner
 import com.xreader.app.tts.ReadAloudState
@@ -39,6 +40,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -86,6 +89,7 @@ class ReaderViewModel(
     private var saveJob: Job? = null
     private var searchJob: Job? = null
     private var lastReadingState: ReadingStateEntity? = null
+    private var lastPersistedReadingState: ReadingStateEntity? = null
     private var ignoreStoredStateUntilFirstLocator = initialLocatorOverride != null
     private var deferredObserversStarted = false
     private var lastReadAloudLocator: String? = null
@@ -138,23 +142,11 @@ class ReaderViewModel(
             }
         }
         viewModelScope.launch {
-            container.generatedAudiobookPlayback.state.collect { playback ->
+            container.generatedAudiobookPlayback.state
+                .map { playback -> playback.toReaderGeneratedReadAloudState(bookId) }
+                .distinctUntilChanged()
+                .collect { mapped ->
                 if (_uiState.value.settings.readAloudPlaybackMode != ReadAloudPlaybackMode.GENERATED_AUDIO) return@collect
-                val relevant = playback.bookId == bookId
-                val mapped = if (relevant && playback.active) {
-                    ReadAloudState(
-                        activeBookId = bookId,
-                        bookTitle = playback.bookTitle,
-                        playing = playback.playing,
-                        paused = playback.paused,
-                        currentChunk = playback.segmentIndex,
-                        totalChunks = playback.segmentCount,
-                        currentHeading = playback.profileLabel,
-                        message = playback.error
-                    )
-                } else {
-                    ReadAloudState()
-                }
                 _uiState.update { it.copy(readAloud = mapped) }
             }
         }
@@ -200,6 +192,7 @@ class ReaderViewModel(
                 }
                 val jumpState = if (initialPosition.fromInitialOverride) seededState else saved
                 lastReadingState = jumpState
+                lastPersistedReadingState = saved
                 _uiState.update {
                     it.copy(
                         loading = false,
@@ -945,7 +938,9 @@ class ReaderViewModel(
     }
 
     private suspend fun persistState(state: ReadingStateEntity) {
+        if (!shouldPersistReaderState(lastPersistedReadingState, state)) return
         container.readingRepository.saveState(state)
+        lastPersistedReadingState = state
         if (state.finishedAt != null) container.libraryRepository.setFinished(bookId, true)
     }
 
@@ -1013,6 +1008,26 @@ class ReaderViewModel(
             }
     }
 }
+
+internal fun AudiobookPlaybackUiState.toReaderGeneratedReadAloudState(bookId: Long): ReadAloudState {
+    if (this.bookId != bookId || !active) return ReadAloudState()
+    return ReadAloudState(
+        activeBookId = bookId,
+        bookTitle = bookTitle,
+        playing = playing,
+        paused = paused,
+        currentChunk = segmentIndex,
+        totalChunks = segmentCount,
+        currentHeading = profileLabel,
+        message = error
+    )
+}
+
+internal fun shouldPersistReaderState(
+    lastPersisted: ReadingStateEntity?,
+    next: ReadingStateEntity,
+): Boolean =
+    lastPersisted != next
 
 private const val READER_SEARCH_SNIPPET_MAX_LENGTH = 220
 

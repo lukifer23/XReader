@@ -1,7 +1,6 @@
 package com.xreader.app.ui
 
 import android.annotation.SuppressLint
-import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.net.Uri
 import android.util.Log
@@ -10,6 +9,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.xreader.app.AppContainer
 import com.xreader.app.data.BookAudioEntity
+import com.xreader.app.data.BookAudioStatus
 import com.xreader.app.data.BookEntity
 import com.xreader.app.data.CollectionEntity
 import com.xreader.app.data.LibrarySearchRow
@@ -33,8 +33,11 @@ import com.xreader.app.tts.NeuralTtsPreparedBook
 import com.xreader.app.tts.AudiobookPlaybackUiState
 import com.xreader.app.tts.AudiobookGenerationScope
 import com.xreader.app.tts.GeneratedAudiobookChapter
-import com.xreader.app.tts.generatedAudiobookChapters
-import com.xreader.app.tts.playableSegmentFiles
+import com.xreader.app.tts.GeneratedAudiobookFileSnapshot
+import com.xreader.app.tts.fallbackGeneratedAudiobookChapters
+import com.xreader.app.tts.generatedAudiobookFileSnapshot
+import com.xreader.app.tts.playableSegmentCount
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -43,6 +46,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -113,6 +117,106 @@ data class BookAudiobookAudioUiItem(
     val playableSegmentFiles: Int = 0,
 )
 
+internal data class AudiobookUiInvalidationKey(
+    val id: Long,
+    val bookId: Long,
+    val modelId: String,
+    val modelDisplayName: String,
+    val speakerId: Int,
+    val speed: Float,
+    val tone: String,
+    val scope: String,
+    val scopeLabel: String,
+    val status: BookAudioStatus,
+    val filePath: String?,
+    val segmentCount: Int,
+    val completedSegments: Int,
+    val wordCount: Int,
+    val sampleRate: Int,
+    val fileSizeBytes: Long,
+    val generationProvider: String?,
+    val generationAudioMillis: Long,
+    val generationComputeMillis: Long,
+    val generationStartedAt: Long?,
+    val generationSessionStartCompletedSegments: Int,
+    val generatedAt: Long?,
+    val updatedAt: Long,
+    val error: String?,
+)
+
+internal fun BookAudioEntity.audiobookUiInvalidationKey(): AudiobookUiInvalidationKey =
+    AudiobookUiInvalidationKey(
+        id = id,
+        bookId = bookId,
+        modelId = modelId,
+        modelDisplayName = modelDisplayName,
+        speakerId = speakerId,
+        speed = speed,
+        tone = tone,
+        scope = scope,
+        scopeLabel = scopeLabel,
+        status = status,
+        filePath = filePath,
+        segmentCount = segmentCount,
+        completedSegments = completedSegments,
+        wordCount = wordCount,
+        sampleRate = sampleRate,
+        fileSizeBytes = fileSizeBytes,
+        generationProvider = generationProvider,
+        generationAudioMillis = generationAudioMillis,
+        generationComputeMillis = generationComputeMillis,
+        generationStartedAt = generationStartedAt,
+        generationSessionStartCompletedSegments = generationSessionStartCompletedSegments,
+        generatedAt = generatedAt,
+        updatedAt = updatedAt,
+        error = error
+    )
+
+internal fun List<BookAudioEntity>.audiobookUiInvalidationKeys(): List<AudiobookUiInvalidationKey> =
+    map { it.audiobookUiInvalidationKey() }
+
+internal fun BookAudioEntity.toBookAudiobookAudioUiItem(): BookAudiobookAudioUiItem {
+    val snapshot = generatedAudiobookUiSnapshot(verifyFiles = false)
+    return BookAudiobookAudioUiItem(
+        audio = snapshot.audio,
+        chapters = snapshot.chapters,
+        playableSegmentFiles = snapshot.playableSegmentCount
+    )
+}
+
+internal fun BookAudioEntity.toVerifiedBookAudiobookAudioUiItem(): BookAudiobookAudioUiItem {
+    val snapshot = generatedAudiobookUiSnapshot(verifyFiles = true)
+    return BookAudiobookAudioUiItem(
+        audio = snapshot.audio,
+        chapters = snapshot.chapters,
+        playableSegmentFiles = snapshot.playableSegmentCount
+    )
+}
+
+private fun BookAudioEntity.generatedAudiobookUiSnapshot(verifyFiles: Boolean) =
+    if (verifyFiles) {
+        generatedAudiobookFileSnapshot()
+    } else {
+        val playableCount = playableSegmentCount()
+        GeneratedAudiobookFileSnapshot(
+            audio = this,
+            playableSegmentFiles = emptyList(),
+            activeGenerationPlayableSegmentCount = playableCount,
+            chapters = fallbackGeneratedAudiobookChapters(playableCount)
+        )
+    }
+
+internal fun BookAudiobookAudioUiItem.shouldShowInGlobalAudiobooksScreen(): Boolean =
+    audio.status == BookAudioStatus.GENERATED ||
+        audio.status == BookAudioStatus.GENERATING ||
+        playableSegmentFiles > 0
+
+internal fun AudiobookPlaybackUiState.forLibraryChrome(): AudiobookPlaybackUiState =
+    copy(
+        segmentPositionMs = 0,
+        segmentDurationMs = 0
+    )
+
 data class LibraryUiState(
     val query: String = "",
     val group: LibraryGroup = LibraryGroup.BOOKS,
@@ -148,6 +252,7 @@ data class OpdsCatalogUiState(
 @OptIn(ExperimentalCoroutinesApi::class)
 class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     private var neuralPreviewPlayer: MediaPlayer? = null
+    private var neuralPreviewJob: Job? = null
 
     private val query = MutableStateFlow("")
     private val group = MutableStateFlow(LibraryGroup.BOOKS)
@@ -159,6 +264,10 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     private val repairingBookIds = MutableStateFlow<Set<Long>>(emptySet())
     private val audiobookScans = MutableStateFlow<Map<Long, AudiobookScanUiState>>(emptyMap())
     private val audiobookPlayback = container.generatedAudiobookPlayback.state
+    private val libraryAudiobookPlayback =
+        audiobookPlayback
+            .map { it.forLibraryChrome() }
+            .distinctUntilChanged()
     private val opdsCatalog = MutableStateFlow(OpdsCatalogUiState())
     private val pendingRemovalIds = MutableStateFlow<Set<Long>>(emptySet())
     private val pendingRemovalBooks = linkedMapOf<Long, BookEntity>()
@@ -267,7 +376,7 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         bookHealth,
         repairingBookIds,
         audiobookScans,
-        audiobookPlayback
+        libraryAudiobookPlayback
     ) { currentCollections, health, repairing, scans, playback ->
         LibraryRuntimeSupportState(
             collections = currentCollections,
@@ -540,14 +649,22 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
-    fun addToCollection(item: BookListItem, name: String) {
+    fun addToCollection(item: BookListItem, name: String, applyToSeries: Boolean = false) {
         viewModelScope.launch {
-            runCatching { container.libraryRepository.addBookToCollection(item.book.id, name) }
+            runCatching { container.libraryRepository.addBookToCollection(item.book.id, name, applyToSeries) }
                 .onSuccess { result ->
                     postMessage(if (result.changed) {
-                        "Added to ${result.collectionName}"
+                        if (result.changedBooks == 1) {
+                            "Added to ${result.collectionName}"
+                        } else {
+                            "Added ${result.changedBooks} books to ${result.collectionName}"
+                        }
                     } else {
-                        "Already in ${result.collectionName}"
+                        if (result.targetBooks == 1) {
+                            "Already in ${result.collectionName}"
+                        } else {
+                            "Series already in ${result.collectionName}"
+                        }
                     })
                 }
                 .onFailure { error ->
@@ -696,17 +813,15 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
 
     fun observeBookAudio(bookId: Long): Flow<List<BookAudiobookAudioUiItem>> =
         container.neuralTtsRepository.observeBookAudio(bookId)
+            .distinctUntilChanged { previous, next ->
+                previous.audiobookUiInvalidationKeys() == next.audiobookUiInvalidationKeys()
+            }
             .map { rows ->
                 withContext(Dispatchers.IO) {
-                    rows.map { audio ->
-                        BookAudiobookAudioUiItem(
-                            audio = audio,
-                            chapters = audio.generatedAudiobookChapters(),
-                            playableSegmentFiles = audio.playableSegmentFiles().size
-                        )
-                    }
+                    rows.map { audio -> audio.toBookAudiobookAudioUiItem() }
                 }
             }
+            .distinctUntilChanged()
 
     fun scanAudiobook(book: BookEntity) {
         viewModelScope.launch {
@@ -749,22 +864,12 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     fun playAudiobookAudio(book: BookEntity, audio: BookAudioEntity) {
-        if (audio.playableSegmentFiles().isEmpty()) {
-            postMessage("Generate at least one audiobook segment before playing it")
-            return
-        }
-        neuralPreviewPlayer?.release()
-        neuralPreviewPlayer = null
+        neuralPreviewPlayer = releaseNeuralPreviewPlayback(neuralPreviewPlayer)
         container.generatedAudiobookPlayback.play(book.title, audio)
     }
 
     fun playAudiobookAudioFromSegment(book: BookEntity, audio: BookAudioEntity, segmentIndex: Int) {
-        if (audio.playableSegmentFiles().isEmpty()) {
-            postMessage("Generate at least one audiobook segment before playing it")
-            return
-        }
-        neuralPreviewPlayer?.release()
-        neuralPreviewPlayer = null
+        neuralPreviewPlayer = releaseNeuralPreviewPlayback(neuralPreviewPlayer)
         container.generatedAudiobookPlayback.playFromSegment(book.title, audio, segmentIndex)
     }
 
@@ -808,6 +913,17 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    fun cancelNeuralTtsModelInstall(modelId: String) {
+        viewModelScope.launch {
+            runCatching { container.neuralTtsRepository.cancelModelInstall(modelId) }
+                .onSuccess { postMessage("Stopped neural voice download") }
+                .onFailure { error ->
+                    Log.e("XReader", "Neural voice cancel failed for $modelId", error)
+                    postMessage(error.message ?: "Could not stop neural voice download")
+                }
+        }
+    }
+
     fun deleteNeuralTtsModel(modelId: String) {
         viewModelScope.launch {
             runCatching { container.neuralTtsRepository.deleteModel(modelId) }
@@ -819,7 +935,9 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     fun previewNeuralTtsModel(modelId: String) {
-        viewModelScope.launch {
+        neuralPreviewJob?.cancel()
+        neuralPreviewPlayer = releaseNeuralPreviewPlayback(neuralPreviewPlayer)
+        neuralPreviewJob = viewModelScope.launch {
             runCatching {
                 val settings = readerSettings.value
                 val file = container.neuralTtsRepository.generatePreviewAudio(
@@ -828,47 +946,37 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
                     pace = settings.neuralTtsPace,
                     tone = settings.neuralTtsTone
                 )
-                neuralPreviewPlayer?.release()
                 container.generatedAudiobookPlayback.stop()
-                neuralPreviewPlayer = MediaPlayer().apply {
-                    setAudioAttributes(
-                        AudioAttributes.Builder()
-                            .setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
-                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                            .build()
-                    )
-                    setDataSource(file.absolutePath)
-                    setOnCompletionListener {
-                        it.release()
-                        if (neuralPreviewPlayer === it) neuralPreviewPlayer = null
-                    }
-                    setOnErrorListener { player, _, _ ->
-                        player.release()
+                neuralPreviewPlayer = startNeuralPreviewPlayback(
+                    file = file,
+                    previousPlayer = neuralPreviewPlayer,
+                    onCleared = { player ->
                         if (neuralPreviewPlayer === player) neuralPreviewPlayer = null
-                        true
                     }
-                    prepare()
-                    start()
-                }
+                )
             }.onFailure { error ->
-                Log.e("XReader", "Neural voice preview failed for $modelId", error)
-                postMessage(error.message ?: "Neural voice preview failed")
+                if (error !is CancellationException) {
+                    Log.e("XReader", "Neural voice preview failed for $modelId", error)
+                    postMessage(error.message ?: "Neural voice preview failed")
+                }
             }
         }
     }
 
     private suspend fun prepareAudiobookPlan(bookId: Long): PreparedAudiobookPlan {
-        val rows = container.libraryRepository.indexedRowsForBook(bookId)
-        val chunks = ReadAloudPlanner.chunksFromRows(rows)
-        val prepared = NeuralTtsText.prepare(chunks)
-        require(prepared.segments.isNotEmpty()) {
-            "This book has no extractable text for audiobook generation."
+        return withContext(Dispatchers.Default) {
+            val rows = container.libraryRepository.indexedRowsForBook(bookId)
+            val chunks = ReadAloudPlanner.chunksFromRows(rows)
+            val prepared = NeuralTtsText.prepare(chunks)
+            require(prepared.segments.isNotEmpty()) {
+                "This book has no extractable text for audiobook generation."
+            }
+            PreparedAudiobookPlan(
+                chunks = chunks,
+                prepared = prepared,
+                sourceSectionCount = rows.size
+            )
         }
-        return PreparedAudiobookPlan(
-            chunks = chunks,
-            prepared = prepared,
-            sourceSectionCount = rows.size
-        )
     }
 
     private data class PreparedAudiobookPlan(
@@ -984,8 +1092,8 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     override fun onCleared() {
-        neuralPreviewPlayer?.release()
-        neuralPreviewPlayer = null
+        neuralPreviewJob?.cancel()
+        neuralPreviewPlayer = releaseNeuralPreviewPlayback(neuralPreviewPlayer)
         pendingRemovalJobs.values.forEach { it.cancel() }
         val removals = pendingRemovalBooks.values.toList()
         pendingRemovalBooks.clear()

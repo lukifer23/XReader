@@ -20,6 +20,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 class ReadAloudForegroundService : Service() {
@@ -33,7 +34,11 @@ class ReadAloudForegroundService : Service() {
         super.onCreate()
         ensureNotificationChannel()
         serviceScope.launch {
-            engine.state.collectLatest(::renderState)
+            engine.state
+                .distinctUntilChanged { previous, next ->
+                    previous.readAloudNotificationKey() == next.readAloudNotificationKey()
+                }
+                .collectLatest(::renderState)
         }
     }
 
@@ -250,6 +255,27 @@ class ReadAloudForegroundService : Service() {
 
 internal val ReadAloudState.readAloudForegroundActive: Boolean
     get() = initializing || playing || paused
+
+internal data class ReadAloudNotificationKey(
+    val foregroundActive: Boolean,
+    val title: String,
+    val statusText: String,
+    val progressText: String?,
+    val ongoing: Boolean,
+    val canSkipPrevious: Boolean,
+    val canSkipNext: Boolean,
+)
+
+internal fun ReadAloudState.readAloudNotificationKey(): ReadAloudNotificationKey =
+    ReadAloudNotificationKey(
+        foregroundActive = readAloudForegroundActive,
+        title = bookTitle?.takeIf { it.isNotBlank() } ?: "XReader read aloud",
+        statusText = readAloudNotificationStatusText(this),
+        progressText = readAloudNotificationProgressText(this),
+        ongoing = playing || initializing,
+        canSkipPrevious = readAloudNotificationCanSkipPrevious(this),
+        canSkipNext = readAloudNotificationCanSkipNext(this)
+    )
 
 internal fun readAloudNotificationStatusText(state: ReadAloudState): String =
     when {

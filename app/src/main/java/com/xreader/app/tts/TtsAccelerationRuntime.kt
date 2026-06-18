@@ -4,12 +4,13 @@ import android.content.Context
 import android.os.Build
 import android.util.Log
 import java.io.File
+import java.util.Collections
 import java.util.Locale
 import java.util.zip.ZipFile
 
 internal object TtsAccelerationRuntime {
     private const val TAG = "TtsAcceleration"
-    private const val ENABLE_QNN_BY_DEFAULT = false
+    private val failedProviderKeys = Collections.synchronizedSet(mutableSetOf<String>())
 
     private val requiredQnnLibraries = setOf(
         "libQnnGpu.so",
@@ -22,14 +23,28 @@ internal object TtsAccelerationRuntime {
         context: Context,
         includeExperimentalWebGpu: Boolean = false,
     ): List<String> {
+        val installedLibraries = packagedNativeLibraries(context)
+        val hardware = Build.HARDWARE.orEmpty()
+        val boardPlatform = systemProperty("ro.board.platform")
+        val socManufacturer = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) Build.SOC_MANUFACTURER.orEmpty() else ""
+        val socModel = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) Build.SOC_MODEL.orEmpty() else ""
+        val qnnProvider = qnnProviderString(
+            context = context,
+            installedLibraries = installedLibraries,
+            hardware = hardware,
+            boardPlatform = boardPlatform,
+            socManufacturer = socManufacturer,
+            socModel = socModel,
+        )
         return providerOrder(
-            installedLibraries = packagedNativeLibraries(context),
+            installedLibraries = installedLibraries,
             hasVulkan = context.packageManager.hasSystemFeature("android.hardware.vulkan.level"),
             includeExperimentalWebGpu = includeExperimentalWebGpu,
-            hardware = Build.HARDWARE.orEmpty(),
-            boardPlatform = systemProperty("ro.board.platform"),
-            socManufacturer = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) Build.SOC_MANUFACTURER.orEmpty() else "",
-            socModel = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) Build.SOC_MODEL.orEmpty() else "",
+            hardware = hardware,
+            boardPlatform = boardPlatform,
+            socManufacturer = socManufacturer,
+            socModel = socModel,
+            qnnProvider = qnnProvider,
             logDecisions = true,
         )
     }
@@ -42,6 +57,7 @@ internal object TtsAccelerationRuntime {
         boardPlatform: String,
         socManufacturer: String,
         socModel: String,
+        qnnProvider: String? = "qnn",
         logDecisions: Boolean = false,
     ): List<String> {
         val providers = mutableListOf<String>()
@@ -52,11 +68,11 @@ internal object TtsAccelerationRuntime {
             socManufacturer = socManufacturer,
             socModel = socModel,
         )
-        if (qnn.ready && ENABLE_QNN_BY_DEFAULT) {
-            providers += "qnn"
+        if (qnn.ready && qnnProvider != null) {
+            providers += qnnProvider
             if (logDecisions) Log.i(TAG, "QNN provider enabled: ${qnn.reason}")
         } else if (qnn.ready) {
-            if (logDecisions) Log.i(TAG, "QNN provider staged but not enabled by default: no no-fallback hardware smoke has passed on this device.")
+            if (logDecisions) Log.i(TAG, "QNN provider staged but no provider config could be written.")
         } else {
             if (logDecisions) Log.i(TAG, "QNN provider unavailable: ${qnn.reason}")
         }
@@ -76,7 +92,28 @@ internal object TtsAccelerationRuntime {
         }
         providers += "xnnpack"
         providers += "cpu"
-        return providers
+        return providers.filter { provider ->
+            val key = providerKey(provider)
+            val keep = key == "cpu" || key !in failedProviderKeys
+            if (!keep && logDecisions) Log.i(TAG, "Skipping provider=$key after a previous initialization failure in this process.")
+            keep
+        }
+    }
+
+    fun providerKey(provider: String): String =
+        provider.substringBefore(':').trim().lowercase(Locale.US)
+
+    fun recordProviderInitialized(provider: String) {
+        failedProviderKeys.remove(providerKey(provider))
+    }
+
+    fun recordProviderInitializationFailed(provider: String) {
+        val key = providerKey(provider)
+        if (key != "cpu") failedProviderKeys += key
+    }
+
+    internal fun clearProviderFailuresForTests() {
+        failedProviderKeys.clear()
     }
 
     fun webGpuReadiness(context: Context): WebGpuReadiness {
@@ -129,8 +166,72 @@ internal object TtsAccelerationRuntime {
         if (!hasHtpStub || !hasHtpSkel) {
             return QnnReadiness(false, "Missing matching QNN HTP Stub/Skel libraries.")
         }
-        return QnnReadiness(true, "Qualcomm target with packaged QNN GPU/HTP runtime.")
+        return QnnReadiness(true, "Qualcomm target with packaged QNN HTP runtime.")
     }
+
+    fun qnnProviderString(context: Context): String? {
+        return qnnProviderString(
+            context = context,
+            installedLibraries = packagedNativeLibraries(context),
+            hardware = Build.HARDWARE.orEmpty(),
+            boardPlatform = systemProperty("ro.board.platform"),
+            socManufacturer = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) Build.SOC_MANUFACTURER.orEmpty() else "",
+            socModel = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) Build.SOC_MODEL.orEmpty() else "",
+        )
+    }
+
+    private fun qnnProviderString(
+        context: Context,
+        installedLibraries: Set<String>,
+        hardware: String,
+        boardPlatform: String,
+        socManufacturer: String,
+        socModel: String,
+    ): String? {
+        val readiness = qnnReadiness(
+            installedLibraries = installedLibraries,
+            hardware = hardware,
+            boardPlatform = boardPlatform,
+            socManufacturer = socManufacturer,
+            socModel = socModel,
+        )
+        if (!readiness.ready) return null
+        val configFile = writeQnnProviderConfig(context, socModel)
+        return "qnn:${configFile.absolutePath}"
+    }
+
+    internal fun writeQnnProviderConfig(context: Context, socModel: String): File {
+        val configFile = File(context.cacheDir, "xreader-qnn-provider.config")
+        val normalizedSoc = socModel.uppercase(Locale.US)
+        val options = linkedMapOf(
+            "backend_path" to "libQnnHtp.so",
+            "log_severity_level" to "0",
+            "htp_performance_mode" to "burst",
+        )
+        qnnSocModelId(normalizedSoc)?.let { options["soc_model"] = it.toString() }
+        qnnHtpArch(normalizedSoc)?.let { options["htp_arch"] = it.toString() }
+        configFile.writeText(
+            buildString {
+                appendLine("# Generated by XReader for ONNX Runtime QNNExecutionProvider.")
+                options.forEach { (key, value) -> appendLine("$key=$value") }
+            }
+        )
+        return configFile
+    }
+
+    internal fun qnnSocModelId(normalizedSocModel: String): Int? =
+        when {
+            "SM8750" in normalizedSocModel -> 69
+            "SM8650" in normalizedSocModel -> 57
+            else -> null
+        }
+
+    internal fun qnnHtpArch(normalizedSocModel: String): Int? =
+        when {
+            "SM8750" in normalizedSocModel -> 81
+            "SM8650" in normalizedSocModel -> 75
+            else -> null
+        }
 
     private fun isQualcommDevice(
         hardware: String,

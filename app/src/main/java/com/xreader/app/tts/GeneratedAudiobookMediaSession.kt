@@ -23,6 +23,10 @@ internal class GeneratedAudiobookMediaSessionController(
     context: Context,
     private val callbacks: GeneratedAudiobookMediaCallbacks,
 ) {
+    private var lastMetadataKey: GeneratedAudiobookMetadataKey? = null
+    private var lastPlaybackStateKey: GeneratedAudiobookPlaybackStateKey? = null
+    private var stopped = true
+    private var active = false
     private val session = MediaSession(context.applicationContext, "XReader generated audiobook").apply {
         @Suppress("DEPRECATION")
         setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS or MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS)
@@ -51,14 +55,33 @@ internal class GeneratedAudiobookMediaSessionController(
             stop()
             return
         }
-        session.setMetadata(generatedAudiobookMetadata(state))
-        session.setPlaybackState(generatedAudiobookPlaybackState(state))
-        session.isActive = true
+        val metadataKey = state.generatedAudiobookMetadataKey()
+        if (metadataKey != lastMetadataKey) {
+            session.setMetadata(generatedAudiobookMetadata(state))
+            lastMetadataKey = metadataKey
+        }
+        val playbackStateKey = state.generatedAudiobookPlaybackStateKey()
+        if (playbackStateKey != lastPlaybackStateKey) {
+            session.setPlaybackState(generatedAudiobookPlaybackState(state))
+            lastPlaybackStateKey = playbackStateKey
+        }
+        if (!active) {
+            session.isActive = true
+            active = true
+        }
+        stopped = false
     }
 
     fun stop() {
+        if (stopped) return
+        lastMetadataKey = null
+        lastPlaybackStateKey = null
         session.setPlaybackState(generatedAudiobookStoppedPlaybackState())
-        session.isActive = false
+        if (active) {
+            session.isActive = false
+            active = false
+        }
+        stopped = true
     }
 
     fun release() {
@@ -66,6 +89,36 @@ internal class GeneratedAudiobookMediaSessionController(
         session.release()
     }
 }
+
+internal data class GeneratedAudiobookMetadataKey(
+    val bookTitle: String?,
+    val profileLabel: String?,
+    val segmentDurationMs: Int,
+)
+
+internal fun AudiobookPlaybackUiState.generatedAudiobookMetadataKey(): GeneratedAudiobookMetadataKey =
+    GeneratedAudiobookMetadataKey(
+        bookTitle = bookTitle,
+        profileLabel = profileLabel,
+        segmentDurationMs = segmentDurationMs.coerceAtLeast(0),
+    )
+
+internal data class GeneratedAudiobookPlaybackStateKey(
+    val foregroundActive: Boolean,
+    val playing: Boolean,
+    val segmentIndex: Int,
+    val segmentCount: Int,
+    val segmentDurationMs: Int,
+)
+
+internal fun AudiobookPlaybackUiState.generatedAudiobookPlaybackStateKey(): GeneratedAudiobookPlaybackStateKey =
+    GeneratedAudiobookPlaybackStateKey(
+        foregroundActive = foregroundActive,
+        playing = playing,
+        segmentIndex = segmentIndex,
+        segmentCount = segmentCount,
+        segmentDurationMs = segmentDurationMs.coerceAtLeast(0),
+    )
 
 private fun generatedAudiobookPlaybackState(state: AudiobookPlaybackUiState): PlaybackState {
     val total = state.segmentCount
