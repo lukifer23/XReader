@@ -280,6 +280,43 @@ class LibraryRepositoryInstrumentedTest {
         assertEquals(emptyList<String>(), repository.observeBooks("sci-fi").first().map { it.title })
     }
 
+    @Test
+    fun renamingCollectionCanMergeIntoExistingCollection() = runBlocking {
+        val redId = db.books().insert(
+            book(
+                title = "Red Rising",
+                author = "Pierce Brown",
+                series = "Red Rising",
+                seriesIndex = 1.0,
+                genre = "Science Fiction"
+            )
+        )
+        val duneId = db.books().insert(
+            book(
+                title = "Dune",
+                author = "Frank Herbert",
+                series = "Dune",
+                seriesIndex = 1.0,
+                genre = "Science Fiction"
+            )
+        )
+        repository.addBookToCollection(redId, "Sci fi")
+        repository.addBookToCollection(duneId, "Science Fiction")
+        val source = repository.observeBookCollectionNames().first().single { it.bookId == redId }
+
+        val result = repository.renameCollection(source.collectionId, "Science Fiction")
+        val collections = repository.observeCollections().first().map { it.name }
+        val memberships = repository.observeBookCollectionNames().first()
+
+        assertEquals(true, result.changed)
+        assertEquals(true, result.merged)
+        assertEquals("Sci fi", result.oldName)
+        assertEquals("Science Fiction", result.newName)
+        assertEquals(listOf("Science Fiction"), collections)
+        assertEquals(listOf(redId, duneId), memberships.map { it.bookId }.sorted())
+        assertEquals(1, memberships.map { it.collectionId }.distinct().size)
+    }
+
     private fun book(
         title: String,
         author: String,

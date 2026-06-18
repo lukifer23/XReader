@@ -31,6 +31,13 @@ data class CollectionUpdateResult(
     val changed: Boolean,
 )
 
+data class CollectionRenameResult(
+    val oldName: String,
+    val newName: String,
+    val changed: Boolean,
+    val merged: Boolean,
+)
+
 class LibraryRepository(
     private val database: XReaderDatabase,
     private val importService: ImportService,
@@ -110,6 +117,45 @@ class LibraryRepository(
             collectionDao.touchCollection(collectionId, clock.millis())
         }
         CollectionUpdateResult(collectionName = collection.name, changed = changed)
+    }
+
+    suspend fun renameCollection(collectionId: Long, rawName: String): CollectionRenameResult = database.withTransaction {
+        val source = requireNotNull(collectionDao.collectionById(collectionId)) { "Collection not found" }
+        val newName = rawName.cleanCollectionName()
+        val now = clock.millis()
+        val target = collectionDao.collectionByName(newName)
+        when {
+            target == null -> {
+                val changed = collectionDao.renameCollection(collectionId, newName, now) > 0 && source.name != newName
+                CollectionRenameResult(
+                    oldName = source.name,
+                    newName = newName,
+                    changed = changed,
+                    merged = false
+                )
+            }
+            target.id == source.id -> {
+                val changed = source.name != newName
+                if (changed) collectionDao.renameCollection(collectionId, newName, now)
+                CollectionRenameResult(
+                    oldName = source.name,
+                    newName = newName,
+                    changed = changed,
+                    merged = false
+                )
+            }
+            else -> {
+                collectionDao.copyBookCollections(sourceCollectionId = source.id, targetCollectionId = target.id)
+                collectionDao.deleteCollection(source.id)
+                collectionDao.touchCollection(target.id, now)
+                CollectionRenameResult(
+                    oldName = source.name,
+                    newName = target.name,
+                    changed = true,
+                    merged = true
+                )
+            }
+        }
     }
 
     suspend fun deleteBook(book: BookEntity) {

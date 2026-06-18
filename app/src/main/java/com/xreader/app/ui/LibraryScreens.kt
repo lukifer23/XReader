@@ -63,6 +63,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -287,6 +288,7 @@ internal fun LibraryRoute(
             onSetFinished = viewModel::setFinished,
             onAddToCollection = viewModel::addToCollection,
             onRemoveFromCollection = viewModel::removeFromCollection,
+            onRenameCollection = viewModel::renameCollection,
             onShowAll = {
                 viewModel.setQuery("")
                 viewModel.setGroup(LibraryGroup.BOOKS)
@@ -470,6 +472,7 @@ internal fun LibraryScreen(
     onSetFinished: (BookListItem, Boolean) -> Unit,
     onAddToCollection: (BookListItem, String) -> Unit,
     onRemoveFromCollection: (BookListItem, CollectionUiItem) -> Unit,
+    onRenameCollection: (CollectionUiItem, String) -> Unit,
     onShowAll: () -> Unit,
     onUpdateMetadata: (BookEntity, String, String, Int?, String?, String?, Double?, Boolean) -> Unit,
     onReplaceCover: (BookEntity, Uri) -> Unit,
@@ -666,7 +669,8 @@ internal fun LibraryScreen(
             allCollections = state.collections,
             onDismiss = { collectionsTarget = null },
             onAdd = { name -> onAddToCollection(item, name) },
-            onRemove = { collection -> onRemoveFromCollection(item, collection) }
+            onRemove = { collection -> onRemoveFromCollection(item, collection) },
+            onRename = onRenameCollection
         )
     }
     deleteCandidate?.let { book ->
@@ -2239,8 +2243,10 @@ internal fun BookCollectionsDialog(
     onDismiss: () -> Unit,
     onAdd: (String) -> Unit,
     onRemove: (CollectionUiItem) -> Unit,
+    onRename: (CollectionUiItem, String) -> Unit,
 ) {
     var collectionName by remember(item.book.id) { mutableStateOf("") }
+    var editingCollection by remember(item.book.id) { mutableStateOf<CollectionUiItem?>(null) }
     val currentIds = item.collections.mapTo(mutableSetOf()) { it.id }
     val availableCollections = allCollections.filterNot { it.id in currentIds }
     fun addCollection(name: String = collectionName) {
@@ -2275,7 +2281,7 @@ internal fun BookCollectionsDialog(
                             item.collections.forEach { collection ->
                                 FilterChip(
                                     selected = true,
-                                    onClick = { onRemove(collection) },
+                                    onClick = { editingCollection = collection },
                                     label = {
                                         Text(
                                             collection.name,
@@ -2284,7 +2290,15 @@ internal fun BookCollectionsDialog(
                                             overflow = TextOverflow.Ellipsis
                                         )
                                     },
-                                    trailingIcon = { Icon(Icons.Filled.Close, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                                    leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                                    trailingIcon = {
+                                        IconButton(
+                                            onClick = { onRemove(collection) },
+                                            modifier = Modifier.size(28.dp)
+                                        ) {
+                                            Icon(Icons.Filled.Close, contentDescription = "Remove from collection", modifier = Modifier.size(18.dp))
+                                        }
+                                    }
                                 )
                             }
                         }
@@ -2333,6 +2347,48 @@ internal fun BookCollectionsDialog(
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } }
+    )
+    editingCollection?.let { collection ->
+        RenameCollectionDialog(
+            collection = collection,
+            onDismiss = { editingCollection = null },
+            onSave = { name ->
+                onRename(collection, name)
+                editingCollection = null
+            }
+        )
+    }
+}
+
+@Composable
+private fun RenameCollectionDialog(
+    collection: CollectionUiItem,
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit,
+) {
+    var name by remember(collection.id) { mutableStateOf(collection.name) }
+    val cleaned = name.trim().replace(Regex("\\s+"), " ")
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Rename collection") },
+        text = {
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                singleLine = true,
+                label = { Text("Collection name") },
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = { onSave(cleaned) },
+                enabled = cleaned.isNotBlank()
+            ) {
+                Text("Rename")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
 }
 

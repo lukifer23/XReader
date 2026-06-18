@@ -186,8 +186,21 @@ interface CollectionDao {
     @Query("UPDATE collections SET updatedAt = :updatedAt WHERE id = :collectionId")
     suspend fun touchCollection(collectionId: Long, updatedAt: Long)
 
+    @Query("UPDATE collections SET name = :name, updatedAt = :updatedAt WHERE id = :collectionId")
+    suspend fun renameCollection(collectionId: Long, name: String, updatedAt: Long): Int
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertBookCollection(entity: BookCollectionEntity): Long
+
+    @Query(
+        """
+        INSERT OR IGNORE INTO book_collections(bookId, collectionId, addedAt)
+        SELECT bookId, :targetCollectionId, addedAt
+        FROM book_collections
+        WHERE collectionId = :sourceCollectionId
+        """
+    )
+    suspend fun copyBookCollections(sourceCollectionId: Long, targetCollectionId: Long)
 
     @Query("DELETE FROM book_collections WHERE bookId = :bookId AND collectionId = :collectionId")
     suspend fun deleteBookCollection(bookId: Long, collectionId: Long): Int

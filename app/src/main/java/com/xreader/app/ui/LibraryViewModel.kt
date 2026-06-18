@@ -574,6 +574,25 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    fun renameCollection(collection: CollectionUiItem, name: String) {
+        viewModelScope.launch {
+            runCatching { container.libraryRepository.renameCollection(collection.id, name) }
+                .onSuccess { result ->
+                    postMessage(
+                        when {
+                            !result.changed -> "Collection already named ${result.newName}"
+                            result.merged -> "Merged ${result.oldName} into ${result.newName}"
+                            else -> "Renamed ${result.oldName} to ${result.newName}"
+                        }
+                    )
+                }
+                .onFailure { error ->
+                    Log.e("XReader", "Rename collection failed for ${collection.id}", error)
+                    postMessage(error.message ?: "Could not rename collection")
+                }
+        }
+    }
+
     fun updateMetadata(
         book: BookEntity,
         title: String,
