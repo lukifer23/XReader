@@ -1,11 +1,49 @@
 package com.xreader.app.ui
 
+import com.xreader.app.data.BookEntity
+import com.xreader.app.data.BookFormat
+import com.xreader.app.data.ReadingStateEntity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LibrarySearchSnippetTest {
+    @Test
+    fun libraryQueryMatchesAcrossMetadataCollectionsAndStatus() {
+        val books = listOf(
+            item(title = "Red Rising", author = "Pierce Brown", genre = "Science Fiction", progress = 0.45),
+            item(title = "Dune", author = "Frank Herbert", collections = listOf(CollectionUiItem(1L, "Favorites"))),
+            item(title = "Station Manual", sourceExtension = "pdf", format = BookFormat.PDF, finished = true)
+        )
+
+        assertEquals(
+            listOf("Red Rising"),
+            books.filteredForLibraryQuery("pierce progress").map { it.book.title }
+        )
+        assertEquals(
+            listOf("Dune"),
+            books.filteredForLibraryQuery("favorites unread").map { it.book.title }
+        )
+        assertEquals(
+            listOf("Station Manual"),
+            books.filteredForLibraryQuery("pdf finished").map { it.book.title }
+        )
+    }
+
+    @Test
+    fun libraryQueryMatchesTermsAcrossDifferentFields() {
+        val books = listOf(
+            item(title = "Golden Son", author = "Pierce Brown", series = "Red Rising", year = 2015),
+            item(title = "Leviathan Wakes", author = "James Corey", series = "The Expanse", year = 2011)
+        )
+
+        assertEquals(
+            listOf("Golden Son"),
+            books.filteredForLibraryQuery("pierce 2015 rising").map { it.book.title }
+        )
+    }
+
     @Test
     fun visibleResultsUseCompactPreviewByDefault() {
         val results = (1..8).toList()
@@ -72,4 +110,52 @@ class LibrarySearchSnippetTest {
         assertTrue(snippet.contains("terraforming council"))
         assertFalse(snippet.startsWith("Opening status"))
     }
+
+    private fun item(
+        title: String,
+        author: String = "Author",
+        series: String? = null,
+        genre: String? = null,
+        year: Int? = null,
+        sourceExtension: String = "epub",
+        format: BookFormat = BookFormat.EPUB,
+        collections: List<CollectionUiItem> = emptyList(),
+        progress: Double? = null,
+        finished: Boolean = false,
+    ): BookListItem =
+        BookListItem(
+            book = BookEntity(
+                id = title.hashCode().toLong(),
+                title = title,
+                author = author,
+                sortTitle = title,
+                series = series,
+                genre = genre,
+                year = year,
+                format = format,
+                sourceExtension = sourceExtension,
+                fileName = "$title.$sourceExtension",
+                filePath = "books/$title.$sourceExtension",
+                checksum = "checksum-$title",
+                fileSizeBytes = 1024L,
+                wordCount = 10_000,
+                finished = finished,
+                favorite = collections.any { it.name.equals("Favorites", ignoreCase = true) },
+                importedAt = 1_700_000_000_000L,
+                updatedAt = 1_700_000_000_000L
+            ),
+            state = progress?.let {
+                ReadingStateEntity(
+                    bookId = title.hashCode().toLong(),
+                    locator = "locator-$title",
+                    progress = progress,
+                    currentUnit = 0,
+                    totalUnits = 100,
+                    activeMillis = 0L,
+                    estimatedWpm = 0,
+                    lastReadAt = 1_700_000_000_000L
+                )
+            },
+            collections = collections
+        )
 }

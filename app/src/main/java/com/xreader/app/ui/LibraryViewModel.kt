@@ -43,7 +43,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -165,7 +164,6 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     private val pendingRemovalBooks = linkedMapOf<Long, BookEntity>()
     private val pendingRemovalJobs = mutableMapOf<Long, Job>()
 
-    private val queriedBooks = query.flatMapLatest { container.libraryRepository.observeBooks(it) }
     private val allBooks = container.libraryRepository.observeBooks("")
     private val states = container.readingRepository.observeStates()
     private val collections = container.libraryRepository.observeCollections()
@@ -242,12 +240,12 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     )
 
     private val bookItems = combine(
-        queriedBooks,
         allBooks,
+        query,
         states,
         bookCollectionNames,
         pendingRemovalIds
-    ) { currentBooks, currentAllBooks, currentStates, currentBookCollections, removingIds ->
+    ) { currentAllBooks, currentQuery, currentStates, currentBookCollections, removingIds ->
         val statesByBook = currentStates.associateBy { it.bookId }
         val collectionsByBook = currentBookCollections
             .groupBy { it.bookId }
@@ -256,11 +254,11 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
                     .distinctBy { it.collectionId }
                     .map { CollectionUiItem(id = it.collectionId, name = it.name) }
             }
-        val visibleBooks = currentBooks.withoutPendingRemovalIds(removingIds)
         val visibleAllBooks = currentAllBooks.withoutPendingRemovalIds(removingIds)
+        val allItems = visibleAllBooks.map { BookListItem(it, statesByBook[it.id], collectionsByBook[it.id].orEmpty()) }
         LibraryBooksState(
-            queriedItems = visibleBooks.map { BookListItem(it, statesByBook[it.id], collectionsByBook[it.id].orEmpty()) },
-            allItems = visibleAllBooks.map { BookListItem(it, statesByBook[it.id], collectionsByBook[it.id].orEmpty()) }
+            queriedItems = allItems.filteredForLibraryQuery(currentQuery),
+            allItems = allItems
         )
     }
 

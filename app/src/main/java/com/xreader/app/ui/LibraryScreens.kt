@@ -1177,7 +1177,7 @@ internal fun LibraryUiState.emptyStateCopy(): LibraryEmptyStateCopy =
         )
         query.isNotBlank() && matchedBookCount == 0 -> LibraryEmptyStateCopy(
             title = "No matching books",
-            body = "No titles, authors, series, genres, collections, formats, or years match \"${query.trim().take(48)}\".",
+            body = "No titles, authors, series, genres, collections, formats, years, or reading states match \"${query.trim().take(48)}\".",
             primaryAction = "Show all",
             importsBooks = false
         )

@@ -365,8 +365,51 @@ internal fun BookListItem.isLibraryInProgress(): Boolean =
 internal fun BookListItem.isLibraryUnread(): Boolean =
     !isLibraryFinished() && rawLibraryProgress() <= LIBRARY_UNREAD_PROGRESS_THRESHOLD
 
+internal fun List<BookListItem>.filteredForLibraryQuery(query: String): List<BookListItem> {
+    val terms = query.libraryQueryTerms()
+    if (terms.isEmpty()) return this
+    return filter { item ->
+        val searchable = item.librarySearchText()
+        terms.all { term -> term in searchable }
+    }
+}
+
 private fun BookListItem.hasPersistedFinishedState(): Boolean =
     book.finished || state?.finishedAt != null
+
+private fun String.libraryQueryTerms(): List<String> =
+    trim()
+        .lowercase(Locale.US)
+        .split(Regex("\\s+"))
+        .filter { it.isNotBlank() }
+        .distinct()
+
+private fun BookListItem.librarySearchText(): String =
+    buildList {
+        add(book.title)
+        add(book.author)
+        book.series?.let(::add)
+        book.genre?.let(::add)
+        book.year?.toString()?.let(::add)
+        add(book.format.name)
+        add(book.sourceExtension)
+        add(book.fileName)
+        add(bookFormatLabel(book))
+        collections.forEach { add(it.name) }
+        addAll(libraryStatusSearchLabels())
+    }
+        .joinToString(" ")
+        .lowercase(Locale.US)
+
+private fun BookListItem.libraryStatusSearchLabels(): List<String> =
+    buildList {
+        when {
+            isLibraryFinished() -> add("finished complete completed done read")
+            isLibraryInProgress() -> add("in progress currently reading started reading")
+            isLibraryUnread() -> add("unread not started")
+        }
+        if (book.favorite) add("favorite starred")
+    }
 
 private const val LIBRARY_UNREAD_PROGRESS_THRESHOLD = 0.01
 private const val LIBRARY_FINISHED_PROGRESS_THRESHOLD = 0.995

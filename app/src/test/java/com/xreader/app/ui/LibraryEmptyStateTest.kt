@@ -25,7 +25,7 @@ class LibraryEmptyStateTest {
 
         assertEquals("No matching books", copy.title)
         assertEquals(
-            "No titles, authors, series, genres, collections, formats, or years match \"missing title\".",
+            "No titles, authors, series, genres, collections, formats, years, or reading states match \"missing title\".",
             copy.body
         )
         assertEquals("Show all", copy.primaryAction)
