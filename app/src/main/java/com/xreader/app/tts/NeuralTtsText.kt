@@ -65,7 +65,29 @@ private fun NeuralTtsPreparedBook.firstChapterSegmentLimit(scope: AudiobookGener
 }
 
 internal fun List<ReadAloudChunk>.forAudiobookScope(scope: AudiobookGenerationScope): List<ReadAloudChunk> {
-    return sortedBy { it.unitIndex }
+    val ordered = sortedBy { it.unitIndex }
+    return when (scope) {
+        AudiobookGenerationScope.SAMPLE -> ordered.leadingSampleSourceChunks()
+        AudiobookGenerationScope.FIRST_CHAPTER,
+        AudiobookGenerationScope.FULL_BOOK -> ordered
+    }
+}
+
+private fun List<ReadAloudChunk>.leadingSampleSourceChunks(): List<ReadAloudChunk> {
+    if (size <= SAMPLE_SOURCE_MAX_CHUNKS) return this
+    val result = mutableListOf<ReadAloudChunk>()
+    var words = 0
+    for (chunk in this) {
+        result += chunk
+        words += chunk.wordCount.coerceAtLeast(1)
+        if (
+            result.size >= SAMPLE_SOURCE_MIN_CHUNKS &&
+            (words >= SAMPLE_SOURCE_WORD_TARGET || result.size >= SAMPLE_SOURCE_MAX_CHUNKS)
+        ) {
+            break
+        }
+    }
+    return result.ifEmpty { take(1) }
 }
 
 internal object NeuralTtsText {
@@ -497,6 +519,9 @@ internal object NeuralTtsText {
     )
 }
 
+private const val SAMPLE_SOURCE_MIN_CHUNKS = 24
+private const val SAMPLE_SOURCE_MAX_CHUNKS = 96
+private const val SAMPLE_SOURCE_WORD_TARGET = 8_000
 internal const val DEFAULT_AUDIOBOOK_SEGMENT_PAUSE_MS = 240L
 internal const val SHORT_AUDIOBOOK_SEGMENT_PAUSE_MS = 160L
 internal const val PARAGRAPH_AUDIOBOOK_PAUSE_MS = 420L

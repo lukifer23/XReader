@@ -1306,10 +1306,18 @@ private fun TtsRuntime.shouldRotateAfter(generatedSegments: Int): Boolean {
     return generatedSegments >= limit
 }
 
-private fun shouldWriteGenerationCheckpoint(completedSegments: Int, totalSegments: Int): Boolean =
+internal fun shouldWriteGenerationCheckpoint(completedSegments: Int, totalSegments: Int): Boolean =
     completedSegments <= 1 ||
         completedSegments >= totalSegments ||
-        completedSegments % GENERATION_MANIFEST_CHECKPOINT_SEGMENTS == 0
+        completedSegments % generationManifestCheckpointSegmentStep(totalSegments) == 0
+
+internal fun generationManifestCheckpointSegmentStep(totalSegments: Int): Int =
+    if (totalSegments <= SMALL_GENERATION_PROGRESS_SEGMENTS) {
+        GENERATION_MANIFEST_CHECKPOINT_SEGMENTS
+    } else {
+        generationProgressWriteSegmentStep(totalSegments)
+            .coerceAtLeast(GENERATION_MANIFEST_CHECKPOINT_SEGMENTS)
+    }
 
 internal fun shouldWriteGenerationProgress(
     completedSegments: Int,
@@ -1317,7 +1325,19 @@ internal fun shouldWriteGenerationProgress(
     lastProgressWrittenSegments: Int,
 ): Boolean =
     completedSegments in 1..totalSegments.coerceAtLeast(1) &&
-        completedSegments > lastProgressWrittenSegments
+        completedSegments > lastProgressWrittenSegments &&
+        (
+            completedSegments <= 1 ||
+                completedSegments >= totalSegments ||
+                completedSegments - lastProgressWrittenSegments >= generationProgressWriteSegmentStep(totalSegments)
+            )
+
+internal fun generationProgressWriteSegmentStep(totalSegments: Int): Int {
+    val boundedTotal = totalSegments.coerceAtLeast(1)
+    if (boundedTotal <= SMALL_GENERATION_PROGRESS_SEGMENTS) return 1
+    return ((boundedTotal + TARGET_LONG_GENERATION_PROGRESS_UPDATES - 1) / TARGET_LONG_GENERATION_PROGRESS_UPDATES)
+        .coerceAtLeast(MIN_LONG_GENERATION_PROGRESS_SEGMENT_STEP)
+}
 
 internal fun prepareAudiobookGenerationTarget(target: File, canResumeExistingAudio: Boolean) {
     if (!canResumeExistingAudio && target.exists()) {
@@ -1505,3 +1525,6 @@ internal fun deleteGeneratedAudiobookFiles(audio: BookAudioEntity): Boolean {
 private const val WEBGPU_SEGMENTS_PER_RUNTIME = 128
 internal const val KOKORO_MAX_NUM_SENTENCES = 1
 private const val GENERATION_MANIFEST_CHECKPOINT_SEGMENTS = 4
+private const val SMALL_GENERATION_PROGRESS_SEGMENTS = 24
+private const val MIN_LONG_GENERATION_PROGRESS_SEGMENT_STEP = 4
+private const val TARGET_LONG_GENERATION_PROGRESS_UPDATES = 100

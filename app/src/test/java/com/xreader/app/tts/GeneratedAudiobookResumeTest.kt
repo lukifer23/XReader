@@ -922,7 +922,7 @@ class GeneratedAudiobookResumeTest {
     }
 
     @Test
-    fun generationProgressWritesEveryNewCompletedSegment() {
+    fun generationProgressWritesEveryNewCompletedSegmentForShortJobs() {
         assertTrue(
             shouldWriteGenerationProgress(
                 completedSegments = 1,
@@ -954,6 +954,47 @@ class GeneratedAudiobookResumeTest {
     }
 
     @Test
+    fun generationProgressCoalescesLongJobsWithoutLosingFirstOrFinalUpdate() {
+        assertEquals(4, generationProgressWriteSegmentStep(120))
+        assertEquals(12, generationProgressWriteSegmentStep(1_200))
+        assertTrue(
+            shouldWriteGenerationProgress(
+                completedSegments = 1,
+                totalSegments = 400,
+                lastProgressWrittenSegments = 0
+            )
+        )
+        assertFalse(
+            shouldWriteGenerationProgress(
+                completedSegments = 2,
+                totalSegments = 400,
+                lastProgressWrittenSegments = 1
+            )
+        )
+        assertFalse(
+            shouldWriteGenerationProgress(
+                completedSegments = 4,
+                totalSegments = 400,
+                lastProgressWrittenSegments = 1
+            )
+        )
+        assertTrue(
+            shouldWriteGenerationProgress(
+                completedSegments = 5,
+                totalSegments = 400,
+                lastProgressWrittenSegments = 1
+            )
+        )
+        assertTrue(
+            shouldWriteGenerationProgress(
+                completedSegments = 400,
+                totalSegments = 400,
+                lastProgressWrittenSegments = 397
+            )
+        )
+    }
+
+    @Test
     fun generationProgressSkipsDuplicateAndInvalidUpdates() {
         assertFalse(
             shouldWriteGenerationProgress(
@@ -976,6 +1017,26 @@ class GeneratedAudiobookResumeTest {
                 lastProgressWrittenSegments = 20
             )
         )
+    }
+
+    @Test
+    fun generationManifestCheckpointsStayFrequentForShortJobs() {
+        assertEquals(4, generationManifestCheckpointSegmentStep(12))
+        assertTrue(shouldWriteGenerationCheckpoint(completedSegments = 1, totalSegments = 12))
+        assertFalse(shouldWriteGenerationCheckpoint(completedSegments = 2, totalSegments = 12))
+        assertTrue(shouldWriteGenerationCheckpoint(completedSegments = 4, totalSegments = 12))
+        assertTrue(shouldWriteGenerationCheckpoint(completedSegments = 8, totalSegments = 12))
+        assertTrue(shouldWriteGenerationCheckpoint(completedSegments = 12, totalSegments = 12))
+    }
+
+    @Test
+    fun generationManifestCheckpointsCoalesceLongJobsWithoutLosingFirstOrFinalWrite() {
+        assertEquals(12, generationManifestCheckpointSegmentStep(1_200))
+        assertTrue(shouldWriteGenerationCheckpoint(completedSegments = 1, totalSegments = 1_200))
+        assertFalse(shouldWriteGenerationCheckpoint(completedSegments = 4, totalSegments = 1_200))
+        assertTrue(shouldWriteGenerationCheckpoint(completedSegments = 12, totalSegments = 1_200))
+        assertFalse(shouldWriteGenerationCheckpoint(completedSegments = 1_196, totalSegments = 1_200))
+        assertTrue(shouldWriteGenerationCheckpoint(completedSegments = 1_200, totalSegments = 1_200))
     }
 
     @Test

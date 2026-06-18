@@ -382,6 +382,45 @@ class NeuralTtsTextTest {
     }
 
     @Test
+    fun sampleScopePreFiltersLargeSourceBooksBeforePreparation() {
+        val chunks = (0 until 240).map { index ->
+            chunk(
+                unitIndex = index,
+                heading = "Position ${index + 1}",
+                text = "sample source chunk $index with enough words for counting"
+            )
+        }.forAudiobookScope(AudiobookGenerationScope.SAMPLE)
+
+        assertEquals(96, chunks.size)
+        assertEquals(0, chunks.first().unitIndex)
+        assertEquals(95, chunks.last().unitIndex)
+    }
+
+    @Test
+    fun sampleScopeKeepsAtLeastMinimumLeadingSourceChunksUntilWordTarget() {
+        val chunks = (0 until 160).map { index ->
+            chunk(
+                unitIndex = index,
+                heading = "Position ${index + 1}",
+                text = (1..400).joinToString(" ") { word -> "w${index}_$word" }
+            )
+        }.forAudiobookScope(AudiobookGenerationScope.SAMPLE)
+
+        assertEquals(24, chunks.size)
+        assertEquals(23, chunks.last().unitIndex)
+    }
+
+    @Test
+    fun fullBookScopeDoesNotPreFilterLargeSourceBooks() {
+        val chunks = (0 until 140).map { index ->
+            chunk(unitIndex = index, text = "full source chunk $index")
+        }.forAudiobookScope(AudiobookGenerationScope.FULL_BOOK)
+
+        assertEquals(140, chunks.size)
+        assertEquals(139, chunks.last().unitIndex)
+    }
+
+    @Test
     fun wordNumberHeadingsBecomeChapters() {
         val prepared = NeuralTtsText.prepare(
             listOf(
