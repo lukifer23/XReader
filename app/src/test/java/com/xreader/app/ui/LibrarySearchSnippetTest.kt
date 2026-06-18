@@ -45,6 +45,28 @@ class LibrarySearchSnippetTest {
     }
 
     @Test
+    fun libraryQueryMatchesAcrossPunctuationAndAccents() {
+        val books = listOf(
+            item(title = "Red Rising", author = "Pierce Brown", series = "Sci Fi Saga"),
+            item(title = "Leviathan Wakes", author = "James S. A. Corey", series = "The Expanse"),
+            item(title = "Cafe Society", author = "Ada Lovelace")
+        )
+
+        assertEquals(
+            listOf("Red Rising"),
+            books.filteredForLibraryQuery("red-rising sci_fi").map { it.book.title }
+        )
+        assertEquals(
+            listOf("Leviathan Wakes"),
+            books.filteredForLibraryQuery("james.s.a. expanse").map { it.book.title }
+        )
+        assertEquals(
+            listOf("Cafe Society"),
+            books.filteredForLibraryQuery("café").map { it.book.title }
+        )
+    }
+
+    @Test
     fun visibleResultsUseCompactPreviewByDefault() {
         val results = (1..8).toList()
 

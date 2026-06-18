@@ -12,6 +12,7 @@
 - Documentation now records the current connected-device debug smoke path and the next audiobook QA targets.
 - Library sorting now includes `Date added`, using import time independently from reading activity and honoring the option in grouped views.
 - Library search now matches multi-term queries across metadata, collections, file format, year, favorite state, and reading status such as unread, in progress, or finished.
+- Library search now normalizes pasted punctuation, separators, and accents, so queries like `red-rising`, `sci_fi`, or `cafe` match clean book metadata.
 - Notes now normalize pasted whitespace before saving, reject empty note annotations at the repository boundary, and keep highlight notes optional.
 - New bookmarks now save compact chapter/heading labels with percent-read context, making in-book bookmark lists easier to scan.
 - Audiobook text preparation now uses anchored chapter detection, normalized chapter labels, shorter Kokoro-safe prompts, paragraph/question/chapter pause metadata, and prepared-chapter scoped first-chapter generation so scan estimates match generated output.

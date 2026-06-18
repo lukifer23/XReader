@@ -65,6 +65,7 @@ import androidx.core.net.toUri
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.xreader.app.core.TextTools
 import com.xreader.app.data.AnnotationKind
 import com.xreader.app.data.BookEntity
 import com.xreader.app.data.ReaderTheme
@@ -378,8 +379,7 @@ private fun BookListItem.hasPersistedFinishedState(): Boolean =
     book.finished || state?.finishedAt != null
 
 private fun String.libraryQueryTerms(): List<String> =
-    trim()
-        .lowercase(Locale.US)
+    normalizedLibrarySearchText()
         .split(Regex("\\s+"))
         .filter { it.isNotBlank() }
         .distinct()
@@ -399,7 +399,13 @@ private fun BookListItem.librarySearchText(): String =
         addAll(libraryStatusSearchLabels())
     }
         .joinToString(" ")
-        .lowercase(Locale.US)
+        .normalizedLibrarySearchText()
+
+private fun String.normalizedLibrarySearchText(): String =
+    TextTools.normalizeForSearch(this)
+        .replace(Regex("[^\\p{L}\\p{N}]+"), " ")
+        .replace(Regex("\\s+"), " ")
+        .trim()
 
 private fun BookListItem.libraryStatusSearchLabels(): List<String> =
     buildList {
