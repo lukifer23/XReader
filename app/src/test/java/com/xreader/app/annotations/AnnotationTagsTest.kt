@@ -5,6 +5,14 @@ import org.junit.Test
 
 class AnnotationTagsTest {
     @Test
+    fun normalizesAnnotationNotesWithoutFlatteningParagraphs() {
+        assertEquals(
+            "First line\nSecond line\n\nFinal paragraph",
+            normalizeAnnotationNote("  First   line  \n\tSecond\tline\n\n\n\n Final paragraph  ")
+        )
+    }
+
+    @Test
     fun normalizesCommaSeparatedTags() {
         assertEquals(
             "Craft, mars, World building",

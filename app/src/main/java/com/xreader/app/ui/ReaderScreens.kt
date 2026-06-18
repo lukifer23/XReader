@@ -81,6 +81,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.xreader.app.AppContainer
+import com.xreader.app.annotations.normalizeAnnotationNote
 import com.xreader.app.data.AnnotationEntity
 import com.xreader.app.data.BookFormat
 import com.xreader.app.data.ReaderTheme
@@ -1097,6 +1098,7 @@ internal fun DictionaryDialog(
 internal fun NoteDialog(onDismiss: () -> Unit, onSave: (String, String) -> Unit) {
     var note by remember { mutableStateOf("") }
     var tags by remember { mutableStateOf("") }
+    val canSave = normalizeAnnotationNote(note).isNotBlank()
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Add note") },
@@ -1119,7 +1121,7 @@ internal fun NoteDialog(onDismiss: () -> Unit, onSave: (String, String) -> Unit)
             }
         },
         confirmButton = {
-            Button(onClick = { onSave(note, tags) }, enabled = note.isNotBlank()) {
+            Button(onClick = { onSave(note, tags) }, enabled = canSave) {
                 Icon(Icons.Filled.Done, contentDescription = null)
                 Spacer(Modifier.width(6.dp))
                 Text("Save")

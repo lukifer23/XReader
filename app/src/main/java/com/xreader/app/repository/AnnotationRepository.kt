@@ -1,5 +1,6 @@
 package com.xreader.app.repository
 
+import com.xreader.app.annotations.normalizeAnnotationNote
 import com.xreader.app.annotations.normalizeAnnotationTags
 import com.xreader.app.data.AnnotationDao
 import com.xreader.app.data.AnnotationEntity
@@ -51,6 +52,8 @@ class AnnotationRepository(
         note: String,
         tags: String = "",
     ): Long {
+        val cleanNote = normalizeAnnotationNote(note)
+        require(cleanNote.isNotBlank()) { "Note text cannot be empty." }
         val now = clock.millis()
         return dao.insertAnnotation(
             AnnotationEntity(
@@ -58,7 +61,7 @@ class AnnotationRepository(
                 kind = AnnotationKind.NOTE,
                 locator = locator,
                 quote = quote,
-                note = note,
+                note = cleanNote,
                 color = "#2F6F6B",
                 tags = normalizeAnnotationTags(tags),
                 createdAt = now,
@@ -82,7 +85,7 @@ class AnnotationRepository(
                 kind = AnnotationKind.HIGHLIGHT,
                 locator = locator,
                 quote = quote,
-                note = note,
+                note = normalizeAnnotationNote(note),
                 color = color,
                 tags = normalizeAnnotationTags(tags),
                 createdAt = now,
@@ -99,9 +102,11 @@ class AnnotationRepository(
         color: String = annotation.color,
         tags: String = annotation.tags,
     ) {
+        val cleanNote = normalizeAnnotationNote(note)
+        require(annotation.kind != AnnotationKind.NOTE || cleanNote.isNotBlank()) { "Note text cannot be empty." }
         dao.updateAnnotation(
             annotation.copy(
-                note = note.trim(),
+                note = cleanNote,
                 color = color,
                 tags = normalizeAnnotationTags(tags),
                 updatedAt = clock.millis()
@@ -251,12 +256,16 @@ class AnnotationRepository(
                 kind = kind,
                 locator = locator,
                 quote = quote,
-                note = item.optString("note"),
+                note = normalizeAnnotationNote(item.optString("note")),
                 color = item.optString("color", "#2F6F6B"),
                 tags = normalizeAnnotationTags(item.optString("tags")),
                 createdAt = item.optLong("createdAt", clock.millis()),
                 updatedAt = item.optLong("updatedAt", clock.millis())
             )
+            if (imported.kind == AnnotationKind.NOTE && imported.note.isBlank()) {
+                annotationsSkipped += 1
+                continue
+            }
             val existing = dao.getAnnotationForImport(book.id, kind, locator, quote)
             if (existing == null) {
                 dao.insertAnnotation(imported)

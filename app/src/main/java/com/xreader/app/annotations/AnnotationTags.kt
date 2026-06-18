@@ -5,6 +5,15 @@ data class AnnotationTagSummary(
     val count: Int,
 )
 
+internal fun normalizeAnnotationNote(value: String): String =
+    value
+        .trim()
+        .lines()
+        .map { line -> line.trim().replace(Regex("[\\t ]+"), " ") }
+        .joinToString("\n")
+        .replace(Regex("\\n{3,}"), "\n\n")
+        .trim()
+
 internal fun normalizeAnnotationTags(value: String): String =
     value.split(',', '\n')
         .map { it.trim().trimStart('#').replace(Regex("\\s+"), " ") }

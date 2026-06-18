@@ -76,6 +76,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.xreader.app.AppContainer
 import com.xreader.app.annotations.annotationTagsLabel
+import com.xreader.app.annotations.normalizeAnnotationNote
 import com.xreader.app.data.AnnotationEntity
 import com.xreader.app.data.AnnotationKind
 import com.xreader.app.data.BookAudioEntity
@@ -1356,6 +1357,7 @@ internal fun EditAnnotationDialog(
     var note by remember(annotation.id) { mutableStateOf(annotation.note) }
     var color by remember(annotation.id) { mutableStateOf(ReaderHighlightColor.normalized(annotation.color)) }
     var tags by remember(annotation.id) { mutableStateOf(annotation.tags) }
+    val canSave = annotation.kind != AnnotationKind.NOTE || normalizeAnnotationNote(note).isNotBlank()
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (annotation.kind == AnnotationKind.NOTE) "Edit note" else "Edit highlight note") },
@@ -1395,7 +1397,7 @@ internal fun EditAnnotationDialog(
             }
         },
         confirmButton = {
-            Button(onClick = { onSave(note, color, tags) }) {
+            Button(onClick = { onSave(note, color, tags) }, enabled = canSave) {
                 Icon(Icons.Filled.Done, contentDescription = null)
                 Spacer(Modifier.width(6.dp))
                 Text("Save")
