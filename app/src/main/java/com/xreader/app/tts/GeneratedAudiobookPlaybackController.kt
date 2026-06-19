@@ -539,7 +539,7 @@ class GeneratedAudiobookPlaybackController(
     private fun BookAudioEntity.preparePlaybackFiles(): PreparedAudiobookPlayback {
         val segments = segmentFiles()
         val chapters = generatedAudiobookChapters(segments.size)
-        val metadata = generatedAudiobookSegmentMetadata(segmentCount = segments.size, chapters = chapters)
+        val metadata = generatedAudiobookPlaybackMetadata(segmentCount = segments.size, chapters = chapters)
         val chaptersByIndex = chapters.associateBy { it.index }
         return PreparedAudiobookPlayback(
             segments = segments,

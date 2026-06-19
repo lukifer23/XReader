@@ -33,8 +33,6 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.withContext
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
@@ -49,28 +47,13 @@ class NeuralTtsRepository(
     private val modelRoot = File(appContext.filesDir, "neural-tts/models")
     private val audioRoot = File(appContext.filesDir, "neural-tts/book-audio")
     private val activeModelDownloads = ConcurrentHashMap<String, Job>()
-    private val observedFilesystemRepairs = ConcurrentHashMap<Long, Long>()
     private val previewRoot = File(appContext.cacheDir, "neural-tts/previews")
 
     fun observeModels(): Flow<List<NeuralTtsModelEntity>> = dao.observeModels()
 
-    fun observeBookAudio(bookId: Long): Flow<List<BookAudioEntity>> =
-        dao.observeBookAudio(bookId).onEach { rows ->
-            rows.forEach { audio ->
-                if (shouldRepairObservedFilesystemState(audio)) {
-                    repairBookAudioFilesystemState(audio)
-                }
-            }
-        }.flowOn(Dispatchers.IO)
+    fun observeBookAudio(bookId: Long): Flow<List<BookAudioEntity>> = dao.observeBookAudio(bookId)
 
-    fun observeAllBookAudio(): Flow<List<BookAudioEntity>> =
-        dao.observeAllBookAudio().onEach { rows ->
-            rows.forEach { audio ->
-                if (shouldRepairObservedFilesystemState(audio)) {
-                    repairBookAudioFilesystemState(audio)
-                }
-            }
-        }.flowOn(Dispatchers.IO)
+    fun observeAllBookAudio(): Flow<List<BookAudioEntity>> = dao.observeAllBookAudio()
 
     suspend fun generatedBookAudio(
         bookId: Long,
@@ -648,8 +631,11 @@ class NeuralTtsRepository(
         var completedSegments = reusableSegments
         var activeProvider: String? = null
         var activeSampleRate: Int? = null
+        var activeHostThreadCount: Int? = null
         var generationAudioMillis = generating.generationAudioMillis.coerceAtLeast(0L)
         var generationComputeMillis = generating.generationComputeMillis.coerceAtLeast(0L)
+        var runtimeInitializationCount = 0
+        var runtimeInitializationMillis = 0L
         var lastProgressWrittenSegments = reusableSegments
         runCatching {
             val modelDir = requireNotNull(model.localPath)
@@ -669,12 +655,17 @@ class NeuralTtsRepository(
                             includeExperimentalWebGpu = false
                         )
                         segmentsOnRuntime = 0
-                        activeProvider = runtime.provider
+                        val activeRuntime = requireNotNull(runtime)
+                        activeProvider = activeRuntime.provider
+                        activeHostThreadCount = activeRuntime.hostThreadCount
+                        runtimeInitializationCount += 1
+                        runtimeInitializationMillis += activeRuntime.initializationMillis
                         writeAudiobookManifest(
                             target = target,
                             title = bookTitle,
                             spec = spec,
                             provider = activeProvider,
+                            hostThreadCount = activeHostThreadCount,
                             pace = pace,
                             tone = tone,
                             scope = scope,
@@ -684,6 +675,8 @@ class NeuralTtsRepository(
                             sampleRate = activeSampleRate,
                             generationAudioMillis = generationAudioMillis,
                             generationComputeMillis = generationComputeMillis,
+                            runtimeInitializationCount = runtimeInitializationCount,
+                            runtimeInitializationMillis = runtimeInitializationMillis,
                             status = BookAudioStatus.GENERATING,
                             error = null
                         )
@@ -734,6 +727,7 @@ class NeuralTtsRepository(
                             title = bookTitle,
                             spec = spec,
                             provider = tts.provider,
+                            hostThreadCount = tts.hostThreadCount,
                             pace = pace,
                             tone = tone,
                             scope = scope,
@@ -743,6 +737,8 @@ class NeuralTtsRepository(
                             sampleRate = sampleRate,
                             generationAudioMillis = generationAudioMillis,
                             generationComputeMillis = generationComputeMillis,
+                            runtimeInitializationCount = runtimeInitializationCount,
+                            runtimeInitializationMillis = runtimeInitializationMillis,
                             status = BookAudioStatus.GENERATING,
                             error = null
                         )
@@ -753,6 +749,7 @@ class NeuralTtsRepository(
                     title = bookTitle,
                     spec = spec,
                     provider = activeProvider,
+                    hostThreadCount = activeHostThreadCount,
                     pace = pace,
                     tone = tone,
                     scope = scope,
@@ -762,6 +759,8 @@ class NeuralTtsRepository(
                     sampleRate = sampleRate,
                     generationAudioMillis = generationAudioMillis,
                     generationComputeMillis = generationComputeMillis,
+                    runtimeInitializationCount = runtimeInitializationCount,
+                    runtimeInitializationMillis = runtimeInitializationMillis,
                     status = BookAudioStatus.GENERATED,
                     error = null
                 )
@@ -814,6 +813,7 @@ class NeuralTtsRepository(
                             title = bookTitle,
                             spec = spec,
                             provider = activeProvider,
+                            hostThreadCount = activeHostThreadCount,
                             pace = pace,
                             tone = tone,
                             scope = scope,
@@ -823,6 +823,8 @@ class NeuralTtsRepository(
                             sampleRate = activeSampleRate,
                             generationAudioMillis = generationAudioMillis,
                             generationComputeMillis = generationComputeMillis,
+                            runtimeInitializationCount = runtimeInitializationCount,
+                            runtimeInitializationMillis = runtimeInitializationMillis,
                             status = BookAudioStatus.CANCELED,
                             error = null
                         )
@@ -851,6 +853,7 @@ class NeuralTtsRepository(
                     title = bookTitle,
                     spec = spec,
                     provider = activeProvider,
+                    hostThreadCount = activeHostThreadCount,
                     pace = pace,
                     tone = tone,
                     scope = scope,
@@ -860,6 +863,8 @@ class NeuralTtsRepository(
                     sampleRate = activeSampleRate,
                     generationAudioMillis = generationAudioMillis,
                     generationComputeMillis = generationComputeMillis,
+                    runtimeInitializationCount = runtimeInitializationCount,
+                    runtimeInitializationMillis = runtimeInitializationMillis,
                     status = BookAudioStatus.FAILED,
                     error = failed.error
                 )
@@ -1065,6 +1070,7 @@ class NeuralTtsRepository(
         title: String,
         spec: NeuralTtsModelSpec,
         provider: String?,
+        hostThreadCount: Int? = null,
         pace: NeuralTtsPace,
         tone: NeuralTtsTone,
         scope: AudiobookGenerationScope,
@@ -1074,6 +1080,8 @@ class NeuralTtsRepository(
         sampleRate: Int?,
         generationAudioMillis: Long,
         generationComputeMillis: Long,
+        runtimeInitializationCount: Int = 0,
+        runtimeInitializationMillis: Long = 0L,
         status: BookAudioStatus,
         error: String?,
     ) {
@@ -1082,6 +1090,7 @@ class NeuralTtsRepository(
             appendLine("title=$title")
             appendLine("model=${spec.displayName}")
             provider?.let { appendLine("provider=$it") }
+            hostThreadCount?.takeIf { it > 0 }?.let { appendLine("hostThreads=$it") }
             appendLine("gender=${spec.gender.label}")
             appendLine("tone=${tone.label}")
             appendLine("pace=${pace.label}")
@@ -1093,6 +1102,8 @@ class NeuralTtsRepository(
             sampleRate?.let { appendLine("sampleRate=$it") }
             if (generationAudioMillis > 0) appendLine("generationAudioMillis=$generationAudioMillis")
             if (generationComputeMillis > 0) appendLine("generationComputeMillis=$generationComputeMillis")
+            if (runtimeInitializationCount > 0) appendLine("runtimeInitializations=$runtimeInitializationCount")
+            if (runtimeInitializationMillis > 0) appendLine("runtimeInitializationMillis=$runtimeInitializationMillis")
             generationRealtimeFactor(generationAudioMillis, generationComputeMillis)
                 ?.let { appendLine("generationRealtimeFactor=${"%.2f".format(Locale.US, it)}") }
             appendLine("updatedAt=${clock.millis()}")
@@ -1110,36 +1121,32 @@ class NeuralTtsRepository(
         prepared: NeuralTtsPreparedBook,
     ) {
         target.mkdirs()
-        File(target, CHAPTERS_FILE).writeText(
-            buildString {
-                appendLine("index\tfirstSegment\tsegmentCount\ttitle")
-                prepared.chapters.forEach { chapter ->
-                    appendLine(
-                        listOf(
-                            chapter.index.toString(),
-                            chapter.firstSegmentIndex.toString(),
-                            chapter.segmentCount.toString(),
-                            chapter.title.tsvEscaped()
-                        ).joinToString("\t")
-                    )
-                }
+        File(target, CHAPTERS_FILE).bufferedWriter().use { writer ->
+            writer.appendLine("index\tfirstSegment\tsegmentCount\ttitle")
+            prepared.chapters.forEach { chapter ->
+                writer.appendLine(
+                    listOf(
+                        chapter.index.toString(),
+                        chapter.firstSegmentIndex.toString(),
+                        chapter.segmentCount.toString(),
+                        chapter.title.tsvEscaped()
+                    ).joinToString("\t")
+                )
             }
-        )
-        File(target, SEGMENTS_FILE).writeText(
-            buildString {
-                appendLine("index\tchapterIndex\tpauseAfterMs\ttext")
-                prepared.segments.forEachIndexed { index, segment ->
-                    appendLine(
-                        listOf(
-                            index.toString(),
-                            prepared.segmentChapterIndexes.getOrElse(index) { 0 }.toString(),
-                            prepared.segmentPauseMillis.getOrElse(index) { DEFAULT_AUDIOBOOK_SEGMENT_PAUSE_MS }.toString(),
-                            segment.tsvEscaped()
-                        ).joinToString("\t")
-                    )
-                }
+        }
+        File(target, SEGMENTS_FILE).bufferedWriter().use { writer ->
+            writer.appendLine("index\tchapterIndex\tpauseAfterMs\ttext")
+            prepared.segments.forEachIndexed { index, segment ->
+                writer.appendLine(
+                    listOf(
+                        index.toString(),
+                        prepared.segmentChapterIndexes.getOrElse(index) { 0 }.toString(),
+                        prepared.segmentPauseMillis.getOrElse(index) { DEFAULT_AUDIOBOOK_SEGMENT_PAUSE_MS }.toString(),
+                        segment.tsvEscaped()
+                    ).joinToString("\t")
+                )
             }
-        )
+        }
     }
 
     private fun createOfflineTts(
@@ -1154,13 +1161,25 @@ class NeuralTtsRepository(
         )
         var lastError: Throwable? = null
         providers.forEach { provider ->
+            val hostThreadCount = neuralTtsHostThreadCount(provider)
+            val startedAt = clock.millis()
             runCatching {
-                OfflineTts(config = ttsConfig(spec, modelDir, tone, provider))
+                OfflineTts(config = ttsConfig(spec, modelDir, tone, provider, hostThreadCount))
             }.onSuccess { engine ->
+                val initializationMillis = (clock.millis() - startedAt).coerceAtLeast(0L)
                 TtsAccelerationRuntime.recordProviderInitialized(provider)
                 val providerKey = TtsAccelerationRuntime.providerKey(provider)
-                Log.i(tag, "Initialized ${spec.displayName} with provider=$providerKey.")
-                return TtsRuntime(engine = engine, provider = providerKey)
+                Log.i(
+                    tag,
+                    "Initialized ${spec.displayName} with provider=$providerKey, " +
+                        "hostThreads=$hostThreadCount, initMs=$initializationMillis."
+                )
+                return TtsRuntime(
+                    engine = engine,
+                    provider = providerKey,
+                    hostThreadCount = hostThreadCount,
+                    initializationMillis = initializationMillis
+                )
             }.onFailure { error ->
                 TtsAccelerationRuntime.recordProviderInitializationFailed(provider)
                 Log.w(tag, "Could not initialize ${spec.displayName} with provider=$provider.", error)
@@ -1170,7 +1189,13 @@ class NeuralTtsRepository(
         throw IllegalStateException("Could not initialize local neural TTS runtime.", lastError)
     }
 
-    private fun ttsConfig(spec: NeuralTtsModelSpec, modelDir: String, tone: NeuralTtsTone, provider: String) =
+    private fun ttsConfig(
+        spec: NeuralTtsModelSpec,
+        modelDir: String,
+        tone: NeuralTtsTone,
+        provider: String,
+        hostThreadCount: Int,
+    ) =
         getOfflineTtsConfig(
             modelDir = modelDir,
             modelName = spec.modelFile,
@@ -1182,7 +1207,7 @@ class NeuralTtsRepository(
             dictDir = "",
             ruleFsts = "",
             ruleFars = "",
-            numThreads = Runtime.getRuntime().availableProcessors().coerceIn(2, 4),
+            numThreads = hostThreadCount,
             provider = provider,
             isKitten = false
         ).apply {
@@ -1220,34 +1245,9 @@ class NeuralTtsRepository(
         return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
-    private fun shouldRepairObservedFilesystemState(audio: BookAudioEntity): Boolean =
-        when {
-            audio.id <= 0L -> false
-            audio.segmentCount <= 0 -> false
-            audio.status == BookAudioStatus.GENERATING &&
-                audio.updatedAt >= clock.millis() - STALE_GENERATING_AUDIO_REPAIR_AGE_MS -> false
-            else -> {
-                val now = clock.millis()
-                val interval = if (audio.status == BookAudioStatus.GENERATING) {
-                    OBSERVED_STALE_GENERATION_REPAIR_INTERVAL_MS
-                } else {
-                    OBSERVED_FILESYSTEM_REPAIR_INTERVAL_MS
-                }
-                val lastRepair = observedFilesystemRepairs[audio.id] ?: 0L
-                if (now - lastRepair < interval) {
-                    false
-                } else {
-                    observedFilesystemRepairs[audio.id] = now
-                    true
-                }
-            }
-        }
-
     private companion object {
         const val DOWNLOAD_PROGRESS_STEP_BYTES = 1_048_576L
         const val STALE_GENERATING_AUDIO_REPAIR_AGE_MS = 60 * 1000L
-        const val OBSERVED_STALE_GENERATION_REPAIR_INTERVAL_MS = 15 * 1000L
-        const val OBSERVED_FILESYSTEM_REPAIR_INTERVAL_MS = 5 * 60 * 1000L
         const val PREVIEW_TEXT = "This is XReader's local neural voice preview, generated privately on this device."
         const val FINAL_MANIFEST = "manifest.txt"
         const val IN_PROGRESS_MANIFEST = "manifest.in-progress.txt"
@@ -1259,6 +1259,8 @@ class NeuralTtsRepository(
 private data class TtsRuntime(
     val engine: OfflineTts,
     val provider: String,
+    val hostThreadCount: Int,
+    val initializationMillis: Long,
 )
 
 internal fun neuralTtsGenerationConfig(
@@ -1271,6 +1273,18 @@ internal fun neuralTtsGenerationConfig(
         speed = pace.speed.coerceIn(0.75f, 1.35f),
         silenceScale = tone.silenceScale,
     )
+
+internal fun neuralTtsHostThreadCount(
+    provider: String,
+    availableProcessors: Int = Runtime.getRuntime().availableProcessors(),
+): Int {
+    val cores = availableProcessors.coerceAtLeast(1)
+    return when (TtsAccelerationRuntime.providerKey(provider)) {
+        "qnn",
+        "webgpu" -> 1
+        else -> (cores - UI_RESERVED_CORES).coerceIn(MIN_CPU_TTS_THREADS, MAX_CPU_TTS_THREADS)
+    }
+}
 
 internal fun GeneratedAudio.audioDurationMillis(): Long =
     if (sampleRate > 0) {
@@ -1528,3 +1542,6 @@ private const val GENERATION_MANIFEST_CHECKPOINT_SEGMENTS = 4
 private const val SMALL_GENERATION_PROGRESS_SEGMENTS = 24
 private const val MIN_LONG_GENERATION_PROGRESS_SEGMENT_STEP = 4
 private const val TARGET_LONG_GENERATION_PROGRESS_UPDATES = 100
+private const val UI_RESERVED_CORES = 2
+private const val MIN_CPU_TTS_THREADS = 1
+private const val MAX_CPU_TTS_THREADS = 2

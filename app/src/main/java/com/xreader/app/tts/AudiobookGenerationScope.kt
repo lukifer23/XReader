@@ -100,6 +100,11 @@ data class GeneratedAudiobookSegmentMetadata(
     val exportTsv: String,
 )
 
+data class GeneratedAudiobookPlaybackMetadata(
+    val chapterIndexes: List<Int>,
+    val pauseAfterMillis: List<Long>,
+)
+
 data class GeneratedAudiobookFileSnapshot(
     val audio: BookAudioEntity,
     val playableSegmentFiles: List<File>,
@@ -207,7 +212,36 @@ internal fun BookAudioEntity.generatedAudiobookSegmentChapterIndexes(
     segmentCount: Int,
     chapters: List<GeneratedAudiobookChapter>,
 ): List<Int> =
-    generatedAudiobookSegmentMetadata(segmentCount = segmentCount, chapters = chapters).chapterIndexes
+    generatedAudiobookPlaybackMetadata(segmentCount = segmentCount, chapters = chapters).chapterIndexes
+
+internal fun BookAudioEntity.generatedAudiobookPlaybackMetadata(
+    segmentCount: Int,
+    chapters: List<GeneratedAudiobookChapter>,
+): GeneratedAudiobookPlaybackMetadata {
+    val fallback = generatedAudiobookFallbackPlaybackMetadata(segmentCount, chapters)
+    if (segmentCount <= 0) return fallback
+    val root = filePath?.takeIf { it.isNotBlank() }?.let(::File)?.takeIf { it.isDirectory }
+        ?: return fallback
+    val file = File(root, "segments.tsv")
+    if (!file.isFile) return fallback
+    return file.generatedAudiobookPlaybackMetadata(segmentCount = segmentCount, chapters = chapters)
+}
+
+internal fun File.generatedAudiobookPlaybackMetadata(
+    segmentCount: Int,
+    chapters: List<GeneratedAudiobookChapter>,
+): GeneratedAudiobookPlaybackMetadata {
+    val fallback = generatedAudiobookFallbackPlaybackMetadata(segmentCount, chapters)
+    if (segmentCount <= 0 || !isFile) return fallback
+    return runCatching {
+        parseGeneratedAudiobookSegmentSidecar(
+            file = this,
+            segmentCount = segmentCount,
+            chapters = chapters,
+            retainExportRows = false
+        ).playbackMetadata
+    }.getOrDefault(fallback)
+}
 
 internal fun BookAudioEntity.generatedAudiobookSegmentMetadata(
     segmentCount: Int,
@@ -228,33 +262,20 @@ internal fun File.generatedAudiobookSegmentMetadata(
 ): GeneratedAudiobookSegmentMetadata {
     val fallback = generatedAudiobookFallbackSegmentMetadata(segmentCount, chapters)
     if (segmentCount <= 0 || !isFile) return fallback
-    val validChapterIndexes = chapters.mapTo(mutableSetOf()) { it.index }
     return runCatching {
-        val chapterIndexes = fallback.chapterIndexes.toMutableList()
-        val pauses = fallback.pauseAfterMillis.toMutableList()
-        val rowsByIndex = mutableMapOf<Int, String>()
-        useLines { lines ->
-            lines.drop(1).forEach { line ->
-                val columns = line.split('\t')
-                val index = columns.getOrNull(0)?.toIntOrNull() ?: return@forEach
-                if (index !in 0 until segmentCount) return@forEach
-                val chapter = columns.getOrNull(1)?.toIntOrNull()
-                if (chapter != null && (validChapterIndexes.isEmpty() || chapter in validChapterIndexes)) {
-                    chapterIndexes[index] = chapter
-                }
-                columns.getOrNull(2)?.toLongOrNull()?.let { pause ->
-                    pauses[index] = pause
-                }
-                rowsByIndex[index] = line
-            }
-        }
+        val parsed = parseGeneratedAudiobookSegmentSidecar(
+            file = this,
+            segmentCount = segmentCount,
+            chapters = chapters,
+            retainExportRows = true
+        )
         GeneratedAudiobookSegmentMetadata(
-            chapterIndexes = chapterIndexes,
-            pauseAfterMillis = pauses,
+            chapterIndexes = parsed.playbackMetadata.chapterIndexes,
+            pauseAfterMillis = parsed.playbackMetadata.pauseAfterMillis,
             exportTsv = generatedAudiobookSegmentsTsvFromRows(
                 segmentCount = segmentCount,
-                chapterIndexes = chapterIndexes,
-                rowsByIndex = rowsByIndex
+                chapterIndexes = parsed.playbackMetadata.chapterIndexes,
+                rowsByIndex = parsed.rowsByIndex.orEmpty()
             )
         )
     }.getOrDefault(fallback)
@@ -291,12 +312,84 @@ private fun generatedAudiobookFallbackSegmentMetadata(
     segmentCount: Int,
     chapters: List<GeneratedAudiobookChapter>,
 ): GeneratedAudiobookSegmentMetadata {
+    val fallback = generatedAudiobookFallbackPlaybackMetadata(segmentCount, chapters)
+    return GeneratedAudiobookSegmentMetadata(
+        chapterIndexes = fallback.chapterIndexes,
+        pauseAfterMillis = fallback.pauseAfterMillis,
+        exportTsv = generatedAudiobookFallbackSegmentsTsv(
+            segmentCount = fallback.chapterIndexes.size,
+            chapterIndexes = fallback.chapterIndexes
+        )
+    )
+}
+
+private fun generatedAudiobookFallbackPlaybackMetadata(
+    segmentCount: Int,
+    chapters: List<GeneratedAudiobookChapter>,
+): GeneratedAudiobookPlaybackMetadata {
     val boundedCount = segmentCount.coerceAtLeast(0)
     val chapterIndexes = List(boundedCount) { index -> chapters.chapterForSegment(index)?.index ?: 0 }
-    return GeneratedAudiobookSegmentMetadata(
+    return GeneratedAudiobookPlaybackMetadata(
         chapterIndexes = chapterIndexes,
-        pauseAfterMillis = List(boundedCount) { DEFAULT_AUDIOBOOK_SEGMENT_PAUSE_MS },
-        exportTsv = generatedAudiobookFallbackSegmentsTsv(segmentCount = boundedCount, chapterIndexes = chapterIndexes)
+        pauseAfterMillis = List(boundedCount) { DEFAULT_AUDIOBOOK_SEGMENT_PAUSE_MS }
+    )
+}
+
+private data class GeneratedAudiobookSegmentSidecarParse(
+    val playbackMetadata: GeneratedAudiobookPlaybackMetadata,
+    val rowsByIndex: Map<Int, String>?,
+)
+
+private fun parseGeneratedAudiobookSegmentSidecar(
+    file: File,
+    segmentCount: Int,
+    chapters: List<GeneratedAudiobookChapter>,
+    retainExportRows: Boolean,
+): GeneratedAudiobookSegmentSidecarParse {
+    val fallback = generatedAudiobookFallbackPlaybackMetadata(segmentCount, chapters)
+    val validChapterIndexes = chapters.mapTo(mutableSetOf()) { it.index }
+    val chapterIndexes = fallback.chapterIndexes.toMutableList()
+    val pauses = fallback.pauseAfterMillis.toMutableList()
+    val rowsByIndex = if (retainExportRows) mutableMapOf<Int, String>() else null
+    file.useLines { lines ->
+        lines.drop(1).forEach { line ->
+            val row = line.segmentSidecarRowPrefix() ?: return@forEach
+            if (row.index !in 0 until segmentCount) return@forEach
+            if (row.chapterIndex != null && (validChapterIndexes.isEmpty() || row.chapterIndex in validChapterIndexes)) {
+                chapterIndexes[row.index] = row.chapterIndex
+            }
+            row.pauseAfterMillis?.let { pause -> pauses[row.index] = pause }
+            rowsByIndex?.put(row.index, line)
+        }
+    }
+    return GeneratedAudiobookSegmentSidecarParse(
+        playbackMetadata = GeneratedAudiobookPlaybackMetadata(
+            chapterIndexes = chapterIndexes,
+            pauseAfterMillis = pauses
+        ),
+        rowsByIndex = rowsByIndex
+    )
+}
+
+private data class GeneratedAudiobookSegmentSidecarRowPrefix(
+    val index: Int,
+    val chapterIndex: Int?,
+    val pauseAfterMillis: Long?,
+)
+
+private fun String.segmentSidecarRowPrefix(): GeneratedAudiobookSegmentSidecarRowPrefix? {
+    val firstTab = indexOf('\t')
+    if (firstTab <= 0) return null
+    val secondTab = indexOf('\t', firstTab + 1)
+    if (secondTab <= firstTab) return null
+    val thirdTab = indexOf('\t', secondTab + 1).let { if (it == -1) length else it }
+    val index = substring(0, firstTab).toIntOrNull() ?: return null
+    val chapterIndex = substring(firstTab + 1, secondTab).toIntOrNull()
+    val pauseAfterMillis = substring(secondTab + 1, thirdTab).toLongOrNull()
+    return GeneratedAudiobookSegmentSidecarRowPrefix(
+        index = index,
+        chapterIndex = chapterIndex,
+        pauseAfterMillis = pauseAfterMillis
     )
 }
 

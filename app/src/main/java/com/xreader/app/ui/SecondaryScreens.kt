@@ -574,8 +574,8 @@ class AudiobooksViewModel(private val container: AppContainer) : ViewModel() {
                     previous.audiobookUiInvalidationKeys() == next.audiobookUiInvalidationKeys()
                 }
         ) { books, audioRows ->
-            val booksById = books.associateBy { it.id }
-            withContext(Dispatchers.IO) {
+            withContext(Dispatchers.Default) {
+                val booksById = books.associateBy { it.id }
                 audioRows.mapNotNull { audio ->
                     val audioItem = audio.toBookAudiobookAudioUiItem()
                     if (!audioItem.shouldShowInGlobalAudiobooksScreen()) return@mapNotNull null
@@ -593,7 +593,9 @@ class AudiobooksViewModel(private val container: AppContainer) : ViewModel() {
 
     private val sortedAudiobookRows: StateFlow<List<GeneratedAudiobookUiItem>> =
         combine(audiobookRows, playbackSortKey) { rows, sortKey ->
-            rows.sortedForAudiobooksScreen(sortKey)
+            withContext(Dispatchers.Default) {
+                rows.sortedForAudiobooksScreen(sortKey)
+            }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val uiState: StateFlow<AudiobooksUiState> =

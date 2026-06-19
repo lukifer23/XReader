@@ -355,20 +355,22 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         bookCollectionNames,
         pendingRemovalIds
     ) { currentAllBooks, currentQuery, currentStates, currentBookCollections, removingIds ->
-        val statesByBook = currentStates.associateBy { it.bookId }
-        val collectionsByBook = currentBookCollections
-            .groupBy { it.bookId }
-            .mapValues { (_, rows) ->
-                rows
-                    .distinctBy { it.collectionId }
-                    .map { CollectionUiItem(id = it.collectionId, name = it.name) }
-            }
-        val visibleAllBooks = currentAllBooks.withoutPendingRemovalIds(removingIds)
-        val allItems = visibleAllBooks.map { BookListItem(it, statesByBook[it.id], collectionsByBook[it.id].orEmpty()) }
-        LibraryBooksState(
-            queriedItems = allItems.filteredForLibraryQuery(currentQuery),
-            allItems = allItems
-        )
+        withContext(Dispatchers.Default) {
+            val statesByBook = currentStates.associateBy { it.bookId }
+            val collectionsByBook = currentBookCollections
+                .groupBy { it.bookId }
+                .mapValues { (_, rows) ->
+                    rows
+                        .distinctBy { it.collectionId }
+                        .map { CollectionUiItem(id = it.collectionId, name = it.name) }
+                }
+            val visibleAllBooks = currentAllBooks.withoutPendingRemovalIds(removingIds)
+            val allItems = visibleAllBooks.map { BookListItem(it, statesByBook[it.id], collectionsByBook[it.id].orEmpty()) }
+            LibraryBooksState(
+                queriedItems = allItems.filteredForLibraryQuery(currentQuery),
+                allItems = allItems
+            )
+        }
     }
 
     private val runtimeSupportState = combine(
@@ -400,30 +402,32 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
 
     val uiState: StateFlow<LibraryUiState> =
         combine(chromeState, bookItems, supportState) { chrome, libraryBooks, support ->
-            val selection = chrome.selection
-            val visibleBooks = libraryBooks.queriedItems.filteredBy(selection.group).sortedForLibrary(selection.sort)
-            LibraryUiState(
-                query = selection.query,
-                group = selection.group,
-                sort = selection.sort,
-                density = selection.density,
-                books = visibleBooks,
-                allBooks = libraryBooks.allItems,
-                collections = support.collections.toUiItems(),
-                matchedBookCount = libraryBooks.queriedItems.size,
-                totalBookCount = libraryBooks.allItems.size,
-                importing = chrome.importing,
-                message = chrome.message,
-                librarySearchResults = chrome.searchResults,
-                bookHealth = support.bookHealth,
-                repairingBookIds = support.repairingBookIds,
-                audiobookScans = support.audiobookScans,
-                audiobookPlayback = support.audiobookPlayback,
-                authorOptions = support.metadataOptions.authorOptions,
-                genreOptions = support.metadataOptions.genreOptions,
-                seriesOptions = support.metadataOptions.seriesOptions,
-                opdsCatalog = chrome.opdsCatalog
-            )
+            withContext(Dispatchers.Default) {
+                val selection = chrome.selection
+                val visibleBooks = libraryBooks.queriedItems.filteredBy(selection.group).sortedForLibrary(selection.sort)
+                LibraryUiState(
+                    query = selection.query,
+                    group = selection.group,
+                    sort = selection.sort,
+                    density = selection.density,
+                    books = visibleBooks,
+                    allBooks = libraryBooks.allItems,
+                    collections = support.collections.toUiItems(),
+                    matchedBookCount = libraryBooks.queriedItems.size,
+                    totalBookCount = libraryBooks.allItems.size,
+                    importing = chrome.importing,
+                    message = chrome.message,
+                    librarySearchResults = chrome.searchResults,
+                    bookHealth = support.bookHealth,
+                    repairingBookIds = support.repairingBookIds,
+                    audiobookScans = support.audiobookScans,
+                    audiobookPlayback = support.audiobookPlayback,
+                    authorOptions = support.metadataOptions.authorOptions,
+                    genreOptions = support.metadataOptions.genreOptions,
+                    seriesOptions = support.metadataOptions.seriesOptions,
+                    opdsCatalog = chrome.opdsCatalog
+                )
+            }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState())
 
     val readerSettings: StateFlow<ReaderSettings> =
@@ -433,12 +437,6 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     val neuralTtsModels: StateFlow<List<NeuralTtsModelEntity>> =
         container.neuralTtsRepository.observeModels()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
-
-    init {
-        viewModelScope.launch {
-            container.neuralTtsRepository.ensureCatalogSeeded()
-        }
-    }
 
     fun setQuery(value: String) {
         val previous = query.value.trim()

@@ -35,6 +35,7 @@ import com.xreader.app.tts.ReadAloudPlanner
 import com.xreader.app.tts.ReadAloudState
 import com.xreader.app.tts.readAloudNoReadableTextMessage
 import kotlin.math.roundToInt
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -44,6 +45,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.readium.r2.shared.publication.Locator
 
@@ -477,7 +479,9 @@ class ReaderViewModel(
         }
         viewModelScope.launch {
             val publication = _uiState.value.publication ?: return@launch
-            val rows = container.libraryRepository.indexedRowsForBook(bookId)
+            val rows = withContext(Dispatchers.IO) {
+                container.libraryRepository.indexedRowsForBook(bookId)
+            }
             val chunks = readAloudChunks(publication, rows)
             val startPosition = resolveReadAloudStartPosition(
                 visibleUnit = visibleUnit,
@@ -958,35 +962,41 @@ class ReaderViewModel(
         publication: OpenPublication.Readium,
         query: String,
     ): List<ReaderSearchResult> {
-        val matches = container.libraryRepository.searchBook(bookId, query)
+        val matches = withContext(Dispatchers.IO) {
+            container.libraryRepository.searchBook(bookId, query)
+        }
         if (matches.isEmpty()) return emptyList()
-        val lastIndexedUnit = container.libraryRepository.maxIndexedUnitForBook(bookId).coerceAtLeast(1)
-        val lastPositionIndex = (publication.positions.size - 1).coerceAtLeast(0)
-        return matches.map { row ->
-            val positionIndex = if (lastPositionIndex == 0) {
-                0
-            } else {
-                (lastPositionIndex * (row.unitIndex.toDouble() / lastIndexedUnit.toDouble())).roundToInt()
+        val lastIndexedUnit = withContext(Dispatchers.IO) {
+            container.libraryRepository.maxIndexedUnitForBook(bookId).coerceAtLeast(1)
+        }
+        return withContext(Dispatchers.Default) {
+            val lastPositionIndex = (publication.positions.size - 1).coerceAtLeast(0)
+            matches.map { row ->
+                val positionIndex = if (lastPositionIndex == 0) {
+                    0
+                } else {
+                    (lastPositionIndex * (row.unitIndex.toDouble() / lastIndexedUnit.toDouble())).roundToInt()
+                }
+                ReaderSearchResult(
+                    title = row.heading,
+                    snippet = searchResultSnippet(row.body, query, maxLength = READER_SEARCH_SNIPPET_MAX_LENGTH),
+                    locatorJson = publication.positions.getOrNull(positionIndex)?.toJSON()?.toString() ?: row.locator,
+                    unitIndex = positionIndex
+                )
             }
-            ReaderSearchResult(
-                title = row.heading,
-                snippet = searchResultSnippet(row.body, query, maxLength = READER_SEARCH_SNIPPET_MAX_LENGTH),
-                locatorJson = publication.positions.getOrNull(positionIndex)?.toJSON()?.toString() ?: row.locator,
-                unitIndex = positionIndex
-            )
         }
     }
 
-    private fun readAloudChunks(
+    private suspend fun readAloudChunks(
         publication: OpenPublication,
         rows: List<SearchIndexEntity>,
-    ): List<ReadAloudChunk> {
+    ): List<ReadAloudChunk> = withContext(Dispatchers.Default) {
         val chunks = if (rows.isEmpty()) {
             ReadAloudPlanner.chunksFromUnits(publication.units)
         } else {
             ReadAloudPlanner.chunksFromRows(rows)
         }
-        return ReadAloudPlanner.pageAlignedChunks(
+        ReadAloudPlanner.pageAlignedChunks(
             chunks = chunks,
             positionLocators = publication.positions.map { it.toJSON().toString() }
         )

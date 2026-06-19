@@ -792,6 +792,70 @@ class GeneratedAudiobookResumeTest {
     }
 
     @Test
+    fun generatedAudiobookPlaybackMetadataReadsChapterAndPauseWithoutExportRows() {
+        val dir = temporaryFolder.newFolder()
+        val sidecar = File(dir, "segments.tsv").apply {
+            writeText(
+                """
+                index	chapterIndex	pauseAfterMs	text
+                0	0	180	one
+                1	99	220	two
+                2	1	520	three
+                4	1	900	out of range
+                """.trimIndent()
+            )
+        }
+        val chapters = listOf(
+            GeneratedAudiobookChapter(index = 0, title = "Chapter 1", firstSegmentIndex = 0, segmentCount = 2),
+            GeneratedAudiobookChapter(index = 1, title = "Chapter 2", firstSegmentIndex = 2, segmentCount = 1)
+        )
+
+        val metadata = sidecar.generatedAudiobookPlaybackMetadata(segmentCount = 3, chapters = chapters)
+
+        assertEquals(listOf(0, 0, 1), metadata.chapterIndexes)
+        assertEquals(listOf(180L, 220L, 520L), metadata.pauseAfterMillis)
+    }
+
+    @Test
+    fun generatedAudiobookSegmentSidecarParsesPrefixesWithLargeTextRows() {
+        val largeText = (1..2_000).joinToString(" ") { "word$it" }
+        val sidecar = temporaryFolder.newFile("large-segments.tsv").apply {
+            writeText(
+                """
+                index	chapterIndex	pauseAfterMs	text
+                0	0	180	$largeText
+                1	1	520	short
+                """.trimIndent()
+            )
+        }
+        val chapters = listOf(
+            GeneratedAudiobookChapter(index = 0, title = "Chapter 1", firstSegmentIndex = 0, segmentCount = 1),
+            GeneratedAudiobookChapter(index = 1, title = "Chapter 2", firstSegmentIndex = 1, segmentCount = 1)
+        )
+
+        val playback = sidecar.generatedAudiobookPlaybackMetadata(segmentCount = 2, chapters = chapters)
+        val export = sidecar.generatedAudiobookSegmentMetadata(segmentCount = 2, chapters = chapters)
+
+        assertEquals(listOf(0, 1), playback.chapterIndexes)
+        assertEquals(listOf(180L, 520L), playback.pauseAfterMillis)
+        assertTrue(export.exportTsv.contains(largeText))
+    }
+
+    @Test
+    fun generatedAudiobookPlaybackMetadataFallsBackWithoutSidecar() {
+        val chapters = listOf(
+            GeneratedAudiobookChapter(index = 0, title = "Chapter 1", firstSegmentIndex = 0, segmentCount = 2),
+            GeneratedAudiobookChapter(index = 1, title = "Chapter 2", firstSegmentIndex = 2, segmentCount = 2)
+        )
+
+        val metadata = File(temporaryFolder.root, "missing.tsv")
+            .generatedAudiobookPlaybackMetadata(segmentCount = 4, chapters = chapters)
+
+        assertEquals(listOf(0, 0, 1, 1), metadata.chapterIndexes)
+        assertEquals(List(4) { DEFAULT_AUDIOBOOK_SEGMENT_PAUSE_MS }, metadata.pauseAfterMillis)
+    }
+
+    @Test
     fun generatedAudiobookChaptersReadSidecarAndNavigateBoundaries() {
         val dir = temporaryFolder.newFolder()
         repeat(5) { index -> writeSegment(dir, index) }

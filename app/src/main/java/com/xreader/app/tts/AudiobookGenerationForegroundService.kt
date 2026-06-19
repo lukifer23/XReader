@@ -126,7 +126,10 @@ class AudiobookGenerationForegroundService : Service() {
                     tone = activeTone,
                     scope = activeScope
                 )
-                val chunks = ReadAloudPlanner.chunksFromRows(container.libraryRepository.indexedRowsForBook(bookId))
+                val indexedRows = container.libraryRepository.indexedRowsForBook(bookId)
+                val chunks = withContext(Dispatchers.Default) {
+                    ReadAloudPlanner.chunksFromRows(indexedRows)
+                }
                 container.neuralTtsRepository.generateBookAudio(
                     bookId = book.id,
                     bookTitle = book.title,

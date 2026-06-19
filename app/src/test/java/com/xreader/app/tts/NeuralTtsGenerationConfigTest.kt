@@ -28,6 +28,19 @@ class NeuralTtsGenerationConfigTest {
     }
 
     @Test
+    fun hardwareAcceleratedTtsProvidersUseOneHostThread() {
+        assertEquals(1, neuralTtsHostThreadCount(provider = "qnn:/tmp/provider.config", availableProcessors = 8))
+        assertEquals(1, neuralTtsHostThreadCount(provider = "webgpu", availableProcessors = 8))
+    }
+
+    @Test
+    fun cpuBackedTtsProvidersReserveCoresForUiResponsiveness() {
+        assertEquals(1, neuralTtsHostThreadCount(provider = "cpu", availableProcessors = 2))
+        assertEquals(2, neuralTtsHostThreadCount(provider = "xnnpack", availableProcessors = 8))
+        assertEquals(2, neuralTtsHostThreadCount(provider = "cpu", availableProcessors = 16))
+    }
+
+    @Test
     fun realtimeFactorUsesGeneratedAudioDurationAgainstComputeTime() {
         assertEquals(2.5f, generationRealtimeFactor(audioMillis = 4_000L, computeMillis = 10_000L)!!, 0.0001f)
         assertNull(generationRealtimeFactor(audioMillis = 0L, computeMillis = 10_000L))

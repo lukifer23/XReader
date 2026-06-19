@@ -73,7 +73,6 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     init {
         viewModelScope.launch {
-            container.neuralTtsRepository.ensureCatalogSeeded()
             settings.collect { settings ->
                 container.readAloudEngine.refreshVoices(settings.readAloudEngineName)
             }
