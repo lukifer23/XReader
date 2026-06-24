@@ -9,6 +9,7 @@ import com.k2fsa.sherpa.onnx.OfflineTts
 import com.k2fsa.sherpa.onnx.getOfflineTtsConfig
 import com.xreader.app.settings.NeuralTtsTone
 import java.io.File
+import java.util.Locale
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Test
@@ -26,6 +27,20 @@ class TtsAccelerationInstrumentedTest {
         )
 
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        InstrumentationRegistry.getArguments().getString("xreader.qnn.signed_pd")?.let { raw ->
+            TtsAccelerationRuntime.overrideQnnSignedProcessDomainForCurrentProcess(raw.toBooleanStrictOrNull())
+        }
+        TtsAccelerationRuntime.overrideQnnHtpDeviceOptionsForCurrentProcess(
+            includeSignedProcessDomainOption = InstrumentationRegistry.getArguments()
+                .getString("xreader.qnn.include_signed_pd_option")
+                ?.toBooleanStrictOrNull(),
+            socModel = InstrumentationRegistry.getArguments()
+                .getString("xreader.qnn.soc_model")
+                ?.toIntOrNull(),
+            htpArch = InstrumentationRegistry.getArguments()
+                .getString("xreader.qnn.htp_arch")
+                ?.toIntOrNull(),
+        )
         val spec = NeuralTtsModelCatalog.requireModel(NeuralTtsModelCatalog.DEFAULT_MODEL_ID)
         val modelDir = File(context.filesDir, "neural-tts/models/${spec.modelId}/${spec.rootDirectory}")
         assumeTrue("Kokoro model must be installed on this device.", File(modelDir, spec.modelFile).isFile)
@@ -33,10 +48,19 @@ class TtsAccelerationInstrumentedTest {
         val requestedProvider = InstrumentationRegistry.getArguments().getString("xreader.tts.provider")
         val providers = TtsAccelerationRuntime.providerOrder(
             context = context,
-            includeExperimentalWebGpu = true
+            includeExperimentalWebGpu = false,
+            includeCpuFallbacks = false
+        ).filter { neuralTtsProviderHasRequiredModelArtifact(spec, modelDir, it) }
+        assertTrue(
+            "No strict hardware TTS provider is available with the required Kokoro model artifact. " +
+                "Package QNN/OpenCL, install model.qnn.onnx for HTP, or use strict NNAPI.",
+            requestedProvider != null || providers.isNotEmpty()
         )
         val provider = requestedProvider?.toProviderString(context) ?: providers.first()
-        assertTrue(provider in providers || requestedProvider != null)
+        assertTrue(
+            "Requested provider is missing its required Kokoro model artifact.",
+            neuralTtsProviderHasRequiredModelArtifact(spec, modelDir, provider)
+        )
 
         val tts = if (requestedProvider == null) {
             createWithFallback(spec, modelDir, providers)
@@ -44,6 +68,7 @@ class TtsAccelerationInstrumentedTest {
             OfflineTts(config = ttsConfig(spec, modelDir, provider))
         }
         try {
+            val started = System.nanoTime()
             val generated = tts.generateWithConfig(
                 text = "XReader hardware acceleration smoke test.",
                 config = GenerationConfig(
@@ -52,8 +77,22 @@ class TtsAccelerationInstrumentedTest {
                     silenceScale = NeuralTtsTone.NATURAL.silenceScale,
                 )
             )
+            val elapsedMillis = ((System.nanoTime() - started) / 1_000_000L).coerceAtLeast(1L)
             assertTrue(generated.sampleRate > 0)
             assertTrue(generated.samples.isNotEmpty())
+            val audioMillis = generated.audioDurationMillis().coerceAtLeast(1L)
+            val realtimeFactor = generationRealtimeFactor(audioMillis, elapsedMillis)
+                ?: throw AssertionError("Hardware smoke test produced invalid timing metrics.")
+            Log.i(
+                tag,
+                "smokeProvider=$provider elapsedMs=$elapsedMillis audioMs=$audioMillis " +
+                    "realtimeFactor=$realtimeFactor samples=${generated.samples.size} sampleRate=${generated.sampleRate}"
+            )
+            assertTrue(
+                "Hardware smoke provider ${provider.providerLabel()} is too slow for audiobook generation: " +
+                    "realtimeFactor=${"%.2f".format(Locale.US, realtimeFactor)}.",
+                isUsableAudiobookHardwareRealtimeFactor(realtimeFactor)
+            )
         } finally {
             tts.release()
         }
@@ -79,9 +118,20 @@ class TtsAccelerationInstrumentedTest {
             ?.takeIf { it.isNotEmpty() }
             ?: TtsAccelerationRuntime.providerOrder(
                 context = context,
-                includeExperimentalWebGpu = true
+                includeExperimentalWebGpu = false,
+                includeCpuFallbacks = false
             )
-        val providers = requestedProviders.map { it.toProviderString(context) }
+        assertTrue(
+            "No strict hardware TTS providers are available for benchmark. Pass -e xreader.tts.providers for explicit comparison providers.",
+            requestedProviders.isNotEmpty()
+        )
+        val providers = requestedProviders
+            .map { it.toProviderString(context) }
+            .filter { neuralTtsProviderHasRequiredModelArtifact(spec, modelDir, it) }
+        assertTrue(
+            "No requested hardware providers have the required Kokoro model artifacts.",
+            providers.isNotEmpty()
+        )
 
         val text = "XReader measures local audiobook generation speed with a realistic sentence that includes punctuation, pauses, and normal narration cadence."
         val results = mutableListOf<Pair<String, Float>>()
@@ -101,7 +151,7 @@ class TtsAccelerationInstrumentedTest {
                         config = generationConfig(spec)
                     )
                     val elapsedMillis = ((System.nanoTime() - started) / 1_000_000L).coerceAtLeast(1L)
-                    val audioMillis = ((generated.samples.size.toLong() * 1000L) / generated.sampleRate.coerceAtLeast(1)).coerceAtLeast(1L)
+                    val audioMillis = generated.audioDurationMillis().coerceAtLeast(1L)
                     val realtimeFactor = elapsedMillis.toFloat() / audioMillis.toFloat()
                     results += provider to realtimeFactor
                     Log.i(
@@ -117,12 +167,21 @@ class TtsAccelerationInstrumentedTest {
         assertTrue("At least one provider must initialize and generate audio.", results.isNotEmpty())
         val fastest = results.minBy { it.second }
         Log.i(tag, "fastestProvider=${fastest.first} realtimeFactor=${fastest.second} all=$results")
+        assertTrue(
+            "Fastest hardware provider ${fastest.first.providerLabel()} is still too slow for audiobook generation: " +
+                "realtimeFactor=${"%.2f".format(Locale.US, fastest.second)}.",
+            isUsableAudiobookHardwareRealtimeFactor(fastest.second)
+        )
     }
 
     private fun ttsConfig(spec: NeuralTtsModelSpec, modelDir: File, provider: String) =
         getOfflineTtsConfig(
             modelDir = modelDir.absolutePath,
-            modelName = spec.modelFile,
+            modelName = neuralTtsModelFileForProvider(
+                spec = spec,
+                modelDir = modelDir,
+                provider = provider
+            ),
             acousticModelName = "",
             vocoder = "",
             voices = spec.voicesFile,
@@ -131,10 +190,16 @@ class TtsAccelerationInstrumentedTest {
             dictDir = "",
             ruleFsts = "",
             ruleFars = "",
-            numThreads = Runtime.getRuntime().availableProcessors().coerceIn(2, 4),
+            numThreads = neuralTtsHostThreadCount(
+                provider = provider,
+                workload = NeuralTtsRuntimeWorkload.AUDIOBOOK_GENERATION
+            ),
             provider = provider,
             isKitten = false
         ).apply {
+            require(neuralTtsProviderHasRequiredModelArtifact(spec, modelDir, provider)) {
+                "Provider ${provider.providerLabel()} is missing its required Kokoro model artifact."
+            }
             silenceScale = NeuralTtsTone.NATURAL.silenceScale
         }
 
@@ -170,8 +235,17 @@ class TtsAccelerationInstrumentedTest {
     }
 
     private fun String.toProviderString(context: android.content.Context): String {
-        if (this != "qnn") return this
-        return TtsAccelerationRuntime.qnnProviderString(context)
-            ?: throw AssertionError("QNN provider is unavailable on this device.")
+        val requested = trim().lowercase()
+        if (requested !in setOf("qnn", "qnn-gpu", "qnn-htp")) return this
+        val qnnProviders = TtsAccelerationRuntime.qnnProviderStrings(context)
+        if (requested == "qnn") {
+            return qnnProviders.firstOrNull()
+                ?: throw AssertionError("QNN provider is unavailable on this device.")
+        }
+        return qnnProviders.firstOrNull { TtsAccelerationRuntime.providerDisplayKey(it) == requested }
+            ?: throw AssertionError("Requested $requested provider is unavailable on this device.")
     }
+
+    private fun String.providerLabel(): String =
+        TtsAccelerationRuntime.providerDisplayKey(this)
 }

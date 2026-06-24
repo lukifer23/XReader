@@ -27,7 +27,7 @@ class NeuralTtsTextTest {
         assertTrue(prepared.segments.size > 1)
         assertEquals(1_200, prepared.wordCount)
         assertTrue(prepared.segments.last().contains("word1200"))
-        assertTrue(prepared.segments.all { it.length <= 1600 || !it.contains(' ') })
+        assertTrue(prepared.segments.all { it.length <= 2400 || !it.contains(' ') })
     }
 
     @Test
@@ -96,7 +96,7 @@ class NeuralTtsTextTest {
         val prepared = NeuralTtsText.prepare(listOf(chunk(text = text)))
 
         assertTrue(prepared.segments.size >= 2)
-        assertTrue(prepared.segments.all { it.length <= 1600 })
+        assertTrue(prepared.segments.all { it.length <= 1400 })
         assertTrue(prepared.segments.any { it.contains("\"This is a quoted sentence,\" she said.") })
         assertTrue(prepared.segments.any { it.contains("Kokoro rush through the audiobook narration.") })
     }
@@ -110,8 +110,21 @@ class NeuralTtsTextTest {
         val prepared = NeuralTtsText.prepare(listOf(chunk(text = sentences)))
 
         assertTrue("Expected far fewer generated prompts than sentences.", prepared.segments.size < 8)
-        assertTrue(prepared.segments.all { it.length <= 1600 })
+        assertTrue(prepared.segments.all { it.length <= 1400 })
         assertEquals(560, prepared.wordCount)
+    }
+
+    @Test
+    fun prepareUsesResponsiveBodySegmentsToKeepGenerationCancelable() {
+        val sentences = (1..32).joinToString(" ") { index ->
+            "The survey ship crossed the dark lane $index while the crew compared the quiet signal with the old maps."
+        }
+
+        val prepared = NeuralTtsText.prepare(listOf(chunk(heading = "Chapter 1", text = sentences)))
+
+        assertTrue("Expected responsive prompts so slow generation reports progress sooner.", prepared.segments.size in 3..6)
+        assertTrue(prepared.segments.all { it.length <= 1400 })
+        assertEquals(listOf(0), prepared.chapters.map { it.firstSegmentIndex })
     }
 
     @Test
@@ -127,7 +140,7 @@ class NeuralTtsTextTest {
         val prepared = NeuralTtsText.prepare(chunks)
 
         assertTrue("Expected far fewer prompts than extracted chunks.", prepared.segments.size < 25)
-        assertTrue(prepared.segments.all { it.length <= 1600 })
+        assertTrue(prepared.segments.all { it.length <= 1400 })
         assertEquals(900, prepared.wordCount)
         assertTrue(prepared.joinedSegments().contains("Line 1 keeps the scene moving"))
         assertTrue(prepared.joinedSegments().contains("Line 100 keeps the scene moving"))

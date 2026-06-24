@@ -505,10 +505,10 @@ internal object NeuralTtsText {
         PART_HEADING,
     }
 
-    private const val MIN_SEGMENT_CHARS = 220
-    private const val TARGET_SEGMENT_CHARS = 1180
-    private const val HEADING_TARGET_SEGMENT_CHARS = 160
-    private const val MAX_SEGMENT_CHARS = 1600
+    private const val MIN_SEGMENT_CHARS = 180
+    private const val TARGET_SEGMENT_CHARS = 900
+    private const val HEADING_TARGET_SEGMENT_CHARS = 220
+    private const val MAX_SEGMENT_CHARS = 1400
     private const val FRONT_MATTER_SCAN_LIMIT = 48
     private val AUDIOBOOK_SENTENCE_BOUNDARY = Regex("(?<=[.!?][\"']?)\\s+")
     private val AUDIOBOOK_TOC_LEADER_ENTRY_REGEX = Regex(

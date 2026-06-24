@@ -114,6 +114,7 @@ import com.xreader.app.tts.ReadAloudEngineOption
 import com.xreader.app.tts.ReadAloudVoiceOption
 import com.xreader.app.tts.NeuralTtsModelCatalog
 import com.xreader.app.tts.AudiobookPlaybackUiState
+import com.xreader.app.tts.EMPTY_AUDIOBOOK_PLAYBACK_UI_STATE
 import com.xreader.app.tts.TtsAccelerationRuntime
 import com.xreader.app.tts.canDeleteGeneratedAudiobook
 import com.xreader.app.tts.generationEtaLabel
@@ -487,7 +488,7 @@ private fun BookAnalyticsRow(row: BookAnalytics) {
 
 data class AudiobooksUiState(
     val rows: List<GeneratedAudiobookUiItem> = emptyList(),
-    val playback: AudiobookPlaybackUiState = AudiobookPlaybackUiState(),
+    val playback: AudiobookPlaybackUiState = EMPTY_AUDIOBOOK_PLAYBACK_UI_STATE,
     val message: String? = null,
 )
 
@@ -576,8 +577,7 @@ class AudiobooksViewModel(private val container: AppContainer) : ViewModel() {
         ) { books, audioRows ->
             withContext(Dispatchers.Default) {
                 val booksById = books.associateBy { it.id }
-                audioRows.mapNotNull { audio ->
-                    val audioItem = audio.toBookAudiobookAudioUiItem()
+                audioRows.toBookAudiobookAudioUiItems().mapNotNull { audioItem ->
                     if (!audioItem.shouldShowInGlobalAudiobooksScreen()) return@mapNotNull null
                     booksById[audioItem.audio.bookId]?.let { book ->
                         GeneratedAudiobookUiItem(
@@ -1030,8 +1030,12 @@ internal fun generationRealtimeFactorLabel(audioMillis: Long, computeMillis: Lon
 }
 
 private fun String.generationProviderLabel(): String =
-    when (TtsAccelerationRuntime.providerKey(this)) {
+    when (TtsAccelerationRuntime.providerDisplayKey(this)) {
         "webgpu" -> "WebGPU"
+        "qnn-gpu-hybrid" -> "QNN GPU hybrid"
+        "qnn-htp-hybrid" -> "QNN NPU hybrid"
+        "qnn-gpu" -> "QNN GPU"
+        "qnn-htp" -> "QNN NPU"
         "qnn" -> "NPU"
         "nnapi" -> "NNAPI"
         "xnnpack" -> "XNNPACK"
@@ -1107,7 +1111,7 @@ internal fun audiobookPlaybackIconLabel(
 internal fun audiobookExportActionLabel(audio: BookAudioEntity, playableSegmentFiles: Int? = null): String =
     generatedAudiobookActionState(
         active = false,
-        playback = AudiobookPlaybackUiState(),
+        playback = EMPTY_AUDIOBOOK_PLAYBACK_UI_STATE,
         audio = audio,
         playableSegmentFiles = playableSegmentFiles
     ).exportLabel
@@ -1143,7 +1147,7 @@ internal fun canPlayGeneratedAudiobookAction(
 internal fun canExportGeneratedAudiobookAction(audio: BookAudioEntity): Boolean =
     generatedAudiobookActionState(
         active = false,
-        playback = AudiobookPlaybackUiState(),
+        playback = EMPTY_AUDIOBOOK_PLAYBACK_UI_STATE,
         audio = audio
     ).canExport
 
@@ -1216,7 +1220,7 @@ internal fun AudiobookPlaybackUiState.canSkipNextChapter(chapters: List<Generate
     chapters.nextChapterStart(segmentIndex) != null
 
 internal fun AudiobookPlaybackUiState.forAudiobooksScreenRow(audioId: Long): AudiobookPlaybackUiState =
-    if (this.audioId == audioId && active) this else AudiobookPlaybackUiState()
+    if (this.audioId == audioId && active) this else EMPTY_AUDIOBOOK_PLAYBACK_UI_STATE
 
 internal fun GeneratedAudiobookChapter.chapterRangeLabel(): String =
     when {
@@ -1552,6 +1556,9 @@ internal fun SettingsRoute(
             snackbarHostState.showSnackbar(message)
             viewModel.clearMaintenanceMessage()
         }
+    }
+    LaunchedEffect(settings.readAloudEngineName) {
+        viewModel.refreshReadAloudOptions(settings.readAloudEngineName)
     }
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },

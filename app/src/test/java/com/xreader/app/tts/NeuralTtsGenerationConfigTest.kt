@@ -6,6 +6,7 @@ import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -30,14 +31,64 @@ class NeuralTtsGenerationConfigTest {
     @Test
     fun hardwareAcceleratedTtsProvidersUseOneHostThread() {
         assertEquals(1, neuralTtsHostThreadCount(provider = "qnn:/tmp/provider.config", availableProcessors = 8))
+        assertEquals(1, neuralTtsHostThreadCount(provider = "nnapi", availableProcessors = 8))
         assertEquals(1, neuralTtsHostThreadCount(provider = "webgpu", availableProcessors = 8))
+        assertEquals(
+            1,
+            neuralTtsHostThreadCount(
+                provider = "qnn:/tmp/provider.config",
+                workload = NeuralTtsRuntimeWorkload.AUDIOBOOK_GENERATION,
+                availableProcessors = 8
+            )
+        )
     }
 
     @Test
-    fun cpuBackedTtsProvidersReserveCoresForUiResponsiveness() {
+    fun cpuBackedPreviewTtsProvidersReserveCoresForUiResponsiveness() {
         assertEquals(1, neuralTtsHostThreadCount(provider = "cpu", availableProcessors = 2))
         assertEquals(2, neuralTtsHostThreadCount(provider = "xnnpack", availableProcessors = 8))
         assertEquals(2, neuralTtsHostThreadCount(provider = "cpu", availableProcessors = 16))
+    }
+
+    @Test
+    fun cpuBackedAudiobookGenerationUsesMoreBoundedHostThreads() {
+        assertEquals(
+            1,
+            neuralTtsHostThreadCount(
+                provider = "xnnpack",
+                workload = NeuralTtsRuntimeWorkload.AUDIOBOOK_GENERATION,
+                availableProcessors = 2
+            )
+        )
+        assertEquals(
+            3,
+            neuralTtsHostThreadCount(
+                provider = "xnnpack",
+                workload = NeuralTtsRuntimeWorkload.AUDIOBOOK_GENERATION,
+                availableProcessors = 4
+            )
+        )
+        assertEquals(
+            4,
+            neuralTtsHostThreadCount(
+                provider = "cpu",
+                workload = NeuralTtsRuntimeWorkload.AUDIOBOOK_GENERATION,
+                availableProcessors = 8
+            )
+        )
+        assertEquals(
+            4,
+            neuralTtsHostThreadCount(
+                provider = "cpu",
+                workload = NeuralTtsRuntimeWorkload.AUDIOBOOK_GENERATION,
+                availableProcessors = 16
+            )
+        )
+    }
+
+    @Test
+    fun neuralTtsGenerationUsesSharedDedicatedDispatcher() {
+        assertSame(neuralTtsGenerationDispatcher(), neuralTtsGenerationDispatcher())
     }
 
     @Test
@@ -45,6 +96,47 @@ class NeuralTtsGenerationConfigTest {
         assertEquals(2.5f, generationRealtimeFactor(audioMillis = 4_000L, computeMillis = 10_000L)!!, 0.0001f)
         assertNull(generationRealtimeFactor(audioMillis = 0L, computeMillis = 10_000L))
         assertNull(generationRealtimeFactor(audioMillis = 4_000L, computeMillis = 0L))
+    }
+
+    @Test
+    fun fullBookHardwareGenerationRejectsNearRealtimeProviders() {
+        assertTrue(isUsableAudiobookHardwareRealtimeFactor(MAX_AUDIOBOOK_HARDWARE_REALTIME_FACTOR))
+        assertTrue(isUsableAudiobookHardwareRealtimeFactor(0.25f))
+        assertFalse(isUsableAudiobookHardwareRealtimeFactor(0.56f))
+        assertFalse(isUsableAudiobookHardwareRealtimeFactor(1.0f))
+        assertFalse(isUsableAudiobookHardwareRealtimeFactor(Float.NaN))
+    }
+
+    @Test
+    fun fullBookHardwareGenerationSpeedGateWaitsForSustainedEvidence() {
+        assertFalse(
+            isSustainedUnusableAudiobookHardwareGenerationSpeed(
+                audioMillis = MIN_HARDWARE_SPEED_GATE_AUDIO_MS,
+                computeMillis = (MIN_HARDWARE_SPEED_GATE_AUDIO_MS * 0.9f).toLong(),
+                generatedSegments = MIN_HARDWARE_SPEED_GATE_SEGMENTS - 1
+            )
+        )
+        assertFalse(
+            isSustainedUnusableAudiobookHardwareGenerationSpeed(
+                audioMillis = MIN_HARDWARE_SPEED_GATE_AUDIO_MS - 1,
+                computeMillis = MIN_HARDWARE_SPEED_GATE_AUDIO_MS,
+                generatedSegments = MIN_HARDWARE_SPEED_GATE_SEGMENTS
+            )
+        )
+        assertTrue(
+            isSustainedUnusableAudiobookHardwareGenerationSpeed(
+                audioMillis = MIN_HARDWARE_SPEED_GATE_AUDIO_MS,
+                computeMillis = (MIN_HARDWARE_SPEED_GATE_AUDIO_MS * 0.9f).toLong(),
+                generatedSegments = MIN_HARDWARE_SPEED_GATE_SEGMENTS
+            )
+        )
+        assertFalse(
+            isSustainedUnusableAudiobookHardwareGenerationSpeed(
+                audioMillis = MIN_HARDWARE_SPEED_GATE_AUDIO_MS,
+                computeMillis = (MIN_HARDWARE_SPEED_GATE_AUDIO_MS * 0.4f).toLong(),
+                generatedSegments = MIN_HARDWARE_SPEED_GATE_SEGMENTS
+            )
+        )
     }
 
     @Test
@@ -101,5 +193,95 @@ class NeuralTtsGenerationConfigTest {
 
         assertEquals(0.92f, config.speed, 0.0001f)
         assertEquals(0.18f, config.silenceScale, 0.0001f)
+    }
+
+    @Test
+    fun catalogDefinesQnnPreparedKokoroModelTarget() {
+        val spec = NeuralTtsModelCatalog.requireModel(NeuralTtsModelCatalog.DEFAULT_MODEL_ID)
+
+        assertEquals("model.onnx", spec.modelFile)
+        assertEquals("model.qnn.onnx", spec.hardwareModelFile)
+    }
+
+    @Test
+    fun hardwareModelSelectionIsProviderSpecific() {
+        val spec = NeuralTtsModelCatalog.requireModel(NeuralTtsModelCatalog.DEFAULT_MODEL_ID)
+        val modelDir = temporaryFolder.newFolder("kokoro")
+        File(modelDir, spec.modelFile).writeBytes(byteArrayOf(1))
+        File(modelDir, spec.hardwareModelFile).writeBytes(byteArrayOf(2))
+        File(modelDir, spec.hardwareModelManifestFile).writeText(
+            """{"output_model":"${spec.hardwareModelFile}","strict_qnn_compatible":true}"""
+        )
+
+        assertEquals(
+            spec.modelFile,
+            neuralTtsModelFileForProvider(spec, modelDir, "qnn:/tmp/xreader-qnn-gpu-strict-provider.config")
+        )
+        assertEquals(
+            spec.hardwareModelFile,
+            neuralTtsModelFileForProvider(spec, modelDir, "qnn:/tmp/xreader-qnn-htp-strict-provider.config")
+        )
+        assertEquals(spec.modelFile, neuralTtsModelFileForProvider(spec, modelDir, "nnapi"))
+        assertEquals(spec.modelFile, neuralTtsModelFileForProvider(spec, modelDir, "webgpu"))
+        assertEquals(spec.modelFile, neuralTtsModelFileForProvider(spec, modelDir, "xnnpack"))
+        assertEquals(spec.modelFile, neuralTtsModelFileForProvider(spec, modelDir, "cpu"))
+    }
+
+    @Test
+    fun htpProviderRequiresPreparedArtifactBeforeAudiobookGenerationCanUseIt() {
+        val spec = NeuralTtsModelCatalog.requireModel(NeuralTtsModelCatalog.DEFAULT_MODEL_ID)
+        val modelDir = temporaryFolder.newFolder("kokoro-stock")
+        File(modelDir, spec.modelFile).writeBytes(byteArrayOf(1))
+
+        assertTrue(
+            neuralTtsProviderHasRequiredModelArtifact(
+                spec,
+                modelDir,
+                "qnn:/tmp/xreader-qnn-gpu-strict-provider.config"
+            )
+        )
+        assertFalse(
+            neuralTtsProviderHasRequiredModelArtifact(
+                spec,
+                modelDir,
+                "qnn:/tmp/xreader-qnn-htp-strict-provider.config"
+            )
+        )
+        File(modelDir, spec.hardwareModelFile).writeBytes(byteArrayOf(2))
+        assertFalse(
+            neuralTtsProviderHasRequiredModelArtifact(
+                spec,
+                modelDir,
+                "qnn:/tmp/xreader-qnn-htp-strict-provider.config"
+            )
+        )
+        File(modelDir, spec.hardwareModelManifestFile).writeText(
+            """{"output_model":"${spec.hardwareModelFile}","strict_qnn_compatible":true}"""
+        )
+        assertTrue(
+            neuralTtsProviderHasRequiredModelArtifact(
+                spec,
+                modelDir,
+                "qnn:/tmp/xreader-qnn-htp-strict-provider.config"
+            )
+        )
+        assertEquals(
+            spec.hardwareModelFile,
+            neuralTtsModelFileForProvider(spec, modelDir, "qnn:/tmp/xreader-qnn-htp-strict-provider.config")
+        )
+    }
+
+    @Test
+    fun missingHardwareArtifactReasonNamesPreparedQnnModel() {
+        val spec = NeuralTtsModelCatalog.requireModel(NeuralTtsModelCatalog.DEFAULT_MODEL_ID)
+
+        val reason = neuralTtsMissingHardwareArtifactReason(
+            spec = spec,
+            providers = listOf("qnn:/tmp/xreader-qnn-htp-strict-provider.config")
+        )
+
+        assertTrue(reason.contains("qnn-htp"))
+        assertTrue(reason.contains("Kokoro v1.0"))
+        assertTrue(reason.contains("model.qnn.onnx"))
     }
 }

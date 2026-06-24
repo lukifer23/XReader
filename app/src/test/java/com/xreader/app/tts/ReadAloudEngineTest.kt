@@ -159,6 +159,23 @@ class ReadAloudEngineTest {
     }
 
     @Test
+    fun readAloudStateEmissionSkipsIdenticalStatesOnly() {
+        val current = ReadAloudState(
+            activeBookId = 7,
+            bookTitle = "Takedown",
+            playing = true,
+            currentChunk = 2,
+            totalChunks = 12,
+            currentHeading = "Chapter Seven"
+        )
+
+        assertEquals(false, shouldEmitReadAloudState(current, current.copy()))
+        assertEquals(true, shouldEmitReadAloudState(current, current.copy(currentChunk = 3)))
+        assertEquals(true, shouldEmitReadAloudState(current, current.copy(playing = false, paused = true)))
+        assertEquals(true, shouldEmitReadAloudState(current, current.copy(message = "Read aloud paused")))
+    }
+
+    @Test
     fun mediaSessionMetadataKeyIgnoresHeadingWhitespaceOnlyChanges() {
         assertEquals(
             readAloudMetadataKey(bookTitle = "Takedown", heading = "  Chapter   Seven  "),

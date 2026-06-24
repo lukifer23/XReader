@@ -17,6 +17,8 @@ class NeuralTtsModelCatalogTest {
         assertEquals(349_418_188L, model.archiveBytes)
         assertEquals("c133d26353d776da730870dac7da07dbfc9a5e3bc80cc5e8e83ab6e823be7046", model.sha256)
         assertEquals("model.onnx", model.modelFile)
+        assertEquals("model.qnn.onnx", model.hardwareModelFile)
+        assertEquals("xreader-qnn-model-manifest.json", model.hardwareModelManifestFile)
         assertEquals("tokens.txt", model.tokensFile)
         assertEquals("espeak-ng-data", model.dataDirectory)
         assertEquals("voices.bin", model.voicesFile)

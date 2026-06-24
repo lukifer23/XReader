@@ -75,8 +75,20 @@ class GeneratedAudiobookForegroundService : Service() {
             stopForegroundAndSelf(removeNotification = true)
             return
         }
-        startForegroundCompat(buildNotification(state))
-        foregroundStarted = true
+        val notification = buildNotification(state)
+        when (foregroundNotificationOperation(foregroundStarted)) {
+            ForegroundNotificationOperation.START_FOREGROUND -> {
+                startForegroundCompat(notification)
+                foregroundStarted = true
+            }
+            ForegroundNotificationOperation.UPDATE_NOTIFICATION ->
+                postForegroundNotificationUpdate(
+                    context = this,
+                    notificationManager = notificationManager,
+                    notificationId = NOTIFICATION_ID,
+                    notification = notification
+                )
+        }
     }
 
     private fun startForegroundIfNeeded(state: AudiobookPlaybackUiState) {

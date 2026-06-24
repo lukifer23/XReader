@@ -1,0 +1,127 @@
+diff --git a/onnxruntime/core/providers/qnn/builder/qnn_model_wrapper.cc b/onnxruntime/core/providers/qnn/builder/qnn_model_wrapper.cc
+index 6032623541..3295a688da 100644
+--- a/onnxruntime/core/providers/qnn/builder/qnn_model_wrapper.cc
++++ b/onnxruntime/core/providers/qnn/builder/qnn_model_wrapper.cc
+@@ -225,6 +225,13 @@ Status QnnModelWrapper::ValidateQnnNode(const std::string& node_name,
+ bool QnnModelWrapper::CreateBF16CastTensor(const std::string& tensor_name,
+                                            const std::vector<uint32_t>& shape,
+                                            Qnn_TensorType_t tensor_type) {
++#ifndef QNN_DATATYPE_BFLOAT_16
++  ORT_UNUSED_PARAMETER(tensor_name);
++  ORT_UNUSED_PARAMETER(shape);
++  ORT_UNUSED_PARAMETER(tensor_type);
++  LOGS(logger_, VERBOSE) << "BF16: QNN SDK does not expose BF16 tensors; skipping BF16 cast tensor creation.";
++  return false;
++#else
+   QnnTensorWrapper bf16_tensor(tensor_name, tensor_type, QNN_DATATYPE_BFLOAT_16,
+                                QnnQuantParamsWrapper(), std::vector<uint32_t>(shape));
+   if (!AddTensorWrapper(std::move(bf16_tensor))) {
+@@ -232,6 +239,7 @@ bool QnnModelWrapper::CreateBF16CastTensor(const std::string& tensor_name,
+     return false;
+   }
+   return true;
++#endif
+ }
+ 
+ bool QnnModelWrapper::ProcessBF16InputConversion(const std::string& qnn_node_name,
+@@ -239,6 +247,11 @@ bool QnnModelWrapper::ProcessBF16InputConversion(const std::string& qnn_node_nam
+                                                  std::vector<std::string>& converted_input_names,
+                                                  std::vector<QnnOpProperty>& cast_ops_to_add) {
+   ORT_UNUSED_PARAMETER(qnn_node_name);
++#ifndef QNN_DATATYPE_BFLOAT_16
++  ORT_UNUSED_PARAMETER(cast_ops_to_add);
++  converted_input_names.insert(converted_input_names.end(), input_names.begin(), input_names.end());
++  return true;
++#else
+ 
+   for (size_t i = 0; i < input_names.size(); ++i) {
+     const auto& input_name = input_names[i];
+@@ -300,6 +313,7 @@ bool QnnModelWrapper::ProcessBF16InputConversion(const std::string& qnn_node_nam
+   }
+ 
+   return true;
++#endif
+ }
+ 
+ bool QnnModelWrapper::ProcessBF16OutputConversion(const std::string& qnn_node_name,
+@@ -307,6 +321,11 @@ bool QnnModelWrapper::ProcessBF16OutputConversion(const std::string& qnn_node_na
+                                                   std::vector<std::string>& converted_output_names,
+                                                   std::vector<std::pair<std::string, std::string>>& graph_output_cast_ops) {
+   ORT_UNUSED_PARAMETER(qnn_node_name);
++#ifndef QNN_DATATYPE_BFLOAT_16
++  ORT_UNUSED_PARAMETER(graph_output_cast_ops);
++  converted_output_names.insert(converted_output_names.end(), output_names.begin(), output_names.end());
++  return true;
++#else
+ 
+   for (size_t i = 0; i < output_names.size(); ++i) {
+     const auto& output_name = output_names[i];
+@@ -344,12 +363,18 @@ bool QnnModelWrapper::ProcessBF16OutputConversion(const std::string& qnn_node_na
+   }
+ 
+   return true;
++#endif
+ }
+ 
+ bool QnnModelWrapper::ApplyBF16ConversionForValidation(const std::vector<std::string>& input_names,
+                                                        const std::vector<std::string>& output_names,
+                                                        std::vector<std::string>& validation_input_names,
+                                                        std::vector<std::string>& validation_output_names) {
++#ifndef QNN_DATATYPE_BFLOAT_16
++  validation_input_names.insert(validation_input_names.end(), input_names.begin(), input_names.end());
++  validation_output_names.insert(validation_output_names.end(), output_names.begin(), output_names.end());
++  return true;
++#else
+   // Temporarily convert FP32 tensors to BF16 for validation
+   for (const auto& input_name : input_names) {
+     auto it = model_tensors_map_.find(input_name);
+@@ -377,10 +402,15 @@ bool QnnModelWrapper::ApplyBF16ConversionForValidation(const std::vector<std::st
+   }
+ 
+   return true;
++#endif
+ }
+ 
+ void QnnModelWrapper::RestoreFP32AfterValidation(const std::vector<std::string>& input_names,
+                                                  const std::vector<std::string>& output_names) {
++#ifndef QNN_DATATYPE_BFLOAT_16
++  ORT_UNUSED_PARAMETER(input_names);
++  ORT_UNUSED_PARAMETER(output_names);
++#else
+   // Restore FP32 data types after validation
+   for (const auto& input_name : input_names) {
+     auto it = model_tensors_map_.find(input_name);
+@@ -401,6 +431,7 @@ void QnnModelWrapper::RestoreFP32AfterValidation(const std::vector<std::string>&
+       }
+     }
+   }
++#endif
+ }
+ 
+ bool QnnModelWrapper::CreateQnnNode(const std::string& qnn_node_name,
+diff --git a/onnxruntime/core/providers/qnn/builder/qnn_utils.cc b/onnxruntime/core/providers/qnn/builder/qnn_utils.cc
+index 4d7189d672..42752ac85c 100644
+--- a/onnxruntime/core/providers/qnn/builder/qnn_utils.cc
++++ b/onnxruntime/core/providers/qnn/builder/qnn_utils.cc
+@@ -34,7 +34,9 @@ size_t GetElementSizeByType(const Qnn_DataType_t& data_type) {
+       {QNN_DATATYPE_UINT_64, 8},
+       {QNN_DATATYPE_FLOAT_16, 2},
+       {QNN_DATATYPE_FLOAT_32, 4},
++#ifdef QNN_DATATYPE_BFLOAT_16
+       {QNN_DATATYPE_BFLOAT_16, 2},
++#endif
+       {QNN_DATATYPE_BOOL_8, 1},
+       {QNN_DATATYPE_SFIXED_POINT_4, sizeof(Int4x2)},
+       {QNN_DATATYPE_SFIXED_POINT_8, 1},
+@@ -219,9 +221,11 @@ std::ostream& operator<<(std::ostream& out, const Qnn_DataType_t& data_type) {
+     case QNN_DATATYPE_FLOAT_32:
+       out << "QNN_DATATYPE_FLOAT_32";
+       break;
++#ifdef QNN_DATATYPE_BFLOAT_16
+     case QNN_DATATYPE_BFLOAT_16:
+       out << "QNN_DATATYPE_BFLOAT_16";
+       break;
++#endif
+     case QNN_DATATYPE_SFIXED_POINT_8:
+       out << "QNN_DATATYPE_SFIXED_POINT_8";
+       break;

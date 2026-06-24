@@ -6,11 +6,15 @@ import com.xreader.app.data.BookEntity
 import com.xreader.app.data.BookFormat
 import com.xreader.app.data.NeuralTtsModelStatus
 import com.xreader.app.tts.AudiobookGenerationScope
+import com.xreader.app.tts.AudiobookGenerationHardwareReadiness
 import com.xreader.app.tts.AudiobookPlaybackUiState
+import com.xreader.app.tts.EMPTY_AUDIOBOOK_PLAYBACK_UI_STATE
 import com.xreader.app.tts.GeneratedAudiobookChapter
 import com.xreader.app.tts.playableSegmentCount
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -737,6 +741,32 @@ class AudiobookUiFormattersTest {
     }
 
     @Test
+    fun generatedAudiobookUiItemUsesChapterSidecarWithoutVerifyingEverySegmentFile() {
+        val dir = kotlin.io.path.createTempDirectory("xreader-audio-ui").toFile()
+        try {
+            File(dir, "chapters.tsv").writeText(
+                """
+                index	firstSegment	segmentCount	title
+                0	0	2	Chapter 1
+                1	2	3	Chapter 2
+                """.trimIndent()
+            )
+            val audio = playableAudio(1).copy(
+                filePath = dir.absolutePath,
+                segmentCount = 5,
+                completedSegments = 5
+            )
+
+            val item = audio.toBookAudiobookAudioUiItem()
+
+            assertEquals(listOf("Chapter 1", "Chapter 2"), item.chapters.map { it.title })
+            assertEquals(5, item.playableSegmentFiles)
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
     fun globalAudiobookVisibilityKeepsGeneratedActiveAndPlayablePartialRows() {
         assertTrue(
             bookAudioItem(audio(1).copy(status = BookAudioStatus.GENERATED), playableSegmentFiles = 0)
@@ -806,7 +836,12 @@ class AudiobookUiFormattersTest {
 
         assertEquals(playback, playback.forAudiobooksScreenRow(audioId = 10))
         assertEquals(AudiobookPlaybackUiState(), playback.forAudiobooksScreenRow(audioId = 11))
+        assertSame(EMPTY_AUDIOBOOK_PLAYBACK_UI_STATE, playback.forAudiobooksScreenRow(audioId = 11))
         assertEquals(
+            playback.forAudiobooksScreenRow(audioId = 11),
+            playback.copy(segmentPositionMs = 65_000).forAudiobooksScreenRow(audioId = 11)
+        )
+        assertSame(
             playback.forAudiobooksScreenRow(audioId = 11),
             playback.copy(segmentPositionMs = 65_000).forAudiobooksScreenRow(audioId = 11)
         )
@@ -871,6 +906,78 @@ class AudiobookUiFormattersTest {
         assertTrue(
             listOf(base).audiobookUiInvalidationKeys() !=
                 listOf(base.copy(status = BookAudioStatus.CANCELED)).audiobookUiInvalidationKeys()
+        )
+    }
+
+    @Test
+    fun audiobookUiInvalidationKeyIgnoresRawTimingMetricOnlyChanges() {
+        val base = playableAudio(4).copy(
+            generationAudioMillis = 30_000L,
+            generationComputeMillis = 12_000L
+        )
+
+        assertEquals(
+            base.audiobookUiInvalidationKey(),
+            base.copy(
+                generationAudioMillis = 60_000L,
+                generationComputeMillis = 24_000L
+            ).audiobookUiInvalidationKey()
+        )
+        assertTrue(
+            base.audiobookUiInvalidationKey() !=
+                base.copy(completedSegments = 3).audiobookUiInvalidationKey()
+        )
+    }
+
+    @Test
+    fun audiobookUiInvalidationKeyIgnoresTimestampOnlyChanges() {
+        val base = playableAudio(4).copy(updatedAt = 1_000L)
+
+        assertEquals(
+            base.audiobookUiInvalidationKey(),
+            base.copy(updatedAt = 2_000L).audiobookUiInvalidationKey()
+        )
+        assertTrue(
+            base.audiobookUiInvalidationKey() !=
+                base.copy(generatedAt = 2_000L).audiobookUiInvalidationKey()
+        )
+    }
+
+    @Test
+    fun audiobookGenerationBlockedReasonIncludesHardwareReadinessAfterInstall() {
+        val hardwareReason = "No strict hardware TTS provider is available."
+
+        assertEquals(
+            hardwareReason,
+            audiobookGenerationBlockedReason(
+                status = NeuralTtsModelStatus.INSTALLED,
+                generatingSelectedAudio = false,
+                modelName = "Kokoro v1.0",
+                hardwareReadiness = AudiobookGenerationHardwareReadiness(
+                    ready = false,
+                    reason = hardwareReason
+                )
+            )
+        )
+        assertEquals(
+            "Download Kokoro v1.0 before generating audiobook audio.",
+            audiobookGenerationBlockedReason(
+                status = NeuralTtsModelStatus.NOT_DOWNLOADED,
+                generatingSelectedAudio = false,
+                modelName = "Kokoro v1.0",
+                hardwareReadiness = AudiobookGenerationHardwareReadiness(
+                    ready = false,
+                    reason = hardwareReason
+                )
+            )
+        )
+        assertNull(
+            audiobookGenerationBlockedReason(
+                status = NeuralTtsModelStatus.INSTALLED,
+                generatingSelectedAudio = false,
+                modelName = "Kokoro v1.0",
+                hardwareReadiness = AudiobookGenerationHardwareReadiness(ready = true)
+            )
         )
     }
 

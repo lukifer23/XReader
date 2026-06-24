@@ -1,0 +1,25 @@
+diff --git a/include/onnxruntime/core/session/onnxruntime_c_api.h b/include/onnxruntime/core/session/onnxruntime_c_api.h
+index e14f5fbd5c..11ef5c0d4 100644
+--- a/include/onnxruntime/core/session/onnxruntime_c_api.h
++++ b/include/onnxruntime/core/session/onnxruntime_c_api.h
+@@ -4108,6 +4108,7 @@ struct OrtApi {
+    *      -# "69"
+    *      -# "73"
+    *      -# "75"
++   *      -# "79"
+    *      -# "81"
+    *   "device_id": The ID of the device to use when setting 'htp_arch'. Defaults to "0" (for single device).
+    *   "enable_htp_fp16_precision": Used for float32 model for HTP backend.
+diff --git a/onnxruntime/core/providers/qnn/qnn_execution_provider.cc b/onnxruntime/core/providers/qnn/qnn_execution_provider.cc
+index 59532f40e..9fa6f42de 100644
+--- a/onnxruntime/core/providers/qnn/qnn_execution_provider.cc
++++ b/onnxruntime/core/providers/qnn/qnn_execution_provider.cc
+@@ -176,6 +176,8 @@ static void ParseHtpArchitecture(const std::string& htp_arch_string, QnnHtpDevic
+     qnn_htp_arch = QNN_HTP_DEVICE_ARCH_V73;
+   } else if (htp_arch_string == "75") {
+     qnn_htp_arch = QNN_HTP_DEVICE_ARCH_V75;
++  } else if (htp_arch_string == "79") {
++    qnn_htp_arch = QNN_HTP_DEVICE_ARCH_V79;
+   } else if (htp_arch_string == "81") {
+     qnn_htp_arch = QNN_HTP_DEVICE_ARCH_V81;
+   } else {

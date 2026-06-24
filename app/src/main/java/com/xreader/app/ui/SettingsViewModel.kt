@@ -71,16 +71,15 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     private val _maintenance = MutableStateFlow(SettingsMaintenanceUiState())
     val maintenance: StateFlow<SettingsMaintenanceUiState> = _maintenance
 
-    init {
-        viewModelScope.launch {
-            settings.collect { settings ->
-                container.readAloudEngine.refreshVoices(settings.readAloudEngineName)
-            }
-        }
-    }
-
     fun setTheme(theme: com.xreader.app.data.ReaderTheme) {
         viewModelScope.launch { container.settingsRepository.setTheme(theme) }
+    }
+
+    fun refreshReadAloudOptions(engineName: String? = settings.value.readAloudEngineName) {
+        viewModelScope.launch {
+            container.readAloudEngine.refreshEngines()
+            container.readAloudEngine.refreshVoices(engineName)
+        }
     }
 
     fun setFontScale(value: Float) {
@@ -206,7 +205,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     fun previewNeuralTtsModel(modelId: String) {
         neuralPreviewJob?.cancel()
-        neuralPreviewPlayer = releaseNeuralPreviewPlayback(neuralPreviewPlayer)
+        neuralPreviewPlayer = releaseNeuralPreviewPlaybackAsync(neuralPreviewPlayer, viewModelScope)
         neuralPreviewJob = viewModelScope.launch {
             runCatching {
                 val currentSettings = settings.value
@@ -218,7 +217,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
                 )
                 neuralPreviewPlayer = startNeuralPreviewPlayback(
                     file = file,
-                    previousPlayer = neuralPreviewPlayer,
+                    releaseScope = viewModelScope,
                     onCleared = { player ->
                         if (neuralPreviewPlayer === player) neuralPreviewPlayer = null
                     }
@@ -412,7 +411,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     override fun onCleared() {
         neuralPreviewJob?.cancel()
-        neuralPreviewPlayer = releaseNeuralPreviewPlayback(neuralPreviewPlayer)
+        neuralPreviewPlayer = releaseNeuralPreviewPlaybackAsync(neuralPreviewPlayer, container.applicationScope)
         super.onCleared()
     }
 }

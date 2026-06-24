@@ -48,6 +48,16 @@ internal fun BookAudioEntity.playableSegmentFiles(): List<File> {
     return root.contiguousGeneratedAudiobookSegmentFiles(playableSegmentCount())
 }
 
+internal fun BookAudioEntity.expectedPlayableSegmentFiles(): List<File> {
+    val root = filePath
+        ?.takeIf { it.isNotBlank() }
+        ?.let(::File)
+        ?: return emptyList()
+    val playableCount = playableSegmentCount()
+    if (playableCount <= 0 || !root.isDirectory) return emptyList()
+    return List(playableCount) { index -> File(root, generatedAudiobookSegmentFileName(index)) }
+}
+
 internal fun BookAudioEntity.verifiedGeneratedSegmentFiles(): List<File> {
     val root = filePath
         ?.takeIf { it.isNotBlank() }
@@ -57,18 +67,22 @@ internal fun BookAudioEntity.verifiedGeneratedSegmentFiles(): List<File> {
 }
 
 internal fun BookAudioEntity.withVerifiedGeneratedProgress(): BookAudioEntity {
-    val verified = verifiedGeneratedSegmentFiles().size
-    if (verified <= completedSegments) return this
-    return copy(completedSegments = verified.coerceAtMost(segmentCount.coerceAtLeast(0)))
+    val verified = verifiedGeneratedSegmentCount()
+    val boundedVerified = verified.coerceIn(0, segmentCount.coerceAtLeast(0))
+    if (boundedVerified == completedSegments) return this
+    return copy(completedSegments = boundedVerified)
 }
 
 internal fun BookAudioEntity.verifiedPlayableSegmentCount(): Int =
-    playableSegmentFiles().size
+    generatedAudiobookDirectory()?.countContiguousGeneratedAudiobookSegments(playableSegmentCount()) ?: 0
+
+internal fun BookAudioEntity.verifiedGeneratedSegmentCount(): Int =
+    generatedAudiobookDirectory()?.countContiguousGeneratedAudiobookSegments(segmentCount) ?: 0
 
 internal fun BookAudioEntity.hasCompletePlayableAudiobook(): Boolean =
     status == BookAudioStatus.GENERATED &&
         segmentCount > 0 &&
-        playableSegmentFiles().size == segmentCount
+        verifiedPlayableSegmentCount() == segmentCount
 
 internal fun BookAudioEntity.withPlaybackBoundedToGeneratedAudio(playableSegments: Int): BookAudioEntity {
     val position = generatedAudiobookPersistedPlaybackPosition(
@@ -115,29 +129,43 @@ data class GeneratedAudiobookFileSnapshot(
 }
 
 internal fun BookAudioEntity.generatedAudiobookFileSnapshot(): GeneratedAudiobookFileSnapshot {
-    val verifiedAudio = if (status == BookAudioStatus.GENERATING) this else withVerifiedGeneratedProgress()
-    val playableFiles = if (verifiedAudio.status == BookAudioStatus.GENERATING) {
+    if (status == BookAudioStatus.GENERATING) {
+        val playableCount = playableSegmentCount()
+        return GeneratedAudiobookFileSnapshot(
+            audio = this,
+            playableSegmentFiles = emptyList(),
+            activeGenerationPlayableSegmentCount = playableCount,
+            chapters = fallbackGeneratedAudiobookChapters(playableCount)
+        )
+    }
+
+    val root = filePath
+        ?.takeIf { it.isNotBlank() }
+        ?.let(::File)
+    val playableFiles = if (root != null) {
+        root.contiguousGeneratedAudiobookSegmentFiles(segmentCount)
+    } else {
         emptyList()
-    } else {
-        verifiedAudio.verifiedGeneratedSegmentFiles()
     }
-    val playableCount = if (verifiedAudio.status == BookAudioStatus.GENERATING) {
-        verifiedAudio.playableSegmentCount()
+    val playableCount = playableFiles.size
+    val verifiedAudio = if (playableCount == completedSegments) {
+        this
     } else {
-        playableFiles.size
-    }
-    val chapters = if (verifiedAudio.status == BookAudioStatus.GENERATING) {
-        verifiedAudio.fallbackGeneratedAudiobookChapters(playableCount)
-    } else {
-        verifiedAudio.generatedAudiobookChapters(playableCount)
+        copy(completedSegments = playableCount)
     }
     return GeneratedAudiobookFileSnapshot(
         audio = verifiedAudio,
         playableSegmentFiles = playableFiles,
-        activeGenerationPlayableSegmentCount = if (verifiedAudio.status == BookAudioStatus.GENERATING) playableCount else null,
-        chapters = chapters
+        activeGenerationPlayableSegmentCount = null,
+        chapters = verifiedAudio.generatedAudiobookChapters(playableCount)
     )
 }
+
+private fun BookAudioEntity.generatedAudiobookDirectory(): File? =
+    filePath
+        ?.takeIf { it.isNotBlank() }
+        ?.let(::File)
+        ?.takeIf { it.isDirectory }
 
 internal fun BookAudioEntity.generatedAudiobookChapters(playableSegmentCount: Int? = null): List<GeneratedAudiobookChapter> {
     val root = filePath?.takeIf { it.isNotBlank() }?.let(::File)?.takeIf { it.isDirectory }
@@ -494,6 +522,15 @@ internal fun File.contiguousGeneratedAudiobookSegmentFiles(expectedSegments: Int
         contiguous += file
     }
     return contiguous
+}
+
+internal fun File.countContiguousGeneratedAudiobookSegments(expectedSegments: Int): Int {
+    if (expectedSegments <= 0 || !isDirectory) return 0
+    repeat(expectedSegments) { index ->
+        val file = File(this, generatedAudiobookSegmentFileName(index))
+        if (!file.isFile || file.length() <= WAV_HEADER_BYTES) return index
+    }
+    return expectedSegments
 }
 
 internal const val WAV_HEADER_BYTES = 44L

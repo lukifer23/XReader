@@ -39,7 +39,7 @@ class XReaderDatabaseSchemaTest {
 
     @Test
     fun bookAudioUniqueIndexIncludesAudiobookScope() {
-        val bookAudio = schema(version = 12).entity("book_audio")
+        val bookAudio = schema(version = 13).entity("book_audio")
         val indices = bookAudio.getJSONArray("indices")
         val scopedIndex = (0 until indices.length())
             .map { indices.getJSONObject(it) }
@@ -50,6 +50,18 @@ class XReaderDatabaseSchemaTest {
 
         assertEquals(listOf("bookId", "modelId", "speakerId", "speed", "tone", "scope"), columns)
         assertTrue(scopedIndex.getBoolean("unique"))
+    }
+
+    @Test
+    fun version13BookAudioSchemaIndexesHotAudiobookQueries() {
+        val bookAudio = schema(version = 13).entity("book_audio")
+        val indexNames = bookAudio.getJSONArray("indices")
+            .let { array -> (0 until array.length()).map { array.getJSONObject(it).getString("name") }.toSet() }
+
+        assertEquals(13, schema(version = 13).getInt("version"))
+        assertTrue("Missing global audiobook ordering index.", "index_book_audio_updatedAt" in indexNames)
+        assertTrue("Missing generation status index.", "index_book_audio_status" in indexNames)
+        assertTrue("Missing model cleanup index.", "index_book_audio_modelId" in indexNames)
     }
 
     private fun schema(version: Int): JSONObject {

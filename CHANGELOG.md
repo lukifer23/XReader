@@ -7,10 +7,11 @@
 - Embedded Kokoro v1.0 audiobook generation with model download/install/delete controls, narrator selection, narration style, pacing, scan summaries, sample/first-chapter/full-book scopes, persisted progress/ETA, partial playback, generated-audio resume, chapter picker/jump controls, delete, and ZIP export.
 - Global Audiobooks screen for completed, partial, active, failed, and generated audio rows, with compact playback controls and chapter navigation.
 - Collection additions can now be applied to every book in the same-author series from the existing book collections dialog.
+- QNN/ONNX Runtime development tooling for real hardware-accelerated audiobook generation, including packaged QNN runtime libraries, DSP asset staging, strict provider configs, device smoke-test hooks, and prepared Kokoro model manifest validation.
 
 ### Changed
 
-- Documentation now records the current connected-device debug smoke path and the next audiobook QA targets.
+- Documentation now records the current audiobook acceleration focus: strict hardware generation only, no CPU fallback masquerading as acceleration, and prepared QNN/NPU artifacts gated by a strict compatibility manifest.
 - Library sorting now includes `Date added`, using import time independently from reading activity and honoring the option in grouped views.
 - Library search now matches multi-term queries across metadata, collections, file format, year, favorite state, and reading status such as unread, in progress, or finished.
 - Library search now normalizes pasted punctuation, separators, and accents, so queries like `red-rising`, `sci_fi`, or `cafe` match clean book metadata.
@@ -64,7 +65,7 @@
 - Markdown notes export now includes readable percent positions for highlights, notes, and bookmarks, with safer Markdown escaping for book titles, authors, tags, and bookmark labels.
 - Notes/bookmarks restore now counts malformed backup rows as invalid items instead of silently ignoring them.
 - Library and notes backup restore now trims and normalizes checksum references before matching imported books, making hand-inspected or case-shifted JSON backups less fragile.
-- Full-book neural generation prefers WebGPU with isolated-process runtime rotation, then XNNPACK/CPU fallback; preview generation stays on XNNPACK/CPU for stability.
+- Full-book neural generation now fails closed unless an eligible strict hardware provider initializes with the required model artifact; CPU-backed `xnnpack`/`cpu` remain available only for short previews and are no longer treated as acceptable full-book generation providers.
 
 ## 0.1.0 - 2026-05-28
 

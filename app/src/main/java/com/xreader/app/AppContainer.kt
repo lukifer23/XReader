@@ -28,6 +28,7 @@ import com.xreader.app.tts.NeuralTtsRepository
 import com.xreader.app.tts.GeneratedAudiobookPlaybackController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -105,14 +106,23 @@ class AppContainer(
     }
 
     init {
-        applicationScope.launch(Dispatchers.IO) {
-            runCatching {
-                neuralTtsRepository.ensureCatalogSeeded()
-                neuralTtsRepository.repairInterruptedModelInstalls()
-                neuralTtsRepository.repairStaleGeneratingAudio()
+        if (databaseOverride == null && isMainApplicationProcess(appContext)) {
+            applicationScope.launch(Dispatchers.IO) {
+                runCatching {
+                    delay(STARTUP_NEURAL_TTS_MAINTENANCE_DELAY_MS)
+                    runNeuralTtsStartupMaintenance()
+                }
+                    .onFailure { Log.w("XReader", "Neural TTS startup maintenance failed", it) }
             }
-                .onFailure { Log.w("XReader", "Neural TTS startup maintenance failed", it) }
         }
+    }
+
+    private suspend fun runNeuralTtsStartupMaintenance() {
+        neuralTtsRepository.ensureCatalogSeeded()
+        neuralTtsRepository.repairInterruptedModelInstalls()
+        neuralTtsRepository.repairStaleGeneratingAudio()
+        delay(STARTUP_DEFERRED_MAINTENANCE_DELAY_MS)
+        neuralTtsRepository.pruneObsoleteCatalogStorage()
     }
 
     fun startAudiobookGeneration(
@@ -160,5 +170,10 @@ class AppContainer(
                 }.onFailure { Log.w("XReader", "WebView warmup failed", it) }
             }
         }
+    }
+
+    private companion object {
+        const val STARTUP_NEURAL_TTS_MAINTENANCE_DELAY_MS = 2_000L
+        const val STARTUP_DEFERRED_MAINTENANCE_DELAY_MS = 3_000L
     }
 }

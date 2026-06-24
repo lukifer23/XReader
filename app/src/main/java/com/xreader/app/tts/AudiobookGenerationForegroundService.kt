@@ -80,11 +80,15 @@ class AudiobookGenerationForegroundService : Service() {
         when (audiobookGenerationStartGate(canceling = cancelingGeneration, jobActive = generationJob?.isActive == true)) {
             AudiobookGenerationStartGate.START -> Unit
             AudiobookGenerationStartGate.CANCELING -> {
-                updateNotification(buildNotification(title = activeTitle, audio = null, preparing = true, canceling = true))
+                if (shouldReplaceAudiobookGenerationNotificationForRejectedStart(AudiobookGenerationStartGate.CANCELING)) {
+                    updateNotification(buildNotification(title = activeTitle, audio = null, preparing = true, canceling = true))
+                }
                 return
             }
             AudiobookGenerationStartGate.ALREADY_RUNNING -> {
-                updateNotification(buildNotification(title = activeTitle, audio = null, preparing = true, alreadyRunning = true))
+                if (shouldReplaceAudiobookGenerationNotificationForRejectedStart(AudiobookGenerationStartGate.ALREADY_RUNNING)) {
+                    updateNotification(buildNotification(title = activeTitle, audio = null, preparing = true, alreadyRunning = true))
+                }
                 return
             }
         }
@@ -118,6 +122,16 @@ class AudiobookGenerationForegroundService : Service() {
                 withContext(Dispatchers.Main.immediate) {
                     updateNotification(buildNotification(title = activeTitle, audio = null, preparing = true))
                 }
+                container.neuralTtsRepository.generatedBookAudio(
+                    bookId = book.id,
+                    modelId = activeModelId,
+                    speakerId = activeSpeakerId,
+                    pace = activePace,
+                    tone = activeTone,
+                    scope = activeScope
+                )?.let {
+                    return@runCatching
+                }
                 container.neuralTtsRepository.markBookAudioPreparing(
                     bookId = book.id,
                     modelId = activeModelId,
@@ -126,14 +140,16 @@ class AudiobookGenerationForegroundService : Service() {
                     tone = activeTone,
                     scope = activeScope
                 )
-                val indexedRows = container.libraryRepository.indexedRowsForBook(bookId)
-                val chunks = withContext(Dispatchers.Default) {
-                    ReadAloudPlanner.chunksFromRows(indexedRows)
+                val indexedRows = withContext(Dispatchers.IO) {
+                    container.libraryRepository.indexedRowsForBook(bookId)
                 }
-                container.neuralTtsRepository.generateBookAudio(
+                val plan = withContext(Dispatchers.Default) {
+                    prepareAudiobookPlan(indexedRows, activeScope)
+                }
+                container.neuralTtsRepository.generatePreparedBookAudio(
                     bookId = book.id,
                     bookTitle = book.title,
-                    chunks = chunks,
+                    prepared = plan.prepared,
                     modelId = activeModelId,
                     speakerId = activeSpeakerId,
                     pace = activePace,
@@ -168,6 +184,21 @@ class AudiobookGenerationForegroundService : Service() {
         cancelingGeneration = true
         updateNotification(buildNotification(title = activeTitle, audio = null, preparing = true, canceling = true))
         serviceScope.launch {
+            val bookId = activeBookId
+            if (bookId != null) {
+                runCatching {
+                    container.neuralTtsRepository.cancelGeneratingBookAudio(
+                        bookId = bookId,
+                        modelId = activeModelId,
+                        speakerId = activeSpeakerId,
+                        pace = activePace,
+                        tone = activeTone,
+                        scope = activeScope
+                    )
+                }.onFailure { error ->
+                    Log.w("XReader", "Could not mark audiobook generation canceled for $bookId", error)
+                }
+            }
             job.cancelAndJoin()
             generationJob = null
             cancelingGeneration = false
@@ -205,16 +236,20 @@ class AudiobookGenerationForegroundService : Service() {
     }
 
     private fun updateNotification(notification: Notification) {
-        if (foregroundStarted) {
-            startForegroundCompat(notification)
-        } else {
-            startForegroundIfNeeded(notification)
+        when (foregroundNotificationOperation(foregroundStarted)) {
+            ForegroundNotificationOperation.START_FOREGROUND -> startForegroundIfNeeded(notification)
+            ForegroundNotificationOperation.UPDATE_NOTIFICATION -> postForegroundNotificationUpdate(
+                context = this,
+                notificationManager = notificationManager,
+                notificationId = NOTIFICATION_ID,
+                notification = notification
+            )
         }
     }
 
     private fun startForegroundCompat(notification: Notification) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+            startForeground(NOTIFICATION_ID, notification, audiobookGenerationForegroundServiceType(Build.VERSION.SDK_INT))
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
@@ -343,6 +378,18 @@ internal fun audiobookGenerationStartGate(canceling: Boolean, jobActive: Boolean
         canceling -> AudiobookGenerationStartGate.CANCELING
         jobActive -> AudiobookGenerationStartGate.ALREADY_RUNNING
         else -> AudiobookGenerationStartGate.START
+    }
+
+internal fun shouldReplaceAudiobookGenerationNotificationForRejectedStart(
+    gate: AudiobookGenerationStartGate,
+): Boolean =
+    gate == AudiobookGenerationStartGate.CANCELING
+
+internal fun audiobookGenerationForegroundServiceType(sdkInt: Int): Int =
+    if (sdkInt >= 35) {
+        ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROCESSING
+    } else {
+        ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
     }
 
 internal fun audiobookGenerationStatusText(

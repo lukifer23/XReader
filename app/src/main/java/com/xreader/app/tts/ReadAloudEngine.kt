@@ -128,6 +128,7 @@ class ReadAloudEngine(
     private var activeSpeech: ActiveSpeech? = null
     private var pendingUtteranceId: String? = null
     private var sleepTimerJob: Job? = null
+    private var segmentPreparationJob: Job? = null
     private var sleepTimerEndsAtMillis: Long? = null
     private var hasAudioFocus = false
     private var foregroundServiceRequested = false
@@ -170,13 +171,17 @@ class ReadAloudEngine(
 
             setVoiceInternal(voiceName)
             setSpeechRateInternal(speechRate)
-            val chunkIndex = ReadAloudPlanner.startIndex(
+            val startIndex = ReadAloudPlanner.startIndex(
                 chunks = chunks,
                 currentUnit = currentUnit,
                 currentLocator = currentLocator
             )
-            val segments = ReadAloudPlanner.splitForSpeech(chunks[chunkIndex].text)
-            if (segments.isEmpty()) {
+            val prepared = prepareSpeakableChunk(
+                chunks = chunks,
+                startIndex = startIndex,
+                delta = 1
+            )
+            if (prepared == null) {
                 showMessage(bookId, "No readable text is indexed for this position.")
                 return@withContext
             }
@@ -191,8 +196,8 @@ class ReadAloudEngine(
                 bookId = bookId,
                 chunks = chunks,
                 bookTitle = bookTitle,
-                chunkIndex = chunkIndex,
-                segments = segments,
+                chunkIndex = prepared.chunkIndex,
+                segments = prepared.segments,
                 segmentIndex = 0
             )
             scheduleSleepTimerInternal(sleepTimerDurationMillis)
@@ -358,8 +363,6 @@ class ReadAloudEngine(
         engine.setAudioAttributes(speechAudioAttributes)
         tts = engine
         activeEngineName = requestedEngine
-        updateEngineOptions(engine)
-        updateVoiceOptions(engine)
         return true
     }
 
@@ -481,13 +484,23 @@ class ReadAloudEngine(
             totalChunks = current.chunks.size,
             delta = delta
         ) ?: return
-        var candidate = targetIndex
-        while (candidate in current.chunks.indices) {
-            val segments = ReadAloudPlanner.splitForSpeech(current.chunks[candidate].text)
-            if (segments.isNotEmpty()) {
-                activeSpeech = current.copy(
-                    chunkIndex = candidate,
-                    segments = segments,
+        segmentPreparationJob?.cancel()
+        segmentPreparationJob = scope.launch {
+            val prepared = prepareSpeakableChunk(
+                chunks = current.chunks,
+                startIndex = targetIndex,
+                delta = delta
+            )
+            withContext(Dispatchers.Main.immediate) {
+                val latest = activeSpeech ?: return@withContext
+                if (latest.bookId != current.bookId || latest.chunks !== current.chunks) return@withContext
+                if (prepared == null) {
+                    if (delta > 0) stopInternal(current.bookId)
+                    return@withContext
+                }
+                activeSpeech = latest.copy(
+                    chunkIndex = prepared.chunkIndex,
+                    segments = prepared.segments,
                     segmentIndex = 0
                 )
                 if (paused) {
@@ -500,11 +513,8 @@ class ReadAloudEngine(
                 } else {
                     speakCurrentSegment()
                 }
-                return
             }
-            candidate += delta
         }
-        if (delta > 0) stopInternal(current.bookId)
     }
 
     private fun pauseInternal(bookId: Long? = null) {
@@ -550,13 +560,35 @@ class ReadAloudEngine(
             return
         }
 
-        val segments = ReadAloudPlanner.splitForSpeech(current.chunks[nextChunk].text)
-        activeSpeech = current.copy(
-            chunkIndex = nextChunk,
-            segments = segments,
-            segmentIndex = 0
-        )
-        speakCurrentSegment()
+        segmentPreparationJob?.cancel()
+        segmentPreparationJob = scope.launch {
+            val prepared = prepareSpeakableChunk(
+                chunks = current.chunks,
+                startIndex = nextChunk,
+                delta = 1
+            )
+            withContext(Dispatchers.Main.immediate) {
+                val latest = activeSpeech ?: return@withContext
+                if (
+                    latest.bookId != current.bookId ||
+                    latest.chunks !== current.chunks ||
+                    latest.chunkIndex != current.chunkIndex ||
+                    latest.segmentIndex != current.segmentIndex
+                ) {
+                    return@withContext
+                }
+                if (prepared == null) {
+                    stopInternal(current.bookId)
+                    return@withContext
+                }
+                activeSpeech = latest.copy(
+                    chunkIndex = prepared.chunkIndex,
+                    segments = prepared.segments,
+                    segmentIndex = 0
+                )
+                speakCurrentSegment()
+            }
+        }
     }
 
     private fun speakCurrentSegment() {
@@ -585,7 +617,7 @@ class ReadAloudEngine(
         message: String? = null,
     ) {
         val chunk = current.chunks.getOrNull(current.chunkIndex)
-        _state.value = ReadAloudState(
+        val nextState = ReadAloudState(
             activeBookId = current.bookId,
             bookTitle = current.bookTitle,
             playing = playing,
@@ -599,6 +631,8 @@ class ReadAloudEngine(
             sleepTimerRemainingMillis = currentSleepTimerRemainingMillis(),
             message = message
         )
+        if (!shouldEmitReadAloudState(current = _state.value, next = nextState)) return
+        _state.value = nextState
         if (playing || paused) startForegroundServiceIfNeeded()
         mediaSession.update(
             bookTitle = current.bookTitle,
@@ -622,6 +656,8 @@ class ReadAloudEngine(
         }
         tts?.stop()
         abandonAudioFocus()
+        segmentPreparationJob?.cancel()
+        segmentPreparationJob = null
         activeSpeech = null
         pendingUtteranceId = null
         foregroundServiceRequested = false
@@ -702,32 +738,10 @@ class ReadAloudEngine(
         locales.forEach { locale ->
             val languageResult = engine.setLanguage(locale)
             if (languageResult != TextToSpeech.LANG_MISSING_DATA && languageResult != TextToSpeech.LANG_NOT_SUPPORTED) {
-                engine.bestOfflineVoice(locale)?.let { engine.setVoice(it) }
                 return true
             }
         }
         return false
-    }
-
-    private fun TextToSpeech.bestOfflineVoice(locale: Locale): Voice? =
-        runCatching {
-            voices.orEmpty()
-                .filterNot { it.isNetworkConnectionRequired }
-                .filter { it.locale.matches(locale) }
-                .sortedWith(
-                    compareByDescending<Voice> { it.quality }
-                        .thenBy { it.latency }
-                        .thenBy { it.name }
-                )
-                .firstOrNull()
-        }.getOrNull()
-
-    private fun Locale?.matches(requested: Locale): Boolean {
-        if (this == null) return false
-        if (!language.equals(requested.language, ignoreCase = true)) return false
-        return requested.country.isBlank() ||
-            country.isBlank() ||
-            country.equals(requested.country, ignoreCase = true)
     }
 
     private fun Voice.displayLabel(): String {
@@ -753,6 +767,28 @@ class ReadAloudEngine(
         val segments: List<String>,
         val segmentIndex: Int,
     )
+
+    private data class PreparedSpeechChunk(
+        val chunkIndex: Int,
+        val segments: List<String>,
+    )
+
+    private suspend fun prepareSpeakableChunk(
+        chunks: List<ReadAloudChunk>,
+        startIndex: Int,
+        delta: Int,
+    ): PreparedSpeechChunk? =
+        withContext(Dispatchers.Default) {
+            var candidate = startIndex
+            while (candidate in chunks.indices) {
+                val segments = ReadAloudPlanner.splitForSpeech(chunks[candidate].text)
+                if (segments.isNotEmpty()) {
+                    return@withContext PreparedSpeechChunk(candidate, segments)
+                }
+                candidate += delta
+            }
+            null
+        }
 
     companion object {
         private const val TTS_INIT_TIMEOUT_MILLIS = 5_000L
@@ -784,3 +820,9 @@ internal fun readAloudSkipTargetIndex(
     val target = currentChunk + delta
     return target.takeIf { it in 0 until totalChunks }
 }
+
+internal fun shouldEmitReadAloudState(
+    current: ReadAloudState,
+    next: ReadAloudState,
+): Boolean =
+    current != next

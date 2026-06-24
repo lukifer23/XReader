@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SHERPA_LIB_DIR="${1:-}"
 TARGET_DIR="$ROOT_DIR/app/src/main/jniLibs/arm64-v8a"
+DSP_ASSET_DIR="$ROOT_DIR/app/src/main/assets/qnn-dsp"
 ONNXRUNTIME_LIB_DIR="${ONNXRUNTIME_LIB_DIR:-$SHERPA_LIB_DIR}"
 
 if [[ -z "$SHERPA_LIB_DIR" || ! -d "$SHERPA_LIB_DIR" ]]; then
@@ -29,18 +30,25 @@ if [[ ! -d "$QNN_LIB_DIR" ]]; then
 fi
 
 mkdir -p "$TARGET_DIR"
+mkdir -p "$DSP_ASSET_DIR"
 
 install -m 0644 "$SHERPA_LIB_DIR/libsherpa-onnx-jni.so" "$TARGET_DIR/libsherpa-onnx-jni.so"
 install -m 0644 "$ONNXRUNTIME_LIB_DIR/libonnxruntime.so" "$TARGET_DIR/libonnxruntime.so"
 
-for lib in libQnnGpu.so libQnnHtp.so libQnnHtpPrepare.so libQnnSystem.so; do
+for lib in \
+  libQnnGpu.so \
+  libQnnGpuNetRunExtensions.so \
+  libQnnHtp.so \
+  libQnnHtpNetRunExtensions.so \
+  libQnnHtpPrepare.so \
+  libQnnSystem.so; do
   install -m 0644 "$QNN_LIB_DIR/$lib" "$TARGET_DIR/$lib"
 done
 
 stub_count=0
 skel_count=0
 shopt -s nullglob
-for lib in "$QNN_LIB_DIR"/libQnnHtpV*Stub.so; do
+for lib in "$QNN_LIB_DIR"/libQnnHtpV*Stub.so "$QNN_LIB_DIR"/libQnnHtpV*CalculatorStub.so; do
   install -m 0644 "$lib" "$TARGET_DIR/$(basename "$lib")"
   stub_count=$((stub_count + 1))
 done
@@ -49,6 +57,20 @@ for lib in "$QNN_LIB_DIR"/libQnnHtpV*Skel.so "$QNN_SDK_ROOT"/lib/hexagon-v*/unsi
   skel_count=$((skel_count + 1))
 done
 shopt -u nullglob
+
+for dir in "$QNN_SDK_ROOT"/lib/hexagon-v*/unsigned; do
+  [[ -d "$dir" ]] || continue
+  arch="$(basename "$(dirname "$dir")")"
+  mkdir -p "$DSP_ASSET_DIR/$arch"
+  shopt -s nullglob
+  for lib in \
+    "$dir"/libQnn*.so \
+    "$dir"/libCalculator_skel.so \
+    "$dir"/libqnn*.cat; do
+    install -m 0644 "$lib" "$DSP_ASSET_DIR/$arch/$(basename "$lib")"
+  done
+  shopt -u nullglob
+done
 
 if [[ "$stub_count" -eq 0 || "$skel_count" -eq 0 ]]; then
   echo "No QNN HTP Stub/Skel libraries were staged from $QNN_LIB_DIR." >&2

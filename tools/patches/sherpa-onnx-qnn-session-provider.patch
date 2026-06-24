@@ -30,22 +30,47 @@ diff --git a/sherpa-onnx/csrc/session.cc b/sherpa-onnx/csrc/session.cc
 index 8206bb99..9ff70662 100755
 --- a/sherpa-onnx/csrc/session.cc
 +++ b/sherpa-onnx/csrc/session.cc
-@@ -424,6 +424,106 @@ Ort::SessionOptions GetSessionOptionsImpl(
+@@ -5,6 +5,7 @@
+ #include <algorithm>
+ #include <fstream>
+ #include <sstream>
++#include <stdexcept>
+ #include <string>
+ #include <unordered_map>
+ #include <utility>
+@@ -424,6 +425,107 @@ Ort::SessionOptions GetSessionOptionsImpl(
  #endif
        break;
      }
 +    case Provider::kQNN: {
 +      if (std::find(available_providers.begin(), available_providers.end(),
 +                    "QNNExecutionProvider") == available_providers.end()) {
-+        SHERPA_ONNX_LOGE(
-+            "QNNExecutionProvider is unavailable. Available providers: %s. "
-+            "Fallback to cpu!",
-+            os.str().c_str());
-+        break;
++        std::ostringstream msg;
++        msg << "QNNExecutionProvider is unavailable. Available providers: "
++            << os.str();
++        SHERPA_ONNX_LOGE("%s", msg.str().c_str());
++        throw std::runtime_error(msg.str());
 +      }
 +
 +      std::unordered_map<std::string, std::string> provider_options(config);
 +      provider_options.erase("DEBUG");
++      std::vector<std::pair<std::string, std::string>> session_config_entries;
++      bool disable_cpu_ep_fallback = false;
++      if (provider_options.find("disable_cpu_ep_fallback") !=
++          provider_options.end()) {
++        disable_cpu_ep_fallback =
++            ToIntOrDefault(provider_options["disable_cpu_ep_fallback"], 0) == 1;
++        provider_options.erase("disable_cpu_ep_fallback");
++      }
++      for (auto it = provider_options.begin(); it != provider_options.end();) {
++        if (it->first.rfind("session.", 0) == 0 ||
++            it->first.rfind("ep.", 0) == 0) {
++          session_config_entries.emplace_back(it->first, it->second);
++          it = provider_options.erase(it);
++        } else {
++          ++it;
++        }
++      }
 +      if (provider_options.find("backend_path") == provider_options.end() &&
 +          provider_options.find("backend_type") == provider_options.end()) {
 +        provider_options.emplace("backend_path", "libQnnHtp.so");
@@ -73,17 +98,22 @@ index 8206bb99..9ff70662 100755
 +      }
 +
 +      const auto &api = Ort::GetApi();
-+      sess_opts.AddConfigEntry("session.disable_cpu_ep_fallback", "1");
++      if (disable_cpu_ep_fallback) {
++        sess_opts.AddConfigEntry("session.disable_cpu_ep_fallback", "1");
++      }
++      for (const auto &entry : session_config_entries) {
++        sess_opts.AddConfigEntry(entry.first.c_str(), entry.second.c_str());
++      }
 +      OrtStatus *status = api.SessionOptionsAppendExecutionProvider(
 +          sess_opts, "QNN", key_ptrs.data(), value_ptrs.data(),
 +          key_ptrs.size());
 +      if (status) {
 +        const char *msg = api.GetErrorMessage(status);
-+        SHERPA_ONNX_LOGE(
-+            "Failed to enable QNNExecutionProvider: %s. Available providers: "
-+            "%s. Fallback to cpu",
-+            msg, os.str().c_str());
++        std::string error_msg = std::string("Failed to enable QNNExecutionProvider: ") +
++                                msg + ". Available providers: " + os.str();
++        SHERPA_ONNX_LOGE("%s", error_msg.c_str());
 +        api.ReleaseStatus(status);
++        throw std::runtime_error(error_msg);
 +      } else {
 +        SHERPA_ONNX_LOGE("Use QNNExecutionProvider");
 +      }

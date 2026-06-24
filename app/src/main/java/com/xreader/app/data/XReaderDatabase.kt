@@ -26,7 +26,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SearchIndexFtsEntity::class,
         DictionaryEntryEntity::class
     ],
-    version = 12,
+    version = 13,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -60,9 +60,11 @@ abstract class XReaderDatabase : RoomDatabase() {
                         MIGRATION_8_9,
                         MIGRATION_9_10,
                         MIGRATION_10_11,
-                        MIGRATION_11_12
+                        MIGRATION_11_12,
+                        MIGRATION_12_13
                     )
                     .fallbackToDestructiveMigration(false)
+                    .enableMultiInstanceInvalidation()
                     .build()
                     .also { instance = it }
             }
@@ -220,6 +222,14 @@ abstract class XReaderDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE book_audio ADD COLUMN generationProvider TEXT")
                 db.execSQL("ALTER TABLE book_audio ADD COLUMN generationAudioMillis INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE book_audio ADD COLUMN generationComputeMillis INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        private val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_book_audio_modelId ON book_audio(modelId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_book_audio_status ON book_audio(status)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_book_audio_updatedAt ON book_audio(updatedAt)")
             }
         }
     }

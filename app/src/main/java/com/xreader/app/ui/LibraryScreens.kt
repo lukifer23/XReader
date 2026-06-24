@@ -112,6 +112,7 @@ import com.xreader.app.settings.NeuralTtsGender
 import com.xreader.app.settings.NeuralTtsPace
 import com.xreader.app.settings.NeuralTtsTone
 import com.xreader.app.settings.ReaderSettings
+import com.xreader.app.tts.AudiobookGenerationHardwareReadiness
 import com.xreader.app.tts.AudiobookPlaybackUiState
 import com.xreader.app.tts.AudiobookGenerationScope
 import com.xreader.app.tts.GeneratedAudiobookChapter
@@ -140,6 +141,7 @@ internal fun LibraryRoute(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val readerSettings by viewModel.readerSettings.collectAsStateWithLifecycle()
     val neuralTtsModels by viewModel.neuralTtsModels.collectAsStateWithLifecycle()
+    val audiobookHardwareReadiness by viewModel.audiobookHardwareReadiness.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
     var importMenuOpen by remember { mutableStateOf(false) }
@@ -330,6 +332,7 @@ internal fun LibraryRoute(
             book = book,
             settings = readerSettings,
             models = neuralTtsModels,
+            hardwareReadiness = audiobookHardwareReadiness,
             bookAudioItems = bookAudioItems,
             scan = state.audiobookScans[book.id],
             playback = state.audiobookPlayback,
@@ -1298,6 +1301,7 @@ internal fun BookAudiobookDialog(
     book: BookEntity,
     settings: ReaderSettings,
     models: List<NeuralTtsModelEntity>,
+    hardwareReadiness: AudiobookGenerationHardwareReadiness,
     bookAudioItems: List<BookAudiobookAudioUiItem>,
     scan: AudiobookScanUiState?,
     playback: AudiobookPlaybackUiState,
@@ -1357,7 +1361,8 @@ internal fun BookAudiobookDialog(
     val generationBlockedReason = audiobookGenerationBlockedReason(
         status = selectedStatus,
         generatingSelectedAudio = generatingSelectedAudio,
-        modelName = selectedSpec.displayName
+        modelName = selectedSpec.displayName,
+        hardwareReadiness = hardwareReadiness
     )
     val generatedAudioItems = remember(bookAudioItems) {
         bookAudioItems
@@ -1784,7 +1789,7 @@ private fun AudiobookRuntimeNote() {
         color = MaterialTheme.colorScheme.surfaceVariant
     ) {
         Text(
-            text = "Generated locally on device with Kokoro v1.0. Full-book jobs try hardware acceleration first, keep resumable segment files as they run, and can take time on long books.",
+            text = "Generated locally on device with Kokoro v1.0. Full-book jobs require hardware acceleration, keep resumable segment files as they run, and can take time on long books.",
             modifier = Modifier.padding(12.dp),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -2223,6 +2228,7 @@ internal fun audiobookGenerationBlockedReason(
     status: NeuralTtsModelStatus,
     generatingSelectedAudio: Boolean,
     modelName: String,
+    hardwareReadiness: AudiobookGenerationHardwareReadiness = AudiobookGenerationHardwareReadiness(ready = true),
 ): String? =
     when {
         generatingSelectedAudio -> "This voice is already generating audio. Stop it before starting another scope."
@@ -2232,7 +2238,7 @@ internal fun audiobookGenerationBlockedReason(
         status == NeuralTtsModelStatus.FAILED -> "$modelName did not install cleanly. Retry the download before generating audio."
         status == NeuralTtsModelStatus.NOT_DOWNLOADED -> "Download $modelName before generating audiobook audio."
         else -> null
-    }
+    } ?: hardwareReadiness.reason.takeIf { !hardwareReadiness.ready }
 
 internal fun selectedAudiobookStatusItem(
     items: List<BookAudiobookAudioUiItem>,

@@ -1,0 +1,113 @@
+diff --git a/include/onnxruntime/core/session/onnxruntime_c_api.h b/include/onnxruntime/core/session/onnxruntime_c_api.h
+index 6ae1539d4c..46ca0bf28b 100644
+--- a/include/onnxruntime/core/session/onnxruntime_c_api.h
++++ b/include/onnxruntime/core/session/onnxruntime_c_api.h
+@@ -4114,12 +4114,15 @@ struct OrtApi {
+    *      -# "69"
+    *      -# "73"
+    *      -# "75"
++   *      -# "79"
+    *      -# "81"
+    *   "device_id": The ID of the device to use when setting 'htp_arch'. Defaults to "0" (for single device).
+    *   "enable_htp_fp16_precision": Used for float32 model for HTP backend.
+    *      Enable the float32 model to be inferenced with fp16 precision. Otherwise, it will be fp32 precision.
+    *      -# "0": With fp32 precision.
+    *      -# "1": Default. With fp16 precision.
++   *   "htp_use_signed_process_domain": Configure the HTP device to open FastRPC in signed process domain.
++   *      Use "1" for signed PD or "0" for unsigned PD. If omitted, QNN backend defaults are used.
+    *   "offload_graph_io_quantization": Offload graph input quantization and graph output dequantization to another
+    *      execution provider (typically CPU EP).
+    *      -# "0": Disabled. QNN EP will handle quantization and dequantization of graph I/O.
+diff --git a/onnxruntime/core/providers/qnn/builder/qnn_backend_manager.cc b/onnxruntime/core/providers/qnn/builder/qnn_backend_manager.cc
+index eba0a8c261..05729c3034 100644
+--- a/onnxruntime/core/providers/qnn/builder/qnn_backend_manager.cc
++++ b/onnxruntime/core/providers/qnn/builder/qnn_backend_manager.cc
+@@ -638,6 +638,20 @@ Status QnnBackendManager::CreateDevice() {
+       device_config->customConfig = custom_config;
+     }
+ 
++    // Configure FastRPC process domain when requested by provider options.
++    // Retail Qualcomm devices may require signed PD for HTP skel transport.
++    if (htp_use_signed_process_domain_set_) {
++      gsl::not_null<QnnHtpDevice_CustomConfig_t*> custom_config = device_configs_builder.PushCustomConfig();
++      custom_config->option = QNN_HTP_DEVICE_CONFIG_OPTION_SIGNEDPD;
++      custom_config->useSignedProcessDomain.deviceId = device_id_;
++      custom_config->useSignedProcessDomain.useSignedProcessDomain = htp_use_signed_process_domain_;
++
++      gsl::not_null<QnnDevice_Config_t*> device_config = device_configs_builder.PushConfig();
++      device_config->option = QNN_DEVICE_CONFIG_OPTION_CUSTOM;
++      device_config->customConfig = custom_config;
++      LOGS_DEFAULT(INFO) << "HTP signed process domain: " << htp_use_signed_process_domain_;
++    }
++
+     // Set the minimum HTP architecture. The driver will use ops that are compatible with this minimum architecture.
+     if (htp_arch_ != QNN_HTP_DEVICE_ARCH_NONE) {
+       gsl::not_null<QnnHtpDevice_CustomConfig_t*> custom_config = device_configs_builder.PushCustomConfig();
+diff --git a/onnxruntime/core/providers/qnn/builder/qnn_backend_manager.h b/onnxruntime/core/providers/qnn/builder/qnn_backend_manager.h
+index dfa40a2c8a..165d3f4a39 100644
+--- a/onnxruntime/core/providers/qnn/builder/qnn_backend_manager.h
++++ b/onnxruntime/core/providers/qnn/builder/qnn_backend_manager.h
+@@ -124,6 +124,8 @@ struct QnnBackendManagerConfig {
+   uint32_t soc_model;
+   std::vector<OpPackage> op_packages;
+   bool skip_qnn_version_check;
++  bool htp_use_signed_process_domain_set;
++  bool htp_use_signed_process_domain;
+ };
+ 
+ class QnnBackendManager : public std::enable_shared_from_this<QnnBackendManager> {
+@@ -149,7 +151,9 @@ class QnnBackendManager : public std::enable_shared_from_this<QnnBackendManager>
+         htp_arch_(config.htp_arch),
+         soc_model_(config.soc_model),
+         op_packages_(config.op_packages),
+-        skip_qnn_version_check_(config.skip_qnn_version_check) {
++        skip_qnn_version_check_(config.skip_qnn_version_check),
++        htp_use_signed_process_domain_set_(config.htp_use_signed_process_domain_set),
++        htp_use_signed_process_domain_(config.htp_use_signed_process_domain) {
+   }
+ 
+   ORT_DISALLOW_COPY_ASSIGNMENT_AND_MOVE(QnnBackendManager);
+@@ -527,6 +531,8 @@ class QnnBackendManager : public std::enable_shared_from_this<QnnBackendManager>
+   uint32_t soc_model_ = QNN_SOC_MODEL_UNKNOWN;
+   const std::vector<OpPackage> op_packages_;
+   bool skip_qnn_version_check_ = false;
++  bool htp_use_signed_process_domain_set_ = false;
++  bool htp_use_signed_process_domain_ = false;
+ 
+   // Mapping of thread id to on-run-start/end power configs
+   std::mutex per_thread_power_configs_mutex_;
+diff --git a/onnxruntime/core/providers/qnn/qnn_execution_provider.cc b/onnxruntime/core/providers/qnn/qnn_execution_provider.cc
+index c3d8328b37..fb30244b47 100644
+--- a/onnxruntime/core/providers/qnn/qnn_execution_provider.cc
++++ b/onnxruntime/core/providers/qnn/qnn_execution_provider.cc
+@@ -176,6 +176,8 @@ static void ParseHtpArchitecture(const std::string& htp_arch_string, QnnHtpDevic
+     qnn_htp_arch = QNN_HTP_DEVICE_ARCH_V73;
+   } else if (htp_arch_string == "75") {
+     qnn_htp_arch = QNN_HTP_DEVICE_ARCH_V75;
++  } else if (htp_arch_string == "79") {
++    qnn_htp_arch = QNN_HTP_DEVICE_ARCH_V79;
+   } else if (htp_arch_string == "81") {
+     qnn_htp_arch = QNN_HTP_DEVICE_ARCH_V81;
+   } else {
+@@ -619,6 +621,10 @@ QNNExecutionProvider::QNNExecutionProvider(const ProviderOptions& provider_optio
+   static const std::string SKIP_QNN_VERSION_CHECK = "skip_qnn_version_check";
+   auto skip_qnn_version_check = ParseBoolOption(SKIP_QNN_VERSION_CHECK, false, provider_options_map);
+ 
++  static const std::string HTP_USE_SIGNED_PROCESS_DOMAIN = "htp_use_signed_process_domain";
++  bool htp_use_signed_process_domain_set = provider_options_map.find(HTP_USE_SIGNED_PROCESS_DOMAIN) != provider_options_map.end();
++  bool htp_use_signed_process_domain = ParseBoolOption(HTP_USE_SIGNED_PROCESS_DOMAIN, false, provider_options_map);
++
+   // For context binary generation with weight sharing enabled, use the QnnBackendManager from the shared context if it exits
+   // So that all graphs from later sessions will be compiled into the same QNN context
+   if (((context_cache_enabled_ && share_ep_contexts_) || enable_vtcm_backup_buffer_sharing_) && SharedContext::GetInstance().GetSharedQnnBackendManager()) {
+@@ -639,7 +645,9 @@ QNNExecutionProvider::QNNExecutionProvider(const ProviderOptions& provider_optio
+                                      htp_arch,
+                                      soc_model,
+                                      op_packages,
+-                                     skip_qnn_version_check});
++                                     skip_qnn_version_check,
++                                     htp_use_signed_process_domain_set,
++                                     htp_use_signed_process_domain});
+     if (enable_vtcm_backup_buffer_sharing_) {
+       SharedContext::GetInstance().SetSharedQnnBackendManager(qnn_backend_manager_);
+     }

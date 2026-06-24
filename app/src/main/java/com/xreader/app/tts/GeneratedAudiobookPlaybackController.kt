@@ -4,6 +4,8 @@ import android.content.Context
 import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.util.Log
+import com.xreader.app.core.releaseQuietlyAsync
+import com.xreader.app.core.speechMediaPlayerForFile
 import com.xreader.app.data.BookAudioEntity
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
@@ -37,13 +39,15 @@ data class AudiobookPlaybackUiState(
     val paused: Boolean get() = active && !playing && !preparing && error == null
 }
 
+val EMPTY_AUDIOBOOK_PLAYBACK_UI_STATE = AudiobookPlaybackUiState()
+
 class GeneratedAudiobookPlaybackController(
     private val context: Context,
     private val repository: NeuralTtsRepository,
     private val scope: CoroutineScope,
 ) {
     private val appContext = context.applicationContext
-    private val _state = MutableStateFlow(AudiobookPlaybackUiState())
+    private val _state = MutableStateFlow(EMPTY_AUDIOBOOK_PLAYBACK_UI_STATE)
     val state: StateFlow<AudiobookPlaybackUiState> = _state.asStateFlow()
 
     private var player: MediaPlayer? = null
@@ -58,7 +62,10 @@ class GeneratedAudiobookPlaybackController(
     private var segmentPrepareJob: Job? = null
     private var positionSaveJob: Job? = null
     private var positionPersistJob: Job? = null
+    private var preparedPlaybackCache: PreparedAudiobookPlaybackCache? = null
     private val positionPersistQueue = GeneratedAudiobookPositionPersistQueue()
+    @Volatile
+    private var lastPersistedPosition: PendingGeneratedAudiobookPositionPersist? = null
     private var preparingSegment = false
     private val mediaSession = GeneratedAudiobookMediaSessionController(
         context = appContext,
@@ -103,7 +110,7 @@ class GeneratedAudiobookPlaybackController(
             preparing = true,
             error = null
         ))
-        playbackStartJob = scope.launch {
+        playbackStartJob = scope.launch(Dispatchers.Main.immediate) {
             val prepared = runCatching {
                 withContext(Dispatchers.IO) { audio.preparePlaybackFiles() }
             }.getOrElse { error ->
@@ -187,7 +194,7 @@ class GeneratedAudiobookPlaybackController(
         val current = _state.value
         persist(current.audioId, current.segmentIndex, runCatching { player?.currentPosition ?: 0 }.getOrDefault(0))
         resetPlaybackResources(cancelPlaybackStart = true)
-        setState(AudiobookPlaybackUiState())
+        setState(EMPTY_AUDIOBOOK_PLAYBACK_UI_STATE)
     }
 
     fun skipPrevious() {
@@ -205,14 +212,13 @@ class GeneratedAudiobookPlaybackController(
     }
 
     fun release() {
+        persistCurrentPosition(_state.value)
         positionSaveJob?.cancel()
         positionSaveJob = null
-        positionPersistJob?.cancel()
-        positionPersistJob = null
-        positionPersistQueue.clear()
         resetPlaybackResources(cancelPlaybackStart = true)
-        _state.value = AudiobookPlaybackUiState()
+        _state.value = EMPTY_AUDIOBOOK_PLAYBACK_UI_STATE
         mediaSession.release()
+        preparedPlaybackCache = null
     }
 
     private fun startSegment(bookTitle: String, audio: BookAudioEntity, index: Int, startPositionMs: Int = 0) {
@@ -221,7 +227,7 @@ class GeneratedAudiobookPlaybackController(
         if (index !in segmentQueue.indices) {
             persist(audio.id, index, 0)
             resetPlaybackResources(cancelPlaybackStart = false)
-            setState(AudiobookPlaybackUiState())
+            setState(EMPTY_AUDIOBOOK_PLAYBACK_UI_STATE)
             return
         }
         val file = segmentQueue[index]
@@ -238,49 +244,42 @@ class GeneratedAudiobookPlaybackController(
             error = null
         ))
         segmentPrepareJob?.cancel()
-        segmentPrepareJob = scope.launch(Dispatchers.IO) {
+        segmentPrepareJob = scope.launch(Dispatchers.Main.immediate) {
             val preparedPlayer = runCatching {
-                MediaPlayer().apply {
-                    setAudioAttributes(
-                        AudioAttributes.Builder()
-                            .setUsage(AudioAttributes.USAGE_MEDIA)
-                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                            .build()
+                withContext(Dispatchers.IO) {
+                    speechMediaPlayerForFile(
+                        file = file,
+                        usage = AudioAttributes.USAGE_MEDIA
                     )
-                    setDataSource(file.absolutePath)
                 }
             }.getOrElse { error ->
                 Log.e("XReader", "Generated audiobook segment datasource failed for ${audio.id}/$index", error)
-                withContext(Dispatchers.Main.immediate) {
-                    if (_state.value.audioId == audio.id && _state.value.segmentIndex == index) {
-                        preparingSegment = false
-                        stopWithError(error.message ?: "Could not load generated audio segment ${index + 1}.")
-                    }
+                if (_state.value.audioId == audio.id && _state.value.segmentIndex == index) {
+                    preparingSegment = false
+                    stopWithError(error.message ?: "Could not load generated audio segment ${index + 1}.")
                 }
                 return@launch
             }
             if (!isActive) {
-                runCatching { preparedPlayer.release() }
+                preparedPlayer.releaseQuietlyAsync(scope)
                 return@launch
             }
-            withContext(Dispatchers.Main.immediate) {
-                if (_state.value.audioId != audio.id || _state.value.segmentIndex != index || !preparingSegment) {
-                    runCatching { preparedPlayer.release() }
-                    return@withContext
-                }
-                player = preparedPlayer.configureSegmentCallbacks(
-                    bookTitle = bookTitle,
-                    audio = audio,
-                    index = index,
-                    startPositionMs = startPositionMs
-                )
-                runCatching { preparedPlayer.prepareAsync() }
-                    .onFailure { error ->
-                        preparingSegment = false
-                        Log.e("XReader", "Generated audiobook segment prepare failed for ${audio.id}/$index", error)
-                        stopWithError(error.message ?: "Could not prepare generated audio segment ${index + 1}.")
-                    }
+            if (_state.value.audioId != audio.id || _state.value.segmentIndex != index || !preparingSegment) {
+                preparedPlayer.releaseQuietlyAsync(scope)
+                return@launch
             }
+            player = preparedPlayer.configureSegmentCallbacks(
+                bookTitle = bookTitle,
+                audio = audio,
+                index = index,
+                startPositionMs = startPositionMs
+            )
+            runCatching { preparedPlayer.prepareAsync() }
+                .onFailure { error ->
+                    preparingSegment = false
+                    Log.e("XReader", "Generated audiobook segment prepare failed for ${audio.id}/$index", error)
+                    stopWithError(error.message ?: "Could not prepare generated audio segment ${index + 1}.")
+                }
         }
     }
 
@@ -306,15 +305,15 @@ class GeneratedAudiobookPlaybackController(
                 preparing = false,
                 error = null
             ))
-            transitionJob = scope.launch {
+            transitionJob = scope.launch(Dispatchers.Main.immediate) {
                 delay(transitionPauseMillis(index, nextIndex))
                 startSegment(bookTitle, audio, nextIndex)
             }
         }
         setOnErrorListener { failedPlayer, _, _ ->
             if (player !== failedPlayer) return@setOnErrorListener true
-            runCatching { failedPlayer.release() }
             player = null
+            failedPlayer.releaseQuietlyAsync(scope)
             setState(AudiobookPlaybackUiState(
                 audioId = audio.id,
                 bookId = audio.bookId,
@@ -390,17 +389,9 @@ class GeneratedAudiobookPlaybackController(
     }
 
     private fun releasePlayer() {
-        player?.let { current ->
-            runCatching {
-                current.setOnPreparedListener(null)
-                current.setOnCompletionListener(null)
-                current.setOnErrorListener(null)
-                current.release()
-            }.onFailure { error ->
-                Log.w("XReader", "Generated audiobook player release failed", error)
-            }
-        }
+        val current = player ?: return
         player = null
+        current.releaseQuietlyAsync(scope)
     }
 
     private fun resetPlaybackResources(
@@ -480,8 +471,9 @@ class GeneratedAudiobookPlaybackController(
             positionMs = position.positionMs,
             playableSegmentCount = segmentQueue.size
         )
+        if (!shouldOfferGeneratedAudiobookPositionPersist(pending, lastPersistedPosition)) return
         if (!positionPersistQueue.offer(pending, coalesce = coalesce)) return
-        positionPersistJob = scope.launch {
+        positionPersistJob = scope.launch(Dispatchers.IO) {
             try {
                 while (isActive) {
                     val next = positionPersistQueue.poll() ?: break
@@ -492,6 +484,7 @@ class GeneratedAudiobookPlaybackController(
                             positionMs = next.positionMs,
                             playableSegmentCount = next.playableSegmentCount
                         )
+                        lastPersistedPosition = next
                     }.onFailure { error ->
                         Log.e("XReader", "Generated audiobook position save failed for ${next.audioId}", error)
                     }
@@ -509,15 +502,20 @@ class GeneratedAudiobookPlaybackController(
             return
         }
         if (positionSaveJob?.isActive == true) return
-        positionSaveJob = scope.launch {
+        positionSaveJob = scope.launch(Dispatchers.Main.immediate) {
+            var lastPersistedAtMillis = System.currentTimeMillis()
             while (isActive) {
-                delay(POSITION_SAVE_INTERVAL_MS)
+                delay(PLAYBACK_POSITION_UI_UPDATE_INTERVAL_MS)
                 val current = _state.value
                 val currentPlayer = player
                 if (!current.playing || current.audioId == null || currentPlayer == null) continue
                 val position = runCatching { currentPlayer.currentPosition.coerceAtLeast(0) }.getOrNull() ?: continue
                 val duration = runCatching { currentPlayer.duration.coerceAtLeast(0) }.getOrDefault(current.segmentDurationMs)
-                persist(current.audioId, current.segmentIndex, position, coalesce = true)
+                val nowMillis = System.currentTimeMillis()
+                if (shouldPersistGeneratedAudiobookPlaybackPosition(lastPersistedAtMillis, nowMillis)) {
+                    persist(current.audioId, current.segmentIndex, position, coalesce = true)
+                    lastPersistedAtMillis = nowMillis
+                }
                 val updated = current.copy(segmentPositionMs = position, segmentDurationMs = duration)
                 if (shouldEmitAudiobookPlaybackState(current = current, next = updated)) {
                     _state.value = updated
@@ -531,23 +529,29 @@ class GeneratedAudiobookPlaybackController(
         filePath?.let { path ->
             require(File(path).isDirectory) { "Generated audio files are missing." }
         } ?: error("Generated audio files are missing.")
-        val files = playableSegmentFiles()
+        val files = expectedPlayableSegmentFiles()
         require(files.isNotEmpty()) { "Generated audio segments are missing." }
         return files
     }
 
     private fun BookAudioEntity.preparePlaybackFiles(): PreparedAudiobookPlayback {
+        val key = generatedAudiobookPlaybackPreparationKey()
+        preparedPlaybackCache
+            ?.takeIf { it.key == key }
+            ?.let { return it.prepared }
         val segments = segmentFiles()
         val chapters = generatedAudiobookChapters(segments.size)
         val metadata = generatedAudiobookPlaybackMetadata(segmentCount = segments.size, chapters = chapters)
         val chaptersByIndex = chapters.associateBy { it.index }
-        return PreparedAudiobookPlayback(
+        val prepared = PreparedAudiobookPlayback(
             segments = segments,
             chapters = chapters,
             segmentChapterIndexes = metadata.chapterIndexes,
             segmentChapters = metadata.chapterIndexes.map { chapterIndex -> chaptersByIndex[chapterIndex] },
             segmentPauseMillis = metadata.pauseAfterMillis.sanitizedSegmentPauseMillis(segments.size)
         )
+        preparedPlaybackCache = PreparedAudiobookPlaybackCache(key = key, prepared = prepared)
+        return prepared
     }
 
     private fun List<Long>.sanitizedSegmentPauseMillis(segmentCount: Int): List<Long> =
@@ -569,12 +573,44 @@ private data class PreparedAudiobookPlayback(
     val segmentPauseMillis: List<Long>,
 )
 
+private data class PreparedAudiobookPlaybackCache(
+    val key: GeneratedAudiobookPlaybackPreparationKey,
+    val prepared: PreparedAudiobookPlayback,
+)
+
+internal data class GeneratedAudiobookPlaybackPreparationKey(
+    val audioId: Long,
+    val filePath: String?,
+    val status: String,
+    val segmentCount: Int,
+    val playableSegmentCount: Int,
+    val scope: String,
+    val generatedAt: Long?,
+)
+
+internal fun BookAudioEntity.generatedAudiobookPlaybackPreparationKey(): GeneratedAudiobookPlaybackPreparationKey =
+    GeneratedAudiobookPlaybackPreparationKey(
+        audioId = id,
+        filePath = filePath,
+        status = status.name,
+        segmentCount = segmentCount,
+        playableSegmentCount = playableSegmentCount(),
+        scope = scope,
+        generatedAt = generatedAt
+    )
+
 internal data class PendingGeneratedAudiobookPositionPersist(
     val audioId: Long,
     val segmentIndex: Int,
     val positionMs: Int,
     val playableSegmentCount: Int,
 )
+
+internal fun shouldOfferGeneratedAudiobookPositionPersist(
+    pending: PendingGeneratedAudiobookPositionPersist,
+    lastPersisted: PendingGeneratedAudiobookPositionPersist?,
+): Boolean =
+    pending != lastPersisted
 
 internal fun PendingGeneratedAudiobookPositionPersist?.coalescedWith(
     next: PendingGeneratedAudiobookPositionPersist,
@@ -620,12 +656,6 @@ internal class GeneratedAudiobookPositionPersistQueue {
         }
     }
 
-    fun clear() {
-        synchronized(this) {
-            pending = null
-            draining = false
-        }
-    }
 }
 
 internal data class GeneratedAudiobookPersistedPlaybackPosition(
@@ -662,8 +692,28 @@ internal fun generatedAudiobookStartSegmentIndex(
 internal fun shouldEmitAudiobookPlaybackState(
     current: AudiobookPlaybackUiState,
     next: AudiobookPlaybackUiState,
+): Boolean {
+    if (current == next) return false
+    if (
+        current.copy(
+            segmentPositionMs = 0,
+            segmentDurationMs = 0
+        ) != next.copy(
+            segmentPositionMs = 0,
+            segmentDurationMs = 0
+        )
+    ) {
+        return true
+    }
+    if (current.segmentDurationMs != next.segmentDurationMs) return true
+    return kotlin.math.abs(next.segmentPositionMs - current.segmentPositionMs) >= PLAYBACK_POSITION_UI_UPDATE_STEP_MS
+}
+
+internal fun shouldPersistGeneratedAudiobookPlaybackPosition(
+    lastPersistedAtMillis: Long,
+    nowMillis: Long,
 ): Boolean =
-    current != next
+    nowMillis - lastPersistedAtMillis >= POSITION_SAVE_INTERVAL_MS
 
 internal fun BookAudioEntity.profileLabel(): String =
     listOf(
@@ -674,6 +724,8 @@ internal fun BookAudioEntity.profileLabel(): String =
     ).filterNotNull().joinToString(" ")
 
 private const val POSITION_SAVE_INTERVAL_MS = 5_000L
+private const val PLAYBACK_POSITION_UI_UPDATE_INTERVAL_MS = 1_000L
+private const val PLAYBACK_POSITION_UI_UPDATE_STEP_MS = 1_000
 private const val SEGMENT_TRANSITION_PAUSE_MS = 220L
 private const val MIN_SEGMENT_TRANSITION_PAUSE_MS = 120L
 private const val MAX_SEGMENT_TRANSITION_PAUSE_MS = 900L

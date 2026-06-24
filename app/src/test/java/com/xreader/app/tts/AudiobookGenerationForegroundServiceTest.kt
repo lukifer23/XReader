@@ -1,5 +1,6 @@
 package com.xreader.app.tts
 
+import android.content.pm.ServiceInfo
 import com.xreader.app.data.BookAudioEntity
 import com.xreader.app.data.BookAudioStatus
 import org.junit.Assert.assertEquals
@@ -24,6 +25,38 @@ class AudiobookGenerationForegroundServiceTest {
         assertEquals(
             AudiobookGenerationStartGate.START,
             audiobookGenerationStartGate(canceling = false, jobActive = false)
+        )
+    }
+
+    @Test
+    fun rejectedStartNotificationPolicyPreservesRunningProgress() {
+        assertEquals(
+            true,
+            shouldReplaceAudiobookGenerationNotificationForRejectedStart(AudiobookGenerationStartGate.CANCELING)
+        )
+        assertEquals(
+            false,
+            shouldReplaceAudiobookGenerationNotificationForRejectedStart(AudiobookGenerationStartGate.ALREADY_RUNNING)
+        )
+        assertEquals(
+            false,
+            shouldReplaceAudiobookGenerationNotificationForRejectedStart(AudiobookGenerationStartGate.START)
+        )
+    }
+
+    @Test
+    fun foregroundServiceTypeUsesMediaProcessingOnAndroid15AndNewer() {
+        assertEquals(
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
+            audiobookGenerationForegroundServiceType(34)
+        )
+        assertEquals(
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROCESSING,
+            audiobookGenerationForegroundServiceType(35)
+        )
+        assertEquals(
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROCESSING,
+            audiobookGenerationForegroundServiceType(36)
         )
     }
 

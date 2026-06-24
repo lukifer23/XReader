@@ -76,11 +76,18 @@ class ReadAloudForegroundService : Service() {
             return
         }
         val notification = buildReadAloudNotification(state)
-        if (foregroundStarted) {
-            startForegroundCompat(notification)
-        } else {
-            startForegroundCompat(notification)
-            foregroundStarted = true
+        when (foregroundNotificationOperation(foregroundStarted)) {
+            ForegroundNotificationOperation.START_FOREGROUND -> {
+                startForegroundCompat(notification)
+                foregroundStarted = true
+            }
+            ForegroundNotificationOperation.UPDATE_NOTIFICATION ->
+                postForegroundNotificationUpdate(
+                    context = this,
+                    notificationManager = notificationManager,
+                    notificationId = NOTIFICATION_ID,
+                    notification = notification
+                )
         }
     }
 

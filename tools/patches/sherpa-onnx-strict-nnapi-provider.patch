@@ -1,0 +1,17 @@
+diff --git a/sherpa-onnx/csrc/session.cc b/sherpa-onnx/csrc/session.cc
+index 8206bb99..2e2a9d02 100755
+--- a/sherpa-onnx/csrc/session.cc
++++ b/sherpa-onnx/csrc/session.cc
+@@ -362,9 +362,9 @@ Ort::SessionOptions GetSessionOptionsImpl(
+       // Please see
+       // https://onnxruntime.ai/docs/execution-providers/NNAPI-ExecutionProvider.html#usage
+       // to enable different flags
+-      uint32_t nnapi_flags = 0;
+-      // nnapi_flags |= NNAPI_FLAG_USE_FP16;
+-      // nnapi_flags |= NNAPI_FLAG_CPU_DISABLED;
++      uint32_t nnapi_flags = NNAPI_FLAG_CPU_DISABLED;
++      nnapi_flags |= NNAPI_FLAG_USE_FP16;
++      sess_opts.AddConfigEntry("session.disable_cpu_ep_fallback", "1");
+       OrtStatus *status = OrtSessionOptionsAppendExecutionProvider_Nnapi(
+           sess_opts, nnapi_flags);
+ 

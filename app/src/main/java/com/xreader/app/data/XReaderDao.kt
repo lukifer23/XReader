@@ -334,19 +334,14 @@ interface NeuralTtsDao {
         """
         UPDATE book_audio
         SET completedSegments = :completedSegments, updatedAt = :updatedAt
-        WHERE bookId = :bookId AND modelId = :modelId AND speakerId = :speakerId AND speed = :speed AND tone = :tone AND scope = :scope
+        WHERE id = :id AND status = 'GENERATING'
         """
     )
     suspend fun updateBookAudioProgress(
-        bookId: Long,
-        modelId: String,
-        speakerId: Int,
-        speed: Float,
-        tone: String,
-        scope: String,
+        id: Long,
         completedSegments: Int,
         updatedAt: Long,
-    )
+    ): Int
 
     @Query(
         """
@@ -357,23 +352,43 @@ interface NeuralTtsDao {
             generationComputeMillis = :generationComputeMillis,
             sampleRate = :sampleRate,
             updatedAt = :updatedAt
-        WHERE bookId = :bookId AND modelId = :modelId AND speakerId = :speakerId AND speed = :speed AND tone = :tone AND scope = :scope
+        WHERE id = :id AND status = 'GENERATING'
         """
     )
     suspend fun updateBookAudioGenerationMetrics(
-        bookId: Long,
-        modelId: String,
-        speakerId: Int,
-        speed: Float,
-        tone: String,
-        scope: String,
+        id: Long,
         completedSegments: Int,
         generationProvider: String?,
         generationAudioMillis: Long,
         generationComputeMillis: Long,
         sampleRate: Int,
         updatedAt: Long,
+    ): Int
+
+    @Query(
+        """
+        UPDATE book_audio
+        SET status = 'CANCELED',
+            updatedAt = :updatedAt,
+            error = NULL
+        WHERE bookId = :bookId
+            AND modelId = :modelId
+            AND speakerId = :speakerId
+            AND speed = :speed
+            AND tone = :tone
+            AND scope = :scope
+            AND status = 'GENERATING'
+        """
     )
+    suspend fun cancelGeneratingBookAudio(
+        bookId: Long,
+        modelId: String,
+        speakerId: Int,
+        speed: Float,
+        tone: String,
+        scope: String,
+        updatedAt: Long,
+    ): Int
 
     @Query(
         """

@@ -60,6 +60,24 @@ class GeneratedAudiobookResumeTest {
     }
 
     @Test
+    fun expectedPlayableSegmentFilesAvoidsFullDirectoryVerificationForPlaybackStartup() {
+        val dir = temporaryFolder.newFolder()
+        writeSegment(dir, index = 0)
+        val audio = audio(filePath = dir.absolutePath).copy(
+            status = BookAudioStatus.GENERATED,
+            segmentCount = 3,
+            completedSegments = 3
+        )
+
+        val expected = audio.expectedPlayableSegmentFiles()
+
+        assertEquals(3, expected.size)
+        assertEquals(generatedAudiobookSegmentFileName(0), expected[0].name)
+        assertEquals(generatedAudiobookSegmentFileName(2), expected[2].name)
+        assertEquals(1, audio.playableSegmentFiles().size)
+    }
+
+    @Test
     fun deleteGeneratedAudiobookFilesRemovesAudioDirectory() {
         val dir = temporaryFolder.newFolder()
         writeSegment(dir, index = 0)
@@ -203,6 +221,7 @@ class GeneratedAudiobookResumeTest {
             """.trimIndent(),
             manifest.readText()
         )
+        assertFalse(File(dir, "manifest.in-progress.txt.tmp").exists())
     }
 
     @Test
@@ -378,7 +397,52 @@ class GeneratedAudiobookResumeTest {
     }
 
     @Test
-    fun playbackStateEmissionSkipsIdenticalStateOnly() {
+    fun positionPersistQueueKeepsLatestPendingPositionAfterCanceledDrain() {
+        val queue = GeneratedAudiobookPositionPersistQueue()
+        val first = PendingGeneratedAudiobookPositionPersist(
+            audioId = 7,
+            segmentIndex = 2,
+            positionMs = 5_000,
+            playableSegmentCount = 10
+        )
+        val final = first.copy(positionMs = 11_000)
+
+        assertTrue(queue.offer(first, coalesce = true))
+        assertFalse(queue.offer(final, coalesce = false))
+
+        queue.finishCanceledDrain()
+
+        assertEquals(final, queue.poll())
+        assertNull(queue.poll())
+    }
+
+    @Test
+    fun generatedAudiobookPositionPersistSkipsOnlyConfirmedDuplicates() {
+        val pending = PendingGeneratedAudiobookPositionPersist(
+            audioId = 7,
+            segmentIndex = 2,
+            positionMs = 0,
+            playableSegmentCount = 10
+        )
+
+        assertTrue(shouldOfferGeneratedAudiobookPositionPersist(pending, lastPersisted = null))
+        assertFalse(shouldOfferGeneratedAudiobookPositionPersist(pending, lastPersisted = pending))
+        assertTrue(
+            shouldOfferGeneratedAudiobookPositionPersist(
+                pending.copy(positionMs = 1_000),
+                lastPersisted = pending
+            )
+        )
+        assertTrue(
+            shouldOfferGeneratedAudiobookPositionPersist(
+                pending.copy(segmentIndex = 3),
+                lastPersisted = pending
+            )
+        )
+    }
+
+    @Test
+    fun playbackStateEmissionAllowsSmoothSecondLevelPositionTicks() {
         val current = AudiobookPlaybackUiState(
             audioId = 7,
             bookId = 9,
@@ -391,8 +455,26 @@ class GeneratedAudiobookResumeTest {
         )
 
         assertFalse(shouldEmitAudiobookPlaybackState(current, current.copy()))
+        assertFalse(shouldEmitAudiobookPlaybackState(current, current.copy(segmentPositionMs = 12_500)))
         assertTrue(shouldEmitAudiobookPlaybackState(current, current.copy(segmentPositionMs = 13_000)))
         assertTrue(shouldEmitAudiobookPlaybackState(current, current.copy(playing = false)))
+        assertTrue(shouldEmitAudiobookPlaybackState(current, current.copy(segmentIndex = 2, segmentPositionMs = 0)))
+    }
+
+    @Test
+    fun playbackPositionPersistenceRemainsCoalescedBehindUiTicks() {
+        assertFalse(
+            shouldPersistGeneratedAudiobookPlaybackPosition(
+                lastPersistedAtMillis = 10_000L,
+                nowMillis = 14_999L
+            )
+        )
+        assertTrue(
+            shouldPersistGeneratedAudiobookPlaybackPosition(
+                lastPersistedAtMillis = 10_000L,
+                nowMillis = 15_000L
+            )
+        )
     }
 
     @Test
@@ -409,6 +491,33 @@ class GeneratedAudiobookResumeTest {
         assertFalse(shouldPersistGeneratedAudiobookPlaybackPosition(audio, current))
         assertTrue(shouldPersistGeneratedAudiobookPlaybackPosition(audio, current.copy(positionMs = 9_000)))
         assertTrue(shouldPersistGeneratedAudiobookPlaybackPosition(audio, current.copy(segmentIndex = 3, positionMs = 0)))
+    }
+
+    @Test
+    fun playbackPreparationKeyIgnoresResumePositionButTracksPlayableSegments() {
+        val audio = audio(filePath = "/tmp/book-audio").copy(
+            id = 9,
+            status = BookAudioStatus.GENERATED,
+            segmentCount = 10,
+            completedSegments = 10,
+            playbackSegmentIndex = 1,
+            playbackPositionMs = 5_000,
+            generatedAt = 20_000L,
+            updatedAt = 30_000L
+        )
+
+        assertEquals(
+            audio.generatedAudiobookPlaybackPreparationKey(),
+            audio.copy(
+                playbackSegmentIndex = 4,
+                playbackPositionMs = 20_000,
+                updatedAt = 35_000L
+            ).generatedAudiobookPlaybackPreparationKey()
+        )
+        assertFalse(
+            audio.generatedAudiobookPlaybackPreparationKey() ==
+                audio.copy(status = BookAudioStatus.CANCELED, completedSegments = 4).generatedAudiobookPlaybackPreparationKey()
+        )
     }
 
     @Test
@@ -455,6 +564,7 @@ class GeneratedAudiobookResumeTest {
         val dir = temporaryFolder.newFolder()
         writeSegment(dir, index = 0)
         writeSegment(dir, index = 2)
+        File(dir, generatedAudiobookSegmentFileName(1)).writeBytes(ByteArray(WAV_HEADER_BYTES.toInt()))
 
         assertEquals(
             1,
@@ -464,6 +574,7 @@ class GeneratedAudiobookResumeTest {
                 completedSegments = 4
             ).verifiedPlayableSegmentCount()
         )
+        assertEquals(1, dir.countContiguousGeneratedAudiobookSegments(expectedSegments = 4))
         assertEquals(
             0,
             audio(filePath = File(temporaryFolder.root, "missing").absolutePath).copy(
@@ -489,8 +600,24 @@ class GeneratedAudiobookResumeTest {
 
         assertTrue(staleAudio.playableSegmentFiles().isEmpty())
         assertEquals(3, staleAudio.verifiedGeneratedSegmentFiles().size)
+        assertEquals(3, staleAudio.verifiedGeneratedSegmentCount())
         assertEquals(3, staleAudio.withVerifiedGeneratedProgress().completedSegments)
         assertEquals(3, staleAudio.withVerifiedGeneratedProgress().playableSegmentFiles().size)
+    }
+
+    @Test
+    fun verifiedGeneratedSegmentsLowerStaleDatabaseCompletedCount() {
+        val dir = temporaryFolder.newFolder()
+        writeSegment(dir, index = 0)
+
+        val staleAudio = audio(filePath = dir.absolutePath).copy(
+            status = BookAudioStatus.CANCELED,
+            segmentCount = 5,
+            completedSegments = 4
+        )
+
+        assertEquals(1, staleAudio.verifiedGeneratedSegmentFiles().size)
+        assertEquals(1, staleAudio.withVerifiedGeneratedProgress().completedSegments)
     }
 
     @Test
@@ -529,6 +656,23 @@ class GeneratedAudiobookResumeTest {
         assertEquals(2, snapshot.playableSegmentCount)
         assertEquals(listOf("First chapter"), snapshot.chapters.map { it.title })
         assertEquals(2, snapshot.chapters.single().segmentCount)
+    }
+
+    @Test
+    fun generatedAudiobookFileSnapshotLowersStaleStoppedProgress() {
+        val dir = temporaryFolder.newFolder()
+        writeSegment(dir, index = 0)
+
+        val snapshot = audio(filePath = dir.absolutePath).copy(
+            status = BookAudioStatus.CANCELED,
+            scopeLabel = "First chapter",
+            segmentCount = 4,
+            completedSegments = 4
+        ).generatedAudiobookFileSnapshot()
+
+        assertEquals(1, snapshot.audio.completedSegments)
+        assertEquals(1, snapshot.playableSegmentCount)
+        assertEquals(1, snapshot.chapters.single().segmentCount)
     }
 
     @Test
@@ -1020,7 +1164,7 @@ class GeneratedAudiobookResumeTest {
     @Test
     fun generationProgressCoalescesLongJobsWithoutLosingFirstOrFinalUpdate() {
         assertEquals(4, generationProgressWriteSegmentStep(120))
-        assertEquals(12, generationProgressWriteSegmentStep(1_200))
+        assertEquals(10, generationProgressWriteSegmentStep(1_200))
         assertTrue(
             shouldWriteGenerationProgress(
                 completedSegments = 1,
@@ -1028,25 +1172,32 @@ class GeneratedAudiobookResumeTest {
                 lastProgressWrittenSegments = 0
             )
         )
-        assertFalse(
+        assertTrue(
             shouldWriteGenerationProgress(
                 completedSegments = 2,
                 totalSegments = 400,
                 lastProgressWrittenSegments = 1
             )
         )
+        assertTrue(
+            shouldWriteGenerationProgress(
+                completedSegments = 8,
+                totalSegments = 400,
+                lastProgressWrittenSegments = 7
+            )
+        )
         assertFalse(
             shouldWriteGenerationProgress(
-                completedSegments = 4,
+                completedSegments = 9,
                 totalSegments = 400,
-                lastProgressWrittenSegments = 1
+                lastProgressWrittenSegments = 8
             )
         )
         assertTrue(
             shouldWriteGenerationProgress(
-                completedSegments = 5,
+                completedSegments = 12,
                 totalSegments = 400,
-                lastProgressWrittenSegments = 1
+                lastProgressWrittenSegments = 8
             )
         )
         assertTrue(
@@ -1054,6 +1205,28 @@ class GeneratedAudiobookResumeTest {
                 completedSegments = 400,
                 totalSegments = 400,
                 lastProgressWrittenSegments = 397
+            )
+        )
+    }
+
+    @Test
+    fun generationProgressWritesAfterSlowSegmentEvenBeforeSegmentStep() {
+        assertFalse(
+            shouldWriteGenerationProgress(
+                completedSegments = 9,
+                totalSegments = 400,
+                lastProgressWrittenSegments = 8,
+                lastProgressWrittenAtMillis = 10_000L,
+                nowMillis = 17_999L
+            )
+        )
+        assertTrue(
+            shouldWriteGenerationProgress(
+                completedSegments = 9,
+                totalSegments = 400,
+                lastProgressWrittenSegments = 8,
+                lastProgressWrittenAtMillis = 10_000L,
+                nowMillis = 18_000L
             )
         )
     }
@@ -1085,9 +1258,9 @@ class GeneratedAudiobookResumeTest {
 
     @Test
     fun generationManifestCheckpointsStayFrequentForShortJobs() {
-        assertEquals(4, generationManifestCheckpointSegmentStep(12))
+        assertEquals(1, generationManifestCheckpointSegmentStep(12))
         assertTrue(shouldWriteGenerationCheckpoint(completedSegments = 1, totalSegments = 12))
-        assertFalse(shouldWriteGenerationCheckpoint(completedSegments = 2, totalSegments = 12))
+        assertTrue(shouldWriteGenerationCheckpoint(completedSegments = 2, totalSegments = 12))
         assertTrue(shouldWriteGenerationCheckpoint(completedSegments = 4, totalSegments = 12))
         assertTrue(shouldWriteGenerationCheckpoint(completedSegments = 8, totalSegments = 12))
         assertTrue(shouldWriteGenerationCheckpoint(completedSegments = 12, totalSegments = 12))
@@ -1095,10 +1268,11 @@ class GeneratedAudiobookResumeTest {
 
     @Test
     fun generationManifestCheckpointsCoalesceLongJobsWithoutLosingFirstOrFinalWrite() {
-        assertEquals(12, generationManifestCheckpointSegmentStep(1_200))
+        assertEquals(10, generationManifestCheckpointSegmentStep(1_200))
         assertTrue(shouldWriteGenerationCheckpoint(completedSegments = 1, totalSegments = 1_200))
         assertFalse(shouldWriteGenerationCheckpoint(completedSegments = 4, totalSegments = 1_200))
-        assertTrue(shouldWriteGenerationCheckpoint(completedSegments = 12, totalSegments = 1_200))
+        assertFalse(shouldWriteGenerationCheckpoint(completedSegments = 9, totalSegments = 1_200))
+        assertTrue(shouldWriteGenerationCheckpoint(completedSegments = 10, totalSegments = 1_200))
         assertFalse(shouldWriteGenerationCheckpoint(completedSegments = 1_196, totalSegments = 1_200))
         assertTrue(shouldWriteGenerationCheckpoint(completedSegments = 1_200, totalSegments = 1_200))
     }
@@ -1122,6 +1296,38 @@ class GeneratedAudiobookResumeTest {
 
         assertEquals(expected, dir.generatedAudiobookKnownFilesSizeBytes(completedSegments = 2))
         assertEquals(expected, audio(filePath = dir.absolutePath).generatedAudiobookKnownFilesSizeBytes(completedSegments = 2))
+    }
+
+    @Test
+    fun atomicTextWriteReplacesExistingFileWithoutLeavingTempFile() {
+        val dir = temporaryFolder.newFolder()
+        val file = File(dir, "manifest.in-progress.txt").apply { writeText("old") }
+
+        file.writeTextAtomically("new")
+
+        assertEquals("new", file.readText())
+        assertFalse(File(dir, "manifest.in-progress.txt.tmp").exists())
+    }
+
+    @Test
+    fun streamingAtomicWriteReplacesExistingFileWithoutLeavingTempFile() {
+        val dir = temporaryFolder.newFolder()
+        val file = File(dir, "segments.tsv").apply { writeText("old") }
+
+        file.writeAtomically { writer ->
+            writer.appendLine("index\tchapterIndex\tpauseAfterMs\ttext")
+            writer.appendLine("0\t0\t220\tHello")
+        }
+
+        assertEquals(
+            """
+            index	chapterIndex	pauseAfterMs	text
+            0	0	220	Hello
+
+            """.trimIndent(),
+            file.readText()
+        )
+        assertFalse(File(dir, "segments.tsv.tmp").exists())
     }
 
     private fun writeSegment(dir: File, index: Int) {

@@ -31,7 +31,9 @@ stage_lib() {
 
 for lib in \
   libQnnGpu.so \
+  libQnnGpuNetRunExtensions.so \
   libQnnHtp.so \
+  libQnnHtpNetRunExtensions.so \
   libQnnHtpPrepare.so \
   libQnnSystem.so; do
   stage_lib "$lib"
@@ -43,7 +45,7 @@ while IFS= read -r entry; do
   lib="$(basename "$entry")"
   stage_lib "$lib"
   stub_count=$((stub_count + 1))
-done < <(unzip -Z1 "$QNN_AAR" 'jni/arm64-v8a/libQnnHtpV*Stub.so')
+done < <(unzip -Z1 "$QNN_AAR" 'jni/arm64-v8a/libQnnHtpV*Stub.so' 'jni/arm64-v8a/libQnnHtpV*CalculatorStub.so')
 while IFS= read -r entry; do
   lib="$(basename "$entry")"
   stage_lib "$lib"
