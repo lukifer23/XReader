@@ -45,6 +45,7 @@ internal object TtsAccelerationRuntime {
         context: Context,
         includeExperimentalWebGpu: Boolean = false,
         includeCpuFallbacks: Boolean = true,
+        configureQnnProviders: Boolean = true,
     ): List<String> {
         val installedLibraries = packagedNativeLibraries(context)
         val hardware = Build.HARDWARE.orEmpty()
@@ -58,6 +59,7 @@ internal object TtsAccelerationRuntime {
             boardPlatform = boardPlatform,
             socManufacturer = socManufacturer,
             socModel = socModel,
+            configureProviders = configureQnnProviders,
         )
         return providerOrder(
             installedLibraries = installedLibraries,
@@ -372,6 +374,7 @@ internal object TtsAccelerationRuntime {
             boardPlatform = systemProperty("ro.board.platform"),
             socManufacturer = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) Build.SOC_MANUFACTURER.orEmpty() else "",
             socModel = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) Build.SOC_MODEL.orEmpty() else "",
+            configureProviders = true,
         )
     }
 
@@ -382,6 +385,7 @@ internal object TtsAccelerationRuntime {
         boardPlatform: String,
         socManufacturer: String,
         socModel: String,
+        configureProviders: Boolean,
     ): List<String> {
         val readiness = qnnReadiness(
             installedLibraries = installedLibraries,
@@ -392,8 +396,12 @@ internal object TtsAccelerationRuntime {
         )
         if (!readiness.ready) return emptyList()
         return qnnProviderModes(installedLibraries).map { mode ->
-            val configFile = writeQnnProviderConfig(context, socModel, mode)
-            "qnn:${configFile.absolutePath}"
+            if (configureProviders) {
+                val configFile = writeQnnProviderConfig(context, socModel, mode)
+                "qnn:${configFile.absolutePath}"
+            } else {
+                "qnn-${mode.backend.configName}"
+            }
         }
     }
 

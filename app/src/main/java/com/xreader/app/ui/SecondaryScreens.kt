@@ -59,6 +59,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -81,6 +82,7 @@ import com.xreader.app.data.AnnotationEntity
 import com.xreader.app.data.AnnotationKind
 import com.xreader.app.data.BookAudioEntity
 import com.xreader.app.data.BookAudioStatus
+import com.xreader.app.data.BookAudioWithBook
 import com.xreader.app.data.BookEntity
 import com.xreader.app.data.ReaderTheme
 import com.xreader.app.analytics.ActivityBucketAnalytics
@@ -487,12 +489,14 @@ private fun BookAnalyticsRow(row: BookAnalytics) {
     }
 }
 
+@Immutable
 data class AudiobooksUiState(
     val rows: List<GeneratedAudiobookUiItem> = emptyList(),
     val playback: AudiobookPlaybackUiState = EMPTY_AUDIOBOOK_PLAYBACK_UI_STATE,
     val message: String? = null,
 )
 
+@Immutable
 data class GeneratedAudiobookUiItem(
     val book: BookEntity,
     val audio: BookAudioEntity,
@@ -560,6 +564,33 @@ private fun GeneratedAudiobookUiItem.audiobookScreenPriority(playback: Audiobook
         else -> 5
     }
 
+internal fun List<BookAudioWithBook>.toGeneratedAudiobookUiItems(
+    audioItems: List<BookAudiobookAudioUiItem>,
+): List<GeneratedAudiobookUiItem> {
+    if (size == audioItems.size) {
+        return zip(audioItems).mapNotNull { (row, audioItem) ->
+            row.toGeneratedAudiobookUiItem(audioItem)
+        }
+    }
+
+    val audioItemsById = audioItems.associateBy { it.audio.id }
+    return mapNotNull { row ->
+        row.toGeneratedAudiobookUiItem(audioItemsById[row.audio.id] ?: return@mapNotNull null)
+    }
+}
+
+private fun BookAudioWithBook.toGeneratedAudiobookUiItem(
+    audioItem: BookAudiobookAudioUiItem,
+): GeneratedAudiobookUiItem? {
+    if (!audioItem.shouldShowInGlobalAudiobooksScreen()) return null
+    return GeneratedAudiobookUiItem(
+        book = book,
+        audio = audioItem.audio,
+        chapters = audioItem.chapters,
+        playableSegmentFiles = audioItem.playableSegmentFiles
+    )
+}
+
 class AudiobooksViewModel(private val container: AppContainer) : ViewModel() {
     private val message = MutableStateFlow<String?>(null)
     private val playback = container.generatedAudiobookPlayback.state
@@ -573,19 +604,8 @@ class AudiobooksViewModel(private val container: AppContainer) : ViewModel() {
         container.neuralTtsRepository.observeVisibleAudiobookScreenRows()
             .map { rows ->
                 withContext(Dispatchers.IO) {
-                    val audioItemsById = audiobookUiItemCache
-                        .toUiItems(rows.map { it.audio })
-                        .associateBy { it.audio.id }
-                    rows.mapNotNull { row ->
-                        val audioItem = audioItemsById[row.audio.id] ?: return@mapNotNull null
-                        if (!audioItem.shouldShowInGlobalAudiobooksScreen()) return@mapNotNull null
-                        GeneratedAudiobookUiItem(
-                            book = row.book,
-                            audio = audioItem.audio,
-                            chapters = audioItem.chapters,
-                            playableSegmentFiles = audioItem.playableSegmentFiles
-                        )
-                    }
+                    val audioItems = audiobookUiItemCache.toUiItems(rows.map { it.audio })
+                    rows.toGeneratedAudiobookUiItems(audioItems)
                 }
             }
             .distinctUntilChanged()

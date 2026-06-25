@@ -423,6 +423,14 @@ class TtsAccelerationRuntimeTest {
     }
 
     @Test
+    fun qnnBackendIsDerivedFromReadinessProviderLabels() {
+        assertEquals(QnnBackend.GPU, TtsAccelerationRuntime.qnnBackend("qnn-gpu"))
+        assertEquals(QnnBackend.HTP, TtsAccelerationRuntime.qnnBackend("qnn-htp"))
+        assertTrue(TtsAccelerationRuntime.isAudiobookGenerationAcceleratedProvider("qnn-gpu"))
+        assertTrue(TtsAccelerationRuntime.isAudiobookGenerationAcceleratedProvider("qnn-htp"))
+    }
+
+    @Test
     fun failedAcceleratorIsSkippedAfterInitializationFailure() {
         TtsAccelerationRuntime.clearProviderFailuresForTests()
         TtsAccelerationRuntime.recordProviderInitializationFailed("webgpu")

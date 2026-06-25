@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.media.MediaPlayer
 import android.net.Uri
 import android.util.Log
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -35,7 +36,6 @@ import com.xreader.app.tts.GeneratedAudiobookFileSnapshot
 import com.xreader.app.tts.PreparedAudiobookPlan
 import com.xreader.app.tts.fallbackGeneratedAudiobookChapters
 import com.xreader.app.tts.generatedAudiobookChapters
-import com.xreader.app.tts.generatedAudiobookFileSnapshot
 import com.xreader.app.tts.playableSegmentCount
 import com.xreader.app.tts.prepareAudiobookPlan
 import kotlinx.coroutines.CancellationException
@@ -112,6 +112,7 @@ data class LibraryMessage(
     val undoRemoveBookId: Long? = null,
 )
 
+@Immutable
 data class BookAudiobookAudioUiItem(
     val audio: BookAudioEntity,
     val chapters: List<GeneratedAudiobookChapter> = emptyList(),
@@ -176,11 +177,8 @@ internal fun BookAudioEntity.audiobookUiInvalidationKey(): AudiobookUiInvalidati
 internal fun List<BookAudioEntity>.audiobookUiInvalidationKeys(): List<AudiobookUiInvalidationKey> =
     map { it.audiobookUiInvalidationKey() }
 
-internal fun List<BookAudioEntity>.toBookAudiobookAudioUiItems(): List<BookAudiobookAudioUiItem> =
-    map { audio -> audio.toBookAudiobookAudioUiItem() }
-
 internal class BookAudiobookAudioUiItemCache {
-    private val items = linkedMapOf<Long, CachedBookAudiobookAudioUiItem>()
+    private val items = linkedMapOf<Long, CachedBookAudiobookAudioMetadata>()
 
     @Synchronized
     fun toUiItems(rows: List<BookAudioEntity>): List<BookAudiobookAudioUiItem> {
@@ -189,26 +187,54 @@ internal class BookAudiobookAudioUiItemCache {
         return rows.map { audio -> toUiItemLocked(audio) }
     }
 
-    @Synchronized
-    fun toUiItem(audio: BookAudioEntity): BookAudiobookAudioUiItem =
-        toUiItemLocked(audio)
-
     private fun toUiItemLocked(audio: BookAudioEntity): BookAudiobookAudioUiItem {
-        val key = audio.audiobookUiInvalidationKey()
-        items[audio.id]?.takeIf { it.key == key }?.let { return it.item }
+        val key = audio.audiobookMetadataInvalidationKey()
+        items[audio.id]?.takeIf { it.key == key }?.let { cached ->
+            return BookAudiobookAudioUiItem(
+                audio = audio,
+                chapters = cached.chapters,
+                playableSegmentFiles = cached.playableSegmentFiles
+            )
+        }
         val item = audio.toBookAudiobookAudioUiItem()
-        items[audio.id] = CachedBookAudiobookAudioUiItem(key = key, item = item)
+        items[audio.id] = CachedBookAudiobookAudioMetadata(
+            key = key,
+            chapters = item.chapters,
+            playableSegmentFiles = item.playableSegmentFiles
+        )
         return item
     }
 }
 
-private data class CachedBookAudiobookAudioUiItem(
-    val key: AudiobookUiInvalidationKey,
-    val item: BookAudiobookAudioUiItem,
+private data class AudiobookMetadataInvalidationKey(
+    val id: Long,
+    val status: BookAudioStatus,
+    val filePath: String?,
+    val segmentCount: Int,
+    val completedSegments: Int,
+    val generatedAt: Long?,
+    val updatedAt: Long?,
 )
 
+private data class CachedBookAudiobookAudioMetadata(
+    val key: AudiobookMetadataInvalidationKey,
+    val chapters: List<GeneratedAudiobookChapter>,
+    val playableSegmentFiles: Int,
+)
+
+private fun BookAudioEntity.audiobookMetadataInvalidationKey(): AudiobookMetadataInvalidationKey =
+    AudiobookMetadataInvalidationKey(
+        id = id,
+        status = status,
+        filePath = filePath,
+        segmentCount = segmentCount,
+        completedSegments = completedSegments,
+        generatedAt = generatedAt,
+        updatedAt = updatedAt.takeUnless { status == BookAudioStatus.GENERATING }
+    )
+
 internal fun BookAudioEntity.toBookAudiobookAudioUiItem(): BookAudiobookAudioUiItem {
-    val snapshot = generatedAudiobookUiSnapshot(verifyFiles = false)
+    val snapshot = generatedAudiobookUiSnapshot()
     return BookAudiobookAudioUiItem(
         audio = snapshot.audio,
         chapters = snapshot.chapters,
@@ -216,33 +242,21 @@ internal fun BookAudioEntity.toBookAudiobookAudioUiItem(): BookAudiobookAudioUiI
     )
 }
 
-internal fun BookAudioEntity.toVerifiedBookAudiobookAudioUiItem(): BookAudiobookAudioUiItem {
-    val snapshot = generatedAudiobookUiSnapshot(verifyFiles = true)
-    return BookAudiobookAudioUiItem(
-        audio = snapshot.audio,
-        chapters = snapshot.chapters,
-        playableSegmentFiles = snapshot.playableSegmentCount
-    )
-}
-
-private fun BookAudioEntity.generatedAudiobookUiSnapshot(verifyFiles: Boolean) =
-    if (verifyFiles) {
-        generatedAudiobookFileSnapshot()
+private fun BookAudioEntity.generatedAudiobookUiSnapshot(): GeneratedAudiobookFileSnapshot {
+    val playableCount = playableSegmentCount()
+    val chapters = if (status == BookAudioStatus.GENERATING) {
+        fallbackGeneratedAudiobookChapters(playableCount)
     } else {
-        val playableCount = playableSegmentCount()
-        val chapters = if (status == BookAudioStatus.GENERATING) {
-            fallbackGeneratedAudiobookChapters(playableCount)
-        } else {
-            generatedAudiobookChapters(playableCount)
-                .ifEmpty { fallbackGeneratedAudiobookChapters(playableCount) }
-        }
-        GeneratedAudiobookFileSnapshot(
-            audio = this,
-            playableSegmentFiles = emptyList(),
-            activeGenerationPlayableSegmentCount = playableCount,
-            chapters = chapters
-        )
+        generatedAudiobookChapters(playableCount)
+            .ifEmpty { fallbackGeneratedAudiobookChapters(playableCount) }
     }
+    return GeneratedAudiobookFileSnapshot(
+        audio = this,
+        playableSegmentFiles = emptyList(),
+        activeGenerationPlayableSegmentCount = playableCount,
+        chapters = chapters
+    )
+}
 
 internal fun BookAudiobookAudioUiItem.shouldShowInGlobalAudiobooksScreen(): Boolean =
     audio.status == BookAudioStatus.GENERATED ||

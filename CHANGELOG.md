@@ -12,6 +12,7 @@
 ### Changed
 
 - Documentation now records the current audiobook acceleration focus: strict hardware generation only, no CPU fallback masquerading as acceleration, and prepared QNN/NPU artifacts gated by a strict compatibility manifest.
+- Audiobook hardware readiness now probes strict QNN availability with non-mutating provider labels; real provider config files are written only when generation initializes a runtime.
 - Library sorting now includes `Date added`, using import time independently from reading activity and honoring the option in grouped views.
 - Library search now matches multi-term queries across metadata, collections, file format, year, favorite state, and reading status such as unread, in progress, or finished.
 - Library search now normalizes pasted punctuation, separators, and accents, so queries like `red-rising`, `sci_fi`, or `cafe` match clean book metadata.
@@ -50,7 +51,11 @@
 - Active generated-audiobook rows now avoid repeated chapter-sidecar reads while generation is still running and reuse unchanged UI row models, reducing library/audiobook screen churn during progress updates.
 - Audiobook heartbeat cleanup now waits for the heartbeat worker to finish after segment synthesis, reducing races between long native calls, completion writes, cancellation, and delete/clear actions.
 - The global Audiobooks screen now uses one Room relation query for visible generated-audio rows and their books, avoiding a full-library/full-audio combine on every generation progress tick.
+- The global Audiobooks screen now keeps Room rows and cached audio UI rows in order instead of building an extra id map during active generation refreshes.
 - Generated-audiobook UI row caches now prune entries outside the active row set, preventing stale sidecar metadata from accumulating after delete, repair, or regeneration.
+- Generated-audiobook UI row caches now keep expensive sidecar metadata separate from live progress rows, so heartbeat ETA/provider/timing updates do not force chapter metadata reparsing.
+- Generated-audiobook list and row UI state now declare immutable Compose value objects, helping unaffected audiobook rows skip recomposition during playback and generation progress ticks.
+- Passive generated-audiobook UI now has one non-verifying row conversion path; file verification remains in playback, export, repair, and recovery instead of unused UI helpers.
 - Neural audiobook startup maintenance now runs cheap catalog/install repair early and defers stale-audio repair plus obsolete storage pruning, reducing cold-start and first-library-render contention.
 - Generated-audiobook foreground playback now requests its foreground service once per active playback session instead of repeatedly starting it on play, resume, and pause state transitions.
 - Reader navigation filtering now matches across punctuation boundaries, so queries like `chapter-1`, `landing-sequence`, or `#character-later` find the expected TOC entries, bookmarks, notes, and highlights.

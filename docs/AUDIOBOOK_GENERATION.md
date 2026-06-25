@@ -14,6 +14,8 @@ Full-book generation now fails closed unless a real accelerated provider initial
 
 QNN GPU uses the stock floating-point Kokoro `model.onnx` through `libQnnGpu.so`. QNN HTP/NPU requires a prepared `model.qnn.onnx` beside the installed model and a matching `xreader-qnn-model-manifest.json` whose `strict_qnn_compatible` field is `true`. A bare `model.qnn.onnx` is not enough, because prior attempts could produce a quantized file that still left unsupported graph work on CPU. Strict QNN provider configs set `disable_cpu_ep_fallback=1`; if ONNX Runtime assigns nodes to CPU, generation fails instead of pretending to accelerate. NNAPI is built through the strict Sherpa-ONNX patch with Android NNAPI CPU disabled.
 
+Readiness checks used by Settings and generation dialogs are deliberately non-mutating: they report strict QNN GPU/HTP availability using provider labels and do not create provider config files. Actual strict QNN provider configs are written only when a real synthesis runtime starts.
+
 Long-lived WebGPU sessions remain crash-prone until proven otherwise. A 2026-06-12 full-book run reached `362/397` generated segments, then the native process aborted after ONNX Runtime WebGPU reported `Failed to download data from buffer: [Device] is lost.` WebGPU stays available for experiments and previews, but it is not a full-book provider until it can run without CPU fallback and without device-loss crashes.
 
 ## Text Preparation
@@ -56,6 +58,7 @@ Generation scope is persisted per voice profile:
 - Active generation UI should avoid filesystem-heavy sidecar reads until playable segments exist. During `GENERATING`, rows use bounded fallback section metadata and cache unchanged row models so progress/ETA refreshes do not force repeated chapter parsing on the main library surface.
 - The global Audiobooks screen is fed by a single Room relation query for visible generated-audio rows and their books. It does not combine the entire library with the entire audio table on every progress tick.
 - Audiobook row cache entries are pruned to the currently visible active set so old sidecar metadata cannot accumulate or leak into later regenerated rows.
+- Audiobook row caching stores expensive file-derived metadata separately from the live Room row, so heartbeat-only progress updates can refresh ETA/provider/timing labels without reparsing chapter sidecars.
 - Startup maintenance seeds the supported model catalog early, repairs interrupted model installs early, then defers stale audiobook repair and obsolete model-storage pruning so app launch and the library surface do not compete with heavy filesystem work.
 
 ## User-Facing Controls

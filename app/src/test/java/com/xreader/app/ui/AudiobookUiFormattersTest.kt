@@ -2,6 +2,7 @@ package com.xreader.app.ui
 
 import com.xreader.app.data.BookAudioEntity
 import com.xreader.app.data.BookAudioStatus
+import com.xreader.app.data.BookAudioWithBook
 import com.xreader.app.data.BookEntity
 import com.xreader.app.data.BookFormat
 import com.xreader.app.data.NeuralTtsModelStatus
@@ -640,6 +641,43 @@ class AudiobookUiFormattersTest {
     }
 
     @Test
+    fun audiobooksScreenMaterializesRowsInRoomOrderWithoutIdRemap() {
+        val firstAudio = playableAudio(1).copy(bookId = 101, updatedAt = 30L)
+        val hiddenAudio = audio(2).copy(bookId = 102, status = BookAudioStatus.CANCELED, completedSegments = 0)
+        val thirdAudio = playableAudio(3).copy(bookId = 103, updatedAt = 10L)
+        val rows = listOf(
+            BookAudioWithBook(firstAudio, book(id = 101, title = "First")),
+            BookAudioWithBook(hiddenAudio, book(id = 102, title = "Hidden")),
+            BookAudioWithBook(thirdAudio, book(id = 103, title = "Third"))
+        )
+        val audioItems = listOf(
+            bookAudioItem(firstAudio, playableSegmentFiles = 4),
+            bookAudioItem(hiddenAudio, playableSegmentFiles = 0),
+            bookAudioItem(thirdAudio, playableSegmentFiles = 4)
+        )
+
+        val uiItems = rows.toGeneratedAudiobookUiItems(audioItems)
+
+        assertEquals(listOf("First", "Third"), uiItems.map { it.book.title })
+        assertEquals(listOf(1L, 3L), uiItems.map { it.audio.id })
+    }
+
+    @Test
+    fun audiobooksScreenMaterializerFallsBackToIdsForMismatchedRowAndAudioLists() {
+        val firstAudio = playableAudio(1).copy(bookId = 101)
+        val secondAudio = playableAudio(2).copy(bookId = 102)
+        val rows = listOf(
+            BookAudioWithBook(firstAudio, book(id = 101, title = "First")),
+            BookAudioWithBook(secondAudio, book(id = 102, title = "Second"))
+        )
+
+        val uiItems = rows.toGeneratedAudiobookUiItems(listOf(bookAudioItem(secondAudio)))
+
+        assertEquals(listOf("Second"), uiItems.map { it.book.title })
+        assertEquals(listOf(2L), uiItems.map { it.audio.id })
+    }
+
+    @Test
     fun audiobookDisplayProfileLabelCanIncludeOrOmitScope() {
         val sample = audio(1).copy(
             modelDisplayName = "Kokoro v1.0",
@@ -873,6 +911,53 @@ class AudiobookUiFormattersTest {
                 listOf("Changed"),
                 cache.toUiItems(listOf(audio.copy(updatedAt = 2_000L))).single().chapters.map { it.title }
             )
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun audiobookUiItemCacheKeepsHeartbeatUpdatesWithoutReparsingSidecars() {
+        val dir = kotlin.io.path.createTempDirectory("xreader-audio-ui-cache-heartbeat").toFile()
+        try {
+            File(dir, "chapters.tsv").writeText(
+                """
+                index	firstSegment	segmentCount	title
+                0	0	3	Original
+                """.trimIndent()
+            )
+            val cache = BookAudiobookAudioUiItemCache()
+            val audio = playableAudio(1).copy(
+                status = BookAudioStatus.GENERATING,
+                filePath = dir.absolutePath,
+                scope = AudiobookGenerationScope.FULL_BOOK.key,
+                scopeLabel = AudiobookGenerationScope.FULL_BOOK.label,
+                segmentCount = 3,
+                completedSegments = 2,
+                generationAudioMillis = 10_000L,
+                generationComputeMillis = 20_000L,
+                updatedAt = 1_000L
+            )
+
+            assertEquals(listOf("Full book"), cache.toUiItems(listOf(audio)).single().chapters.map { it.title })
+
+            File(dir, "chapters.tsv").writeText(
+                """
+                index	firstSegment	segmentCount	title
+                0	0	3	Changed
+                """.trimIndent()
+            )
+            val heartbeat = audio.copy(
+                generationAudioMillis = 15_000L,
+                generationComputeMillis = 30_000L,
+                updatedAt = 2_000L
+            )
+            val item = cache.toUiItems(listOf(heartbeat)).single()
+
+            assertEquals(listOf("Full book"), item.chapters.map { it.title })
+            assertEquals(15_000L, item.audio.generationAudioMillis)
+            assertEquals(30_000L, item.audio.generationComputeMillis)
+            assertEquals(2_000L, item.audio.updatedAt)
         } finally {
             dir.deleteRecursively()
         }
@@ -1155,24 +1240,32 @@ class AudiobookUiFormattersTest {
         author: String = "Author",
     ): GeneratedAudiobookUiItem =
         GeneratedAudiobookUiItem(
-            book = BookEntity(
-                id = audio.bookId,
-                title = bookTitle,
-                author = author,
-                sortTitle = bookTitle.lowercase(),
-                format = BookFormat.EPUB,
-                sourceExtension = "epub",
-                fileName = "book-${audio.id}.epub",
-                filePath = "/tmp/book-${audio.id}.epub",
-                checksum = "checksum-${audio.id}",
-                fileSizeBytes = 1,
-                wordCount = 100,
-                importedAt = 1,
-                updatedAt = 1
-            ),
+            book = book(id = audio.bookId, title = bookTitle, author = author, suffix = audio.id.toString()),
             audio = audio,
             chapters = chapters,
             playableSegmentFiles = playableSegmentFiles
+        )
+
+    private fun book(
+        id: Long,
+        title: String,
+        author: String = "Author",
+        suffix: String = id.toString(),
+    ): BookEntity =
+        BookEntity(
+            id = id,
+            title = title,
+            author = author,
+            sortTitle = title.lowercase(),
+            format = BookFormat.EPUB,
+            sourceExtension = "epub",
+            fileName = "book-$suffix.epub",
+            filePath = "/tmp/book-$suffix.epub",
+            checksum = "checksum-$suffix",
+            fileSizeBytes = 1,
+            wordCount = 100,
+            importedAt = 1,
+            updatedAt = 1
         )
 
     private fun bookAudioItem(

@@ -297,9 +297,6 @@ interface NeuralTtsDao {
     @Query("SELECT * FROM book_audio WHERE bookId = :bookId ORDER BY updatedAt DESC")
     fun observeBookAudio(bookId: Long): Flow<List<BookAudioEntity>>
 
-    @Query("SELECT * FROM book_audio ORDER BY updatedAt DESC")
-    fun observeAllBookAudio(): Flow<List<BookAudioEntity>>
-
     @Transaction
     @Query(
         """

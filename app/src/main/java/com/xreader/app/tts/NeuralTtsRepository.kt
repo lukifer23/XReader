@@ -68,8 +68,6 @@ class NeuralTtsRepository(
 
     fun observeBookAudio(bookId: Long): Flow<List<BookAudioEntity>> = dao.observeBookAudio(bookId)
 
-    fun observeAllBookAudio(): Flow<List<BookAudioEntity>> = dao.observeAllBookAudio()
-
     fun observeVisibleAudiobookScreenRows(): Flow<List<BookAudioWithBook>> =
         dao.observeVisibleAudiobookScreenRows()
 
@@ -87,7 +85,8 @@ class NeuralTtsRepository(
         val providers = TtsAccelerationRuntime.providerOrder(
             context = appContext,
             includeExperimentalWebGpu = false,
-            includeCpuFallbacks = false
+            includeCpuFallbacks = false,
+            configureQnnProviders = false
         )
         val hardwareProviders = providers.filter(TtsAccelerationRuntime::isAudiobookGenerationAcceleratedProvider)
         if (hardwareProviders.isEmpty()) {
