@@ -462,6 +462,71 @@ class GeneratedAudiobookResumeTest {
     }
 
     @Test
+    fun generatedAudiobookForegroundServiceStartsOnlyForActivePlaybackOnce() {
+        val stopped = AudiobookPlaybackUiState()
+        val preparing = AudiobookPlaybackUiState(audioId = 7, preparing = true)
+        val playing = AudiobookPlaybackUiState(audioId = 7, playing = true)
+        val paused = AudiobookPlaybackUiState(audioId = 7, playing = false, preparing = false)
+
+        assertFalse(
+            shouldRequestGeneratedAudiobookForegroundService(
+                state = stopped,
+                foregroundServiceRequested = false
+            )
+        )
+        assertFalse(
+            shouldRequestGeneratedAudiobookForegroundService(
+                state = preparing,
+                foregroundServiceRequested = false
+            )
+        )
+        assertTrue(
+            shouldRequestGeneratedAudiobookForegroundService(
+                state = playing,
+                foregroundServiceRequested = false
+            )
+        )
+        assertTrue(
+            shouldRequestGeneratedAudiobookForegroundService(
+                state = paused,
+                foregroundServiceRequested = false
+            )
+        )
+        assertFalse(
+            shouldRequestGeneratedAudiobookForegroundService(
+                state = playing,
+                foregroundServiceRequested = true
+            )
+        )
+    }
+
+    @Test
+    fun generatedAudiobookForegroundServiceRequestFlagClearsWhenPlaybackStops() {
+        val playing = AudiobookPlaybackUiState(audioId = 7, playing = true)
+        val stopped = AudiobookPlaybackUiState()
+        val error = AudiobookPlaybackUiState(audioId = 7, error = "Could not play segment")
+
+        assertTrue(
+            generatedAudiobookForegroundServiceRequestedAfterState(
+                state = playing,
+                foregroundServiceRequested = true
+            )
+        )
+        assertFalse(
+            generatedAudiobookForegroundServiceRequestedAfterState(
+                state = stopped,
+                foregroundServiceRequested = true
+            )
+        )
+        assertFalse(
+            generatedAudiobookForegroundServiceRequestedAfterState(
+                state = error,
+                foregroundServiceRequested = true
+            )
+        )
+    }
+
+    @Test
     fun playbackPositionPersistenceRemainsCoalescedBehindUiTicks() {
         assertFalse(
             shouldPersistGeneratedAudiobookPlaybackPosition(

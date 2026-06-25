@@ -118,8 +118,10 @@ import com.xreader.app.tts.AudiobookGenerationScope
 import com.xreader.app.tts.GeneratedAudiobookChapter
 import com.xreader.app.tts.NeuralTtsModelCatalog
 import com.xreader.app.tts.NeuralTtsModelSpec
+import com.xreader.app.tts.audiobookGenerationProgressLabel
 import com.xreader.app.tts.canDeleteGeneratedAudiobook
 import com.xreader.app.tts.generationEtaLabel
+import com.xreader.app.tts.segmentLimit
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.ceil
@@ -1762,15 +1764,10 @@ private fun audiobookScopeSegmentEstimate(
     scope: AudiobookGenerationScope,
     scan: AudiobookScanUiState,
 ): Int =
-    when (scope) {
-        AudiobookGenerationScope.SAMPLE -> scan.segmentCount.coerceAtMost(AudiobookGenerationScope.SAMPLE.maxSegments ?: scan.segmentCount)
-        AudiobookGenerationScope.FIRST_CHAPTER -> {
-            val detectedFirstChapter = scan.firstChapterSegmentCount.takeIf { it > 0 }
-            val fallbackCap = AudiobookGenerationScope.FIRST_CHAPTER.maxSegments ?: scan.segmentCount
-            (detectedFirstChapter ?: scan.segmentCount.coerceAtMost(fallbackCap))
-        }
-        AudiobookGenerationScope.FULL_BOOK -> scan.segmentCount
-    }.coerceAtLeast(0)
+    scope.segmentLimit(
+        totalSegments = scan.segmentCount,
+        firstChapterSegmentCount = scan.firstChapterSegmentCount
+    )
 
 private fun audiobookScopeDurationEstimateMillis(
     scope: AudiobookGenerationScope,
@@ -1835,7 +1832,7 @@ private fun AudiobookStatusCard(
         BookAudioStatus.GENERATING -> {
             if (audio.segmentCount > 0) {
                 listOf(
-                    "${audio.completedSegments.coerceAtMost(audio.segmentCount)} of ${audio.segmentCount} segments",
+                    audio.audiobookGenerationProgressLabel(),
                     "${(progress * 100).roundToInt()}%",
                     audio.generationEtaLabel(),
                     audio.audiobookPerformanceLabel(),

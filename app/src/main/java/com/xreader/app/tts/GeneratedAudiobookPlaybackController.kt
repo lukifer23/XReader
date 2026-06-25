@@ -66,6 +66,7 @@ class GeneratedAudiobookPlaybackController(
     private val positionPersistQueue = GeneratedAudiobookPositionPersistQueue()
     @Volatile
     private var lastPersistedPosition: PendingGeneratedAudiobookPositionPersist? = null
+    private var foregroundServiceRequested = false
     private var preparingSegment = false
     private val mediaSession = GeneratedAudiobookMediaSessionController(
         context = appContext,
@@ -136,7 +137,6 @@ class GeneratedAudiobookPlaybackController(
                 0
             }
             startSegment(bookTitle = bookTitle, audio = audio, index = startIndex, startPositionMs = startPositionMs)
-            GeneratedAudiobookForegroundService.start(appContext)
         }
     }
 
@@ -154,7 +154,6 @@ class GeneratedAudiobookPlaybackController(
                     segmentDurationMs = existing.duration.coerceAtLeast(0),
                     error = null
                 ))
-                GeneratedAudiobookForegroundService.start(appContext)
             }.onFailure { error ->
                 Log.e("XReader", "Generated audiobook resume failed for ${audio.id}", error)
                 stopWithError(error.message ?: "Could not resume audiobook playback")
@@ -162,7 +161,6 @@ class GeneratedAudiobookPlaybackController(
         } else {
             val title = current.bookTitle ?: "Generated audiobook"
             startSegment(title, audio, current.segmentIndex, 0)
-            GeneratedAudiobookForegroundService.start(appContext)
         }
     }
 
@@ -171,7 +169,6 @@ class GeneratedAudiobookPlaybackController(
         val existing = player ?: return
         if (!current.playing || current.preparing || preparingSegment) {
             setState(current.copy(playing = false, error = null))
-            GeneratedAudiobookForegroundService.start(appContext)
             return
         }
         runCatching {
@@ -183,7 +180,6 @@ class GeneratedAudiobookPlaybackController(
                 segmentDurationMs = existing.duration.coerceAtLeast(0),
                 error = null
             ))
-            GeneratedAudiobookForegroundService.start(appContext)
         }.onFailure { error ->
             Log.e("XReader", "Generated audiobook pause failed for ${current.audioId}", error)
             stopWithError(error.message ?: "Could not pause audiobook playback")
@@ -216,6 +212,7 @@ class GeneratedAudiobookPlaybackController(
         positionSaveJob?.cancel()
         positionSaveJob = null
         resetPlaybackResources(cancelPlaybackStart = true)
+        foregroundServiceRequested = false
         _state.value = EMPTY_AUDIOBOOK_PLAYBACK_UI_STATE
         mediaSession.release()
         preparedPlaybackCache = null
@@ -379,6 +376,28 @@ class GeneratedAudiobookPlaybackController(
         _state.value = state
         mediaSession.update(state)
         syncPeriodicPositionSave(state)
+        syncForegroundService(state)
+    }
+
+    private fun syncForegroundService(state: AudiobookPlaybackUiState) {
+        if (!shouldRequestGeneratedAudiobookForegroundService(
+                state = state,
+                foregroundServiceRequested = foregroundServiceRequested
+            )
+        ) {
+            foregroundServiceRequested = generatedAudiobookForegroundServiceRequestedAfterState(
+                state = state,
+                foregroundServiceRequested = foregroundServiceRequested
+            )
+            return
+        }
+        foregroundServiceRequested = true
+        runCatching {
+            GeneratedAudiobookForegroundService.start(appContext)
+        }.onFailure { error ->
+            foregroundServiceRequested = false
+            Log.e("XReader", "Generated audiobook foreground service start failed", error)
+        }
     }
 
     private fun persistCurrentPosition(state: AudiobookPlaybackUiState) {
@@ -708,6 +727,18 @@ internal fun shouldEmitAudiobookPlaybackState(
     if (current.segmentDurationMs != next.segmentDurationMs) return true
     return kotlin.math.abs(next.segmentPositionMs - current.segmentPositionMs) >= PLAYBACK_POSITION_UI_UPDATE_STEP_MS
 }
+
+internal fun shouldRequestGeneratedAudiobookForegroundService(
+    state: AudiobookPlaybackUiState,
+    foregroundServiceRequested: Boolean,
+): Boolean =
+    state.foregroundActive && !foregroundServiceRequested
+
+internal fun generatedAudiobookForegroundServiceRequestedAfterState(
+    state: AudiobookPlaybackUiState,
+    foregroundServiceRequested: Boolean,
+): Boolean =
+    state.foregroundActive && foregroundServiceRequested
 
 internal fun shouldPersistGeneratedAudiobookPlaybackPosition(
     lastPersistedAtMillis: Long,

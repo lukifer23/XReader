@@ -337,6 +337,26 @@ class NeuralTtsTextTest {
     }
 
     @Test
+    fun scopeSegmentLimitMatchesGenerationScopes() {
+        assertEquals(
+            12,
+            AudiobookGenerationScope.SAMPLE.segmentLimit(totalSegments = 90)
+        )
+        assertEquals(
+            8,
+            AudiobookGenerationScope.FIRST_CHAPTER.segmentLimit(totalSegments = 90, firstChapterSegmentCount = 8)
+        )
+        assertEquals(
+            60,
+            AudiobookGenerationScope.FIRST_CHAPTER.segmentLimit(totalSegments = 90)
+        )
+        assertEquals(
+            90,
+            AudiobookGenerationScope.FULL_BOOK.segmentLimit(totalSegments = 90)
+        )
+    }
+
+    @Test
     fun fullBookScopeKeepsPreparedBookUnchanged() {
         val prepared = NeuralTtsPreparedBook(
             segments = listOf("one two", "three four"),

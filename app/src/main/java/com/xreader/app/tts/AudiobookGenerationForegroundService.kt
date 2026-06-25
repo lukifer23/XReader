@@ -410,14 +410,23 @@ internal fun audiobookGenerationStatusText(
     }
 
 internal fun audiobookGenerationProgressText(audio: BookAudioEntity?): String? {
-    val segmentCount = audio?.segmentCount ?: return null
-    if (segmentCount <= 0) return null
-    val completed = audio.completedSegments.coerceIn(0, segmentCount)
+    val progress = audio?.audiobookGenerationProgressLabel() ?: return null
     val eta = audio.generationEtaLabel()
-    return listOfNotNull("$completed/$segmentCount segments", eta).joinToString(" • ")
+    return listOfNotNull(progress, eta).joinToString(" • ")
 }
 
 private const val NOTIFICATION_UPDATE_BUCKET_MS = 60_000L
+
+internal fun BookAudioEntity.audiobookGenerationProgressLabel(): String? {
+    if (status != BookAudioStatus.GENERATING || segmentCount <= 0) return null
+    val completed = completedSegments.coerceIn(0, segmentCount)
+    val activeSegment = (completed + 1).coerceAtMost(segmentCount)
+    return if (completed >= segmentCount) {
+        "$segmentCount/$segmentCount segments"
+    } else {
+        "working on $activeSegment/$segmentCount"
+    }
+}
 
 internal fun BookAudioEntity.generationEtaLabel(nowMillis: Long = System.currentTimeMillis()): String? {
     if (status != BookAudioStatus.GENERATING) return null

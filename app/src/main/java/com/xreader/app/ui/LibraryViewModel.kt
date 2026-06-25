@@ -136,9 +136,12 @@ internal data class AudiobookUiInvalidationKey(
     val sampleRate: Int,
     val fileSizeBytes: Long,
     val generationProvider: String?,
+    val generationAudioMillis: Long,
+    val generationComputeMillis: Long,
     val generationStartedAt: Long?,
     val generationSessionStartCompletedSegments: Int,
     val generatedAt: Long?,
+    val updatedAt: Long,
     val error: String?,
 )
 
@@ -161,9 +164,12 @@ internal fun BookAudioEntity.audiobookUiInvalidationKey(): AudiobookUiInvalidati
         sampleRate = sampleRate,
         fileSizeBytes = fileSizeBytes,
         generationProvider = generationProvider,
+        generationAudioMillis = generationAudioMillis,
+        generationComputeMillis = generationComputeMillis,
         generationStartedAt = generationStartedAt,
         generationSessionStartCompletedSegments = generationSessionStartCompletedSegments,
         generatedAt = generatedAt,
+        updatedAt = updatedAt,
         error = error
     )
 
@@ -172,6 +178,34 @@ internal fun List<BookAudioEntity>.audiobookUiInvalidationKeys(): List<Audiobook
 
 internal fun List<BookAudioEntity>.toBookAudiobookAudioUiItems(): List<BookAudiobookAudioUiItem> =
     map { audio -> audio.toBookAudiobookAudioUiItem() }
+
+internal class BookAudiobookAudioUiItemCache {
+    private val items = linkedMapOf<Long, CachedBookAudiobookAudioUiItem>()
+
+    @Synchronized
+    fun toUiItems(rows: List<BookAudioEntity>): List<BookAudiobookAudioUiItem> {
+        val activeIds = rows.mapTo(mutableSetOf()) { it.id }
+        items.keys.retainAll(activeIds)
+        return rows.map { audio -> toUiItemLocked(audio) }
+    }
+
+    @Synchronized
+    fun toUiItem(audio: BookAudioEntity): BookAudiobookAudioUiItem =
+        toUiItemLocked(audio)
+
+    private fun toUiItemLocked(audio: BookAudioEntity): BookAudiobookAudioUiItem {
+        val key = audio.audiobookUiInvalidationKey()
+        items[audio.id]?.takeIf { it.key == key }?.let { return it.item }
+        val item = audio.toBookAudiobookAudioUiItem()
+        items[audio.id] = CachedBookAudiobookAudioUiItem(key = key, item = item)
+        return item
+    }
+}
+
+private data class CachedBookAudiobookAudioUiItem(
+    val key: AudiobookUiInvalidationKey,
+    val item: BookAudiobookAudioUiItem,
+)
 
 internal fun BookAudioEntity.toBookAudiobookAudioUiItem(): BookAudiobookAudioUiItem {
     val snapshot = generatedAudiobookUiSnapshot(verifyFiles = false)
@@ -196,8 +230,12 @@ private fun BookAudioEntity.generatedAudiobookUiSnapshot(verifyFiles: Boolean) =
         generatedAudiobookFileSnapshot()
     } else {
         val playableCount = playableSegmentCount()
-        val chapters = generatedAudiobookChapters(playableCount)
-            .ifEmpty { fallbackGeneratedAudiobookChapters(playableCount) }
+        val chapters = if (status == BookAudioStatus.GENERATING) {
+            fallbackGeneratedAudiobookChapters(playableCount)
+        } else {
+            generatedAudiobookChapters(playableCount)
+                .ifEmpty { fallbackGeneratedAudiobookChapters(playableCount) }
+        }
         GeneratedAudiobookFileSnapshot(
             audio = this,
             playableSegmentFiles = emptyList(),
@@ -253,6 +291,7 @@ data class OpdsCatalogUiState(
 class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     private var neuralPreviewPlayer: MediaPlayer? = null
     private var neuralPreviewJob: Job? = null
+    private val audiobookUiItemCache = BookAudiobookAudioUiItemCache()
 
     private val query = MutableStateFlow("")
     private val group = MutableStateFlow(LibraryGroup.BOOKS)
@@ -853,7 +892,7 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
             }
             .map { rows ->
                 withContext(Dispatchers.IO) {
-                    rows.toBookAudiobookAudioUiItems()
+                    audiobookUiItemCache.toUiItems(rows)
                 }
             }
             .distinctUntilChanged()

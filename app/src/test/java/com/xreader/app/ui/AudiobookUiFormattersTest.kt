@@ -10,6 +10,7 @@ import com.xreader.app.tts.AudiobookGenerationHardwareReadiness
 import com.xreader.app.tts.AudiobookPlaybackUiState
 import com.xreader.app.tts.EMPTY_AUDIOBOOK_PLAYBACK_UI_STATE
 import com.xreader.app.tts.GeneratedAudiobookChapter
+import com.xreader.app.tts.audiobookGenerationProgressLabel
 import com.xreader.app.tts.playableSegmentCount
 import java.io.File
 import org.junit.Assert.assertEquals
@@ -274,6 +275,51 @@ class AudiobookUiFormattersTest {
         assertEquals("Preparing", audiobookPlaybackActionLabel(active = true, playback = preparing))
         assertEquals("preparing 2 / 4", audiobookPlaybackStateLabel(preparing))
         assertEquals("Play", audiobookPlaybackActionLabel(active = false, playback = preparing))
+    }
+
+    @Test
+    fun generationProgressLabelShowsActiveSegment() {
+        assertEquals(
+            "working on 4/10",
+            audio(1).copy(
+                status = BookAudioStatus.GENERATING,
+                segmentCount = 10,
+                completedSegments = 3
+            ).audiobookGenerationProgressLabel()
+        )
+        assertEquals(
+            "10/10 segments",
+            audio(2).copy(
+                status = BookAudioStatus.GENERATING,
+                segmentCount = 10,
+                completedSegments = 12
+            ).audiobookGenerationProgressLabel()
+        )
+        assertNull(
+            audio(3).copy(
+                status = BookAudioStatus.GENERATED,
+                segmentCount = 10,
+                completedSegments = 10
+            ).audiobookGenerationProgressLabel()
+        )
+    }
+
+    @Test
+    fun audiobookStatusDetailUsesActiveGenerationProgress() {
+        val audio = audio(1).copy(
+            status = BookAudioStatus.GENERATING,
+            segmentCount = 10,
+            completedSegments = 3
+        )
+
+        assertEquals(
+            "Generating • working on 4/10",
+            audio.audiobookStatusDetail(
+                activePlayback = false,
+                playback = EMPTY_AUDIOBOOK_PLAYBACK_UI_STATE,
+                playableSegmentFiles = 3
+            )
+        )
     }
 
     @Test
@@ -767,6 +813,72 @@ class AudiobookUiFormattersTest {
     }
 
     @Test
+    fun generatedAudiobookUiItemSkipsChapterSidecarWhileGenerating() {
+        val dir = kotlin.io.path.createTempDirectory("xreader-audio-generating-ui").toFile()
+        try {
+            File(dir, "chapters.tsv").writeText(
+                """
+                index	firstSegment	segmentCount	title
+                0	0	2	Chapter 1
+                1	2	3	Chapter 2
+                """.trimIndent()
+            )
+            val audio = playableAudio(1).copy(
+                status = BookAudioStatus.GENERATING,
+                filePath = dir.absolutePath,
+                scope = AudiobookGenerationScope.FULL_BOOK.key,
+                scopeLabel = AudiobookGenerationScope.FULL_BOOK.label,
+                segmentCount = 5,
+                completedSegments = 3
+            )
+
+            val item = audio.toBookAudiobookAudioUiItem()
+
+            assertEquals(listOf("Full book"), item.chapters.map { it.title })
+            assertEquals(3, item.playableSegmentFiles)
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun audiobookUiItemCacheReusesUnchangedChapterMetadata() {
+        val dir = kotlin.io.path.createTempDirectory("xreader-audio-ui-cache").toFile()
+        try {
+            File(dir, "chapters.tsv").writeText(
+                """
+                index	firstSegment	segmentCount	title
+                0	0	3	Original
+                """.trimIndent()
+            )
+            val audio = playableAudio(1).copy(
+                filePath = dir.absolutePath,
+                segmentCount = 3,
+                completedSegments = 3,
+                updatedAt = 1_000L
+            )
+            val cache = BookAudiobookAudioUiItemCache()
+
+            assertEquals(listOf("Original"), cache.toUiItems(listOf(audio)).single().chapters.map { it.title })
+
+            File(dir, "chapters.tsv").writeText(
+                """
+                index	firstSegment	segmentCount	title
+                0	0	3	Changed
+                """.trimIndent()
+            )
+
+            assertEquals(listOf("Original"), cache.toUiItems(listOf(audio)).single().chapters.map { it.title })
+            assertEquals(
+                listOf("Changed"),
+                cache.toUiItems(listOf(audio.copy(updatedAt = 2_000L))).single().chapters.map { it.title }
+            )
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
     fun globalAudiobookVisibilityKeepsGeneratedActiveAndPlayablePartialRows() {
         assertTrue(
             bookAudioItem(audio(1).copy(status = BookAudioStatus.GENERATED), playableSegmentFiles = 0)
@@ -910,14 +1022,14 @@ class AudiobookUiFormattersTest {
     }
 
     @Test
-    fun audiobookUiInvalidationKeyIgnoresRawTimingMetricOnlyChanges() {
+    fun audiobookUiInvalidationKeyTracksGenerationTimingMetricChanges() {
         val base = playableAudio(4).copy(
             generationAudioMillis = 30_000L,
             generationComputeMillis = 12_000L
         )
 
-        assertEquals(
-            base.audiobookUiInvalidationKey(),
+        assertTrue(
+            base.audiobookUiInvalidationKey() !=
             base.copy(
                 generationAudioMillis = 60_000L,
                 generationComputeMillis = 24_000L
@@ -930,11 +1042,11 @@ class AudiobookUiFormattersTest {
     }
 
     @Test
-    fun audiobookUiInvalidationKeyIgnoresTimestampOnlyChanges() {
+    fun audiobookUiInvalidationKeyTracksGenerationHeartbeatTimestampChanges() {
         val base = playableAudio(4).copy(updatedAt = 1_000L)
 
-        assertEquals(
-            base.audiobookUiInvalidationKey(),
+        assertTrue(
+            base.audiobookUiInvalidationKey() !=
             base.copy(updatedAt = 2_000L).audiobookUiInvalidationKey()
         )
         assertTrue(

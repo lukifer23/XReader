@@ -40,8 +40,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
@@ -794,17 +797,47 @@ class NeuralTtsRepository(
                         )
                     }
                     val tts = requireNotNull(runtime)
-                    val generatedSegment = withContext(generationDispatcher) {
-                        traced("XReader TTS generate segment") {
-                            val segmentStartedAt = clock.millis()
-                            GeneratedTtsSegment(
-                                audio = tts.engine.generateWithConfig(
-                                    text = segment,
-                                    config = generationConfig(speakerId, pace, tone)
-                                ),
-                                computeMillis = (clock.millis() - segmentStartedAt).coerceAtLeast(0L)
+                    val activeGenerationJob = requireNotNull(currentCoroutineContext()[Job]) {
+                        "Audiobook generation job unavailable."
+                    }
+                    val heartbeatJob = launch(Dispatchers.IO) {
+                        while (isActive) {
+                            delay(GENERATION_PROGRESS_WRITE_INTERVAL_MS)
+                            val heartbeatAt = clock.millis()
+                            val updatedRows = dao.updateBookAudioGenerationMetrics(
+                                id = activeAudio.id,
+                                completedSegments = completedSegments,
+                                generationProvider = tts.provider,
+                                generationAudioMillis = generationAudioMillis,
+                                generationComputeMillis = generationComputeMillis,
+                                sampleRate = activeSampleRate ?: sampleRate,
+                                updatedAt = heartbeatAt
                             )
+                            if (updatedRows != 1) {
+                                activeGenerationJob.cancel(
+                                    CancellationException(
+                                        "Audiobook generation was stopped before segment ${index + 1} could finish."
+                                    )
+                                )
+                                return@launch
+                            }
                         }
+                    }
+                    val generatedSegment = try {
+                        withContext(generationDispatcher) {
+                            traced("XReader TTS generate segment") {
+                                val segmentStartedAt = clock.millis()
+                                GeneratedTtsSegment(
+                                    audio = tts.engine.generateWithConfig(
+                                        text = segment,
+                                        config = generationConfig(speakerId, pace, tone)
+                                    ),
+                                    computeMillis = (clock.millis() - segmentStartedAt).coerceAtLeast(0L)
+                                )
+                            }
+                        }
+                    } finally {
+                        heartbeatJob.cancel()
                     }
                     val generated = generatedSegment.audio
                     val segmentComputeMillis = generatedSegment.computeMillis

@@ -60,8 +60,10 @@ private fun Iterable<Int>.countByValue(): Map<Int, Int> {
 
 private fun NeuralTtsPreparedBook.firstChapterSegmentLimit(scope: AudiobookGenerationScope): Int {
     val detected = chapters.firstOrNull()?.segmentCount?.takeIf { it > 0 }
-    val fallback = scope.maxSegments ?: segments.size
-    return (detected ?: fallback).coerceAtMost(fallback).coerceAtMost(segments.size)
+    return scope.segmentLimit(
+        totalSegments = segments.size,
+        firstChapterSegmentCount = detected ?: 0
+    )
 }
 
 internal fun List<ReadAloudChunk>.forAudiobookScope(scope: AudiobookGenerationScope): List<ReadAloudChunk> {

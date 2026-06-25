@@ -50,6 +50,8 @@ Generation scope is persisted per voice profile:
 - ZIP export maps `manifest.in-progress.txt` to `manifest.txt` for partial, stopped, or failed generated audio when no final manifest exists, so exported partial audio still carries status, provider, progress, scope, and voice metadata.
 - ZIP export bounds `segments.tsv` to the verified playable WAV prefix, keeping pause/text metadata for exported audio while omitting future segments that were not generated yet.
 - Playback position persists the current segment and offset, and final-segment completion is stored as an explicit completed position so finished audio does not reappear as a misleading resume-from-start action.
+- Long native segment synthesis writes heartbeat progress with current provider, elapsed compute/audio timing, and `updatedAt` while the same segment is still running. If the database row disappears or cancellation wins during that heartbeat, generation stops after the native call returns instead of saving more audio into a cleared job.
+- Active generation UI should avoid filesystem-heavy sidecar reads until playable segments exist. During `GENERATING`, rows use bounded fallback section metadata and cache unchanged row models so progress/ETA refreshes do not force repeated chapter parsing on the main library surface.
 
 ## User-Facing Controls
 
@@ -63,6 +65,7 @@ The app should keep the audiobook surface compact:
 - scan summary before generation, including detected chapters, local storage estimate, duration estimate, and compact per-scope segment/duration labels
 - generate sample, detected first chapter, and full-book actions
 - persisted progress, ETA, cancellation, resume/retry, partial playback, generated playback, chapter picker/jump controls, delete, and export
+- active generation status should say which segment is being worked on instead of only showing completed segments, because a long hardware call can legitimately spend time inside the current segment before the completed count advances
 - partial rows must explicitly say `Play partial` and `Save partial` so the user can tell incomplete generated audio apart from a completed audiobook
 - play, save, partial, and resume labels must be based on verified contiguous WAV files, not only database counters; repaired or missing audio should show missing/partial state and should not offer impossible resume positions
 - chapter jump controls must use the prepared/generated chapter sidecar boundaries instead of only current-playback metadata, so older or repaired audio never exposes a previous/next chapter action that cannot actually move
@@ -213,6 +216,7 @@ tools/prepare_kokoro_qnn_model.py \
 The output directory contains the normal Kokoro support files plus `model.qnn.onnx` and `xreader-qnn-model-manifest.json`. Push or package that directory so both files sit next to the installed `model.onnx`. The app chooses the prepared model for QNN HTP only when the manifest declares `strict_qnn_compatible: true`; otherwise it fails closed and reports the missing strict-compatible artifact.
 - Verify that QNN/NNAPI fail closed when unavailable, unsupported, or slower than the full-book realtime threshold.
 - Capture Simpleperf/Perfetto evidence for a short generation run on the Samsung test device and confirm the selected provider in logcat plus the generated manifest.
+- Confirm long-segment heartbeat updates, stop handling, and UI responsiveness while a strict provider is actively generating, not only after segment completion.
 - Measure whether QNN GPU or prepared QNN HTP/NPU beats strict NNAPI enough on real book generation to justify the packaged runtime cost.
 - Keep WebGPU as a separate experiment until it can run full-book generation without CPU fallback and without native device-loss crashes.
 

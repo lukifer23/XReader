@@ -101,7 +101,7 @@ class AudiobookGenerationForegroundServiceTest {
         assertNull(audiobookGenerationProgressText(null))
         assertNull(audiobookGenerationProgressText(audio(BookAudioStatus.GENERATING, segmentCount = 0, completedSegments = 0)))
         assertEquals(
-            "3/10 segments",
+            "working on 4/10",
             audiobookGenerationProgressText(audio(BookAudioStatus.GENERATING, segmentCount = 10, completedSegments = 3))
         )
         assertEquals(

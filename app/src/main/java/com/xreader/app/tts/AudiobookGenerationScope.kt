@@ -32,6 +32,24 @@ enum class AudiobookGenerationScope(
     }
 }
 
+internal fun AudiobookGenerationScope.segmentLimit(
+    totalSegments: Int,
+    firstChapterSegmentCount: Int = 0,
+): Int {
+    val boundedTotal = totalSegments.coerceAtLeast(0)
+    return when (this) {
+        AudiobookGenerationScope.FULL_BOOK -> boundedTotal
+        AudiobookGenerationScope.SAMPLE -> boundedTotal.coerceAtMost(maxSegments ?: boundedTotal)
+        AudiobookGenerationScope.FIRST_CHAPTER -> {
+            val detected = firstChapterSegmentCount.takeIf { it > 0 }
+            val fallbackCap = maxSegments ?: boundedTotal
+            (detected ?: boundedTotal.coerceAtMost(fallbackCap))
+                .coerceAtMost(fallbackCap)
+                .coerceAtMost(boundedTotal)
+        }
+    }.coerceAtLeast(0)
+}
+
 internal fun BookAudioEntity.playableSegmentCount(): Int =
     when (status) {
         BookAudioStatus.GENERATED -> segmentCount

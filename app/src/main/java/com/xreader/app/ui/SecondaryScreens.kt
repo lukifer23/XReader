@@ -116,6 +116,7 @@ import com.xreader.app.tts.NeuralTtsModelCatalog
 import com.xreader.app.tts.AudiobookPlaybackUiState
 import com.xreader.app.tts.EMPTY_AUDIOBOOK_PLAYBACK_UI_STATE
 import com.xreader.app.tts.TtsAccelerationRuntime
+import com.xreader.app.tts.audiobookGenerationProgressLabel
 import com.xreader.app.tts.canDeleteGeneratedAudiobook
 import com.xreader.app.tts.generationEtaLabel
 import com.xreader.app.tts.GeneratedAudiobookChapter
@@ -562,6 +563,7 @@ private fun GeneratedAudiobookUiItem.audiobookScreenPriority(playback: Audiobook
 class AudiobooksViewModel(private val container: AppContainer) : ViewModel() {
     private val message = MutableStateFlow<String?>(null)
     private val playback = container.generatedAudiobookPlayback.state
+    private val audiobookUiItemCache = BookAudiobookAudioUiItemCache()
     private val playbackSortKey =
         playback
             .map { it.toAudiobookRowsSortKey() }
@@ -577,7 +579,7 @@ class AudiobooksViewModel(private val container: AppContainer) : ViewModel() {
         ) { books, audioRows ->
             withContext(Dispatchers.Default) {
                 val booksById = books.associateBy { it.id }
-                audioRows.toBookAudiobookAudioUiItems().mapNotNull { audioItem ->
+                audiobookUiItemCache.toUiItems(audioRows).mapNotNull { audioItem ->
                     if (!audioItem.shouldShowInGlobalAudiobooksScreen()) return@mapNotNull null
                     booksById[audioItem.audio.bookId]?.let { book ->
                         GeneratedAudiobookUiItem(
@@ -991,7 +993,7 @@ internal fun BookAudioEntity.audiobookStatusDetail(
 ): String {
     val progress = when {
         segmentCount <= 0 -> null
-        status == BookAudioStatus.GENERATING -> "${completedSegments.coerceAtMost(segmentCount)} / $segmentCount segments"
+        status == BookAudioStatus.GENERATING -> audiobookGenerationProgressLabel()
         status == BookAudioStatus.GENERATED && playableSegmentFiles >= segmentCount -> "$segmentCount segments"
         status == BookAudioStatus.GENERATED && playableSegmentFiles <= 0 -> "Audio files missing"
         status == BookAudioStatus.GENERATED -> "$playableSegmentFiles playable of $segmentCount segments"

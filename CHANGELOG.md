@@ -45,6 +45,9 @@
 - Audiobook text preparation now drops standalone table-of-contents entry rows such as chapter/page listings before narration, while preserving real chapter headings.
 - Generated-audio rows now separate metadata from playback/export/delete controls and allow the control strip to wrap, avoiding cramped audiobook dialogs on phone-width screens.
 - Audiobook generation controls now explain why generation is disabled when the selected voice is missing, installing, failed, or already generating audio.
+- Audiobook generation now writes live heartbeat progress during long native segment synthesis, so active rows, notifications, and cancellation checks do not look frozen while a hardware provider is working on a large segment.
+- Active generated-audiobook rows now avoid repeated chapter-sidecar reads while generation is still running and reuse unchanged UI row models, reducing library/audiobook screen churn during progress updates.
+- Generated-audiobook foreground playback now requests its foreground service once per active playback session instead of repeatedly starting it on play, resume, and pause state transitions.
 - Reader navigation filtering now matches across punctuation boundaries, so queries like `chapter-1`, `landing-sequence`, or `#character-later` find the expected TOC entries, bookmarks, notes, and highlights.
 - The in-reader find bar is now narrower and less banner-like while keeping previous, next, edit, and close actions available.
 - Reading analytics now treats the initially visible page as a position anchor instead of words read, keeping early WPM, sessions, and ETA from inflating before actual page movement.
