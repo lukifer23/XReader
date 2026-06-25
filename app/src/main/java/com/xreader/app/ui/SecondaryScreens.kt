@@ -570,20 +570,17 @@ class AudiobooksViewModel(private val container: AppContainer) : ViewModel() {
             .distinctUntilChanged()
 
     private val audiobookRows: StateFlow<List<GeneratedAudiobookUiItem>> =
-        combine(
-            container.libraryRepository.observeBooks(""),
-            container.neuralTtsRepository.observeAllBookAudio()
-                .distinctUntilChanged { previous, next ->
-                    previous.audiobookUiInvalidationKeys() == next.audiobookUiInvalidationKeys()
-                }
-        ) { books, audioRows ->
-            withContext(Dispatchers.Default) {
-                val booksById = books.associateBy { it.id }
-                audiobookUiItemCache.toUiItems(audioRows).mapNotNull { audioItem ->
-                    if (!audioItem.shouldShowInGlobalAudiobooksScreen()) return@mapNotNull null
-                    booksById[audioItem.audio.bookId]?.let { book ->
+        container.neuralTtsRepository.observeVisibleAudiobookScreenRows()
+            .map { rows ->
+                withContext(Dispatchers.IO) {
+                    val audioItemsById = audiobookUiItemCache
+                        .toUiItems(rows.map { it.audio })
+                        .associateBy { it.audio.id }
+                    rows.mapNotNull { row ->
+                        val audioItem = audioItemsById[row.audio.id] ?: return@mapNotNull null
+                        if (!audioItem.shouldShowInGlobalAudiobooksScreen()) return@mapNotNull null
                         GeneratedAudiobookUiItem(
-                            book = book,
+                            book = row.book,
                             audio = audioItem.audio,
                             chapters = audioItem.chapters,
                             playableSegmentFiles = audioItem.playableSegmentFiles
@@ -591,7 +588,8 @@ class AudiobooksViewModel(private val container: AppContainer) : ViewModel() {
                     }
                 }
             }
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+            .distinctUntilChanged()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val sortedAudiobookRows: StateFlow<List<GeneratedAudiobookUiItem>> =
         combine(audiobookRows, playbackSortKey) { rows, sortKey ->

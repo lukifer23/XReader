@@ -5,6 +5,7 @@ import androidx.room.Embedded
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Relation
 import androidx.room.Transaction
 import androidx.room.Update
 import androidx.room.Upsert
@@ -20,6 +21,12 @@ data class LibrarySearchRow(
     @Embedded val row: SearchIndexEntity,
     val bookTitle: String,
     val bookAuthor: String,
+)
+
+data class BookAudioWithBook(
+    @Embedded val audio: BookAudioEntity,
+    @Relation(parentColumn = "bookId", entityColumn = "id")
+    val book: BookEntity,
 )
 
 @Dao
@@ -292,6 +299,16 @@ interface NeuralTtsDao {
 
     @Query("SELECT * FROM book_audio ORDER BY updatedAt DESC")
     fun observeAllBookAudio(): Flow<List<BookAudioEntity>>
+
+    @Transaction
+    @Query(
+        """
+        SELECT * FROM book_audio
+        WHERE status IN ('GENERATED', 'GENERATING') OR completedSegments > 0
+        ORDER BY updatedAt DESC
+        """
+    )
+    fun observeVisibleAudiobookScreenRows(): Flow<List<BookAudioWithBook>>
 
     @Query("SELECT * FROM book_audio WHERE bookId = :bookId")
     suspend fun bookAudioForBook(bookId: Long): List<BookAudioEntity>

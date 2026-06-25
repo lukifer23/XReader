@@ -215,7 +215,6 @@ class GeneratedAudiobookPlaybackController(
         foregroundServiceRequested = false
         _state.value = EMPTY_AUDIOBOOK_PLAYBACK_UI_STATE
         mediaSession.release()
-        preparedPlaybackCache = null
     }
 
     private fun startSegment(bookTitle: String, audio: BookAudioEntity, index: Int, startPositionMs: Int = 0) {
@@ -434,6 +433,7 @@ class GeneratedAudiobookPlaybackController(
             segmentChapters = emptyList()
             segmentPauseMillis = emptyList()
             chapters = emptyList()
+            preparedPlaybackCache = null
         }
     }
 

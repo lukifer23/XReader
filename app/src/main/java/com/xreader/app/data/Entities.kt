@@ -214,6 +214,7 @@ data class NeuralTtsModelEntity(
         Index(value = ["bookId"]),
         Index(value = ["modelId"]),
         Index(value = ["status"]),
+        Index(value = ["completedSegments"]),
         Index(value = ["updatedAt"]),
         Index(value = ["bookId", "modelId", "speakerId", "speed", "tone", "scope"], unique = true)
     ]

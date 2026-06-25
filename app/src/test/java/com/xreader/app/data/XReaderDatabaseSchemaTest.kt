@@ -64,6 +64,22 @@ class XReaderDatabaseSchemaTest {
         assertTrue("Missing model cleanup index.", "index_book_audio_modelId" in indexNames)
     }
 
+    @Test
+    fun version14BookAudioSchemaIndexesPlayablePartialRows() {
+        val bookAudio = schema(version = 14).entity("book_audio")
+        val indices = bookAudio.getJSONArray("indices")
+        val index = (0 until indices.length())
+            .map { indices.getJSONObject(it) }
+            .firstOrNull { it.getString("name") == "index_book_audio_completedSegments" }
+        val columns = requireNotNull(index) { "Playable partial audiobook index missing from Room schema." }
+            .getJSONArray("columnNames")
+            .let { array -> (0 until array.length()).map { array.getString(it) } }
+
+        assertEquals(14, schema(version = 14).getInt("version"))
+        assertEquals(listOf("completedSegments"), columns)
+        assertFalse(index.getBoolean("unique"))
+    }
+
     private fun schema(version: Int): JSONObject {
         val file = File("schemas/com.xreader.app.data.XReaderDatabase/$version.json")
         assertTrue("Missing exported Room schema ${file.path}", file.isFile)

@@ -54,6 +54,13 @@ Treat single-device numbers as local baselines, not universal claims. Record:
 
 ## Current Local Baseline
 
+2026-06-25 code-only audiobook responsiveness pass:
+
+- Device: not required for this documentation/build gate.
+- Scope: Room query shape, active audiobook row materialization, generated-audio cache lifecycle, heartbeat cleanup, and deferred startup audiobook maintenance.
+- Expected effect: lower library/audiobook screen churn during active generation, less repeated sidecar parsing, fewer stale playback/cache states after delete/regenerate, and less startup contention from audiobook repair/prune work.
+- Validation should still include a connected-device generation run before claiming runtime speed improvement; this pass hardens app-side responsiveness and persistence, not QNN/NPU throughput.
+
 2026-06-17 connected-device debug smoke after audiobook and reader hardening:
 
 - Device: Samsung SM-F966U, Android 16 / API 36

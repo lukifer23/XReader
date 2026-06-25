@@ -12,6 +12,7 @@ import com.k2fsa.sherpa.onnx.OfflineTtsConfig
 import com.k2fsa.sherpa.onnx.getOfflineTtsConfig
 import com.xreader.app.data.BookAudioEntity
 import com.xreader.app.data.BookAudioStatus
+import com.xreader.app.data.BookAudioWithBook
 import com.xreader.app.data.NeuralTtsDao
 import com.xreader.app.data.NeuralTtsModelEntity
 import com.xreader.app.data.NeuralTtsModelStatus
@@ -38,6 +39,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -67,6 +69,9 @@ class NeuralTtsRepository(
     fun observeBookAudio(bookId: Long): Flow<List<BookAudioEntity>> = dao.observeBookAudio(bookId)
 
     fun observeAllBookAudio(): Flow<List<BookAudioEntity>> = dao.observeAllBookAudio()
+
+    fun observeVisibleAudiobookScreenRows(): Flow<List<BookAudioWithBook>> =
+        dao.observeVisibleAudiobookScreenRows()
 
     suspend fun audiobookGenerationHardwareReadiness(
         modelId: String = NeuralTtsModelCatalog.DEFAULT_MODEL_ID,
@@ -837,7 +842,7 @@ class NeuralTtsRepository(
                             }
                         }
                     } finally {
-                        heartbeatJob.cancel()
+                        heartbeatJob.cancelAndJoin()
                     }
                     val generated = generatedSegment.audio
                     val segmentComputeMillis = generatedSegment.computeMillis

@@ -109,7 +109,7 @@ class AppContainer(
         if (databaseOverride == null && isMainApplicationProcess(appContext)) {
             applicationScope.launch(Dispatchers.IO) {
                 runCatching {
-                    delay(STARTUP_NEURAL_TTS_MAINTENANCE_DELAY_MS)
+                    delay(STARTUP_NEURAL_TTS_CATALOG_MAINTENANCE_DELAY_MS)
                     runNeuralTtsStartupMaintenance()
                 }
                     .onFailure { Log.w("XReader", "Neural TTS startup maintenance failed", it) }
@@ -120,8 +120,9 @@ class AppContainer(
     private suspend fun runNeuralTtsStartupMaintenance() {
         neuralTtsRepository.ensureCatalogSeeded()
         neuralTtsRepository.repairInterruptedModelInstalls()
+        delay(STARTUP_AUDIOBOOK_REPAIR_DELAY_MS)
         neuralTtsRepository.repairStaleGeneratingAudio()
-        delay(STARTUP_DEFERRED_MAINTENANCE_DELAY_MS)
+        delay(STARTUP_OBSOLETE_TTS_STORAGE_PRUNE_DELAY_MS)
         neuralTtsRepository.pruneObsoleteCatalogStorage()
     }
 
@@ -173,7 +174,8 @@ class AppContainer(
     }
 
     private companion object {
-        const val STARTUP_NEURAL_TTS_MAINTENANCE_DELAY_MS = 2_000L
-        const val STARTUP_DEFERRED_MAINTENANCE_DELAY_MS = 3_000L
+        const val STARTUP_NEURAL_TTS_CATALOG_MAINTENANCE_DELAY_MS = 2_000L
+        const val STARTUP_AUDIOBOOK_REPAIR_DELAY_MS = 8_000L
+        const val STARTUP_OBSOLETE_TTS_STORAGE_PRUNE_DELAY_MS = 20_000L
     }
 }

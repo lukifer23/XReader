@@ -50,8 +50,13 @@ Generation scope is persisted per voice profile:
 - ZIP export maps `manifest.in-progress.txt` to `manifest.txt` for partial, stopped, or failed generated audio when no final manifest exists, so exported partial audio still carries status, provider, progress, scope, and voice metadata.
 - ZIP export bounds `segments.tsv` to the verified playable WAV prefix, keeping pause/text metadata for exported audio while omitting future segments that were not generated yet.
 - Playback position persists the current segment and offset, and final-segment completion is stored as an explicit completed position so finished audio does not reappear as a misleading resume-from-start action.
+- Playback setup clears cached sidecar/file state whenever playback resources reset, so deleting, regenerating, or starting a different generated audiobook cannot reuse stale chapter or segment metadata.
 - Long native segment synthesis writes heartbeat progress with current provider, elapsed compute/audio timing, and `updatedAt` while the same segment is still running. If the database row disappears or cancellation wins during that heartbeat, generation stops after the native call returns instead of saving more audio into a cleared job.
+- Heartbeat cleanup waits for the heartbeat coroutine to finish after each native segment call, preventing a stale heartbeat from racing a completed, stopped, or deleted row.
 - Active generation UI should avoid filesystem-heavy sidecar reads until playable segments exist. During `GENERATING`, rows use bounded fallback section metadata and cache unchanged row models so progress/ETA refreshes do not force repeated chapter parsing on the main library surface.
+- The global Audiobooks screen is fed by a single Room relation query for visible generated-audio rows and their books. It does not combine the entire library with the entire audio table on every progress tick.
+- Audiobook row cache entries are pruned to the currently visible active set so old sidecar metadata cannot accumulate or leak into later regenerated rows.
+- Startup maintenance seeds the supported model catalog early, repairs interrupted model installs early, then defers stale audiobook repair and obsolete model-storage pruning so app launch and the library surface do not compete with heavy filesystem work.
 
 ## User-Facing Controls
 

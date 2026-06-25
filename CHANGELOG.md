@@ -41,12 +41,17 @@
 - Partial generated audiobook ZIP exports now include the in-progress manifest as `manifest.txt` when a final manifest does not exist, preserving provider, scope, progress, and status metadata.
 - Partial generated audiobook ZIP exports now trim `segments.tsv` to verified playable segments, preserving existing metadata for playable audio without exporting future, not-yet-generated rows.
 - Generated audiobook playback now gates startup on verified contiguous WAV files instead of database progress counters, avoiding misleading preparing states when stale records reference missing audio.
+- Generated audiobook playback now clears cached file/chapter state whenever playback resources reset, avoiding stale playback metadata after delete, regenerate, or switching to a different generated audiobook.
 - Stale audiobook generation recovery now updates the on-disk manifest status, completed count, timestamp, and failure reason so partial exports and debugging evidence match the repaired database row.
 - Audiobook text preparation now drops standalone table-of-contents entry rows such as chapter/page listings before narration, while preserving real chapter headings.
 - Generated-audio rows now separate metadata from playback/export/delete controls and allow the control strip to wrap, avoiding cramped audiobook dialogs on phone-width screens.
 - Audiobook generation controls now explain why generation is disabled when the selected voice is missing, installing, failed, or already generating audio.
 - Audiobook generation now writes live heartbeat progress during long native segment synthesis, so active rows, notifications, and cancellation checks do not look frozen while a hardware provider is working on a large segment.
 - Active generated-audiobook rows now avoid repeated chapter-sidecar reads while generation is still running and reuse unchanged UI row models, reducing library/audiobook screen churn during progress updates.
+- Audiobook heartbeat cleanup now waits for the heartbeat worker to finish after segment synthesis, reducing races between long native calls, completion writes, cancellation, and delete/clear actions.
+- The global Audiobooks screen now uses one Room relation query for visible generated-audio rows and their books, avoiding a full-library/full-audio combine on every generation progress tick.
+- Generated-audiobook UI row caches now prune entries outside the active row set, preventing stale sidecar metadata from accumulating after delete, repair, or regeneration.
+- Neural audiobook startup maintenance now runs cheap catalog/install repair early and defers stale-audio repair plus obsolete storage pruning, reducing cold-start and first-library-render contention.
 - Generated-audiobook foreground playback now requests its foreground service once per active playback session instead of repeatedly starting it on play, resume, and pause state transitions.
 - Reader navigation filtering now matches across punctuation boundaries, so queries like `chapter-1`, `landing-sequence`, or `#character-later` find the expected TOC entries, bookmarks, notes, and highlights.
 - The in-reader find bar is now narrower and less banner-like while keeping previous, next, edit, and close actions available.

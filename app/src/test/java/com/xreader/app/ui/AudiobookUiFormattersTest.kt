@@ -879,6 +879,42 @@ class AudiobookUiFormattersTest {
     }
 
     @Test
+    fun audiobookUiItemCachePrunesRowsOutsideActiveSet() {
+        val dir = kotlin.io.path.createTempDirectory("xreader-audio-ui-cache-prune").toFile()
+        try {
+            File(dir, "chapters.tsv").writeText(
+                """
+                index	firstSegment	segmentCount	title
+                0	0	2	Original
+                """.trimIndent()
+            )
+            val first = playableAudio(1).copy(
+                filePath = dir.absolutePath,
+                segmentCount = 2,
+                completedSegments = 2,
+                updatedAt = 1_000L
+            )
+            val second = playableAudio(2).copy(updatedAt = 1_000L)
+            val cache = BookAudiobookAudioUiItemCache()
+
+            assertEquals(listOf("Original"), cache.toUiItems(listOf(first, second)).first().chapters.map { it.title })
+
+            File(dir, "chapters.tsv").writeText(
+                """
+                index	firstSegment	segmentCount	title
+                0	0	2	Rebuilt
+                """.trimIndent()
+            )
+
+            cache.toUiItems(listOf(second))
+
+            assertEquals(listOf("Rebuilt"), cache.toUiItems(listOf(first, second)).first().chapters.map { it.title })
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
     fun globalAudiobookVisibilityKeepsGeneratedActiveAndPlayablePartialRows() {
         assertTrue(
             bookAudioItem(audio(1).copy(status = BookAudioStatus.GENERATED), playableSegmentFiles = 0)
