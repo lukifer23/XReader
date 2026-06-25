@@ -419,6 +419,32 @@ interface NeuralTtsDao {
     @Query(
         """
         UPDATE book_audio
+        SET status = 'FAILED',
+            updatedAt = :updatedAt,
+            error = :error
+        WHERE bookId = :bookId
+            AND modelId = :modelId
+            AND speakerId = :speakerId
+            AND speed = :speed
+            AND tone = :tone
+            AND scope = :scope
+            AND status = 'GENERATING'
+        """
+    )
+    suspend fun failGeneratingBookAudio(
+        bookId: Long,
+        modelId: String,
+        speakerId: Int,
+        speed: Float,
+        tone: String,
+        scope: String,
+        error: String,
+        updatedAt: Long,
+    ): Int
+
+    @Query(
+        """
+        UPDATE book_audio
         SET playbackSegmentIndex = :segmentIndex, playbackPositionMs = :positionMs
         WHERE id = :id
             AND (playbackSegmentIndex != :segmentIndex OR playbackPositionMs != :positionMs)

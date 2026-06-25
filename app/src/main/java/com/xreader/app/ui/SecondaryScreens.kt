@@ -659,9 +659,9 @@ class AudiobooksViewModel(private val container: AppContainer) : ViewModel() {
         container.generatedAudiobookPlayback.stop()
     }
 
-    fun cancelGeneration() {
-        container.cancelAudiobookGeneration()
-        message.value = "Stopping audiobook generation."
+    fun cancelGeneration(item: GeneratedAudiobookUiItem) {
+        container.cancelAudiobookGeneration(item.book.id, item.audio)
+        message.value = "Stopping audiobook generation for ${item.book.title}."
     }
 
     fun skipPrevious() {
@@ -794,7 +794,7 @@ internal fun AudiobooksRoute(
                         onPlay = { viewModel.play(item) },
                         onPause = { viewModel.pause(item) },
                         onStop = viewModel::stop,
-                        onCancelGeneration = viewModel::cancelGeneration,
+                        onCancelGeneration = { viewModel.cancelGeneration(item) },
                         onSkipPrevious = viewModel::skipPrevious,
                         onSkipNext = viewModel::skipNext,
                         onSkipPreviousChapter = viewModel::skipPreviousChapter,

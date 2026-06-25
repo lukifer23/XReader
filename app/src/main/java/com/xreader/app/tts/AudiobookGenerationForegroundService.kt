@@ -58,7 +58,7 @@ class AudiobookGenerationForegroundService : Service() {
         startForegroundIfNeeded(buildNotification(title = activeTitle, audio = null, preparing = true))
         when (intent?.action) {
             ACTION_START -> startGeneration(intent)
-            ACTION_CANCEL -> cancelGeneration()
+            ACTION_CANCEL -> cancelGeneration(intent)
         }
         return START_NOT_STICKY
     }
@@ -66,6 +66,7 @@ class AudiobookGenerationForegroundService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        markActiveGenerationCanceledFromDestroy()
         generationJob?.cancel()
         progressJob?.cancel()
         serviceScope.cancel()
@@ -73,7 +74,7 @@ class AudiobookGenerationForegroundService : Service() {
     }
 
     private fun startGeneration(intent: Intent) {
-        val bookId = intent.getLongExtra(EXTRA_BOOK_ID, -1L).takeIf { it > 0L } ?: run {
+        val bookId = intent.getLongExtra(AudiobookGenerationIntentExtras.BOOK_ID, -1L).takeIf { it > 0L } ?: run {
             stopForegroundAndSelf(removeNotification = true)
             return
         }
@@ -93,14 +94,14 @@ class AudiobookGenerationForegroundService : Service() {
             }
         }
         activeBookId = bookId
-        activeModelId = intent.getStringExtra(EXTRA_MODEL_ID)?.takeIf { it.isNotBlank() }
+        activeModelId = intent.getStringExtra(AudiobookGenerationIntentExtras.MODEL_ID)?.takeIf { it.isNotBlank() }
             ?: NeuralTtsModelCatalog.DEFAULT_MODEL_ID
-        activeSpeakerId = intent.getIntExtra(EXTRA_SPEAKER_ID, 0).coerceAtLeast(0)
-        activePace = intent.getStringExtra(EXTRA_PACE)?.let { runCatching { NeuralTtsPace.valueOf(it) }.getOrNull() }
+        activeSpeakerId = intent.getIntExtra(AudiobookGenerationIntentExtras.SPEAKER_ID, 0).coerceAtLeast(0)
+        activePace = intent.getStringExtra(AudiobookGenerationIntentExtras.PACE)?.let { runCatching { NeuralTtsPace.valueOf(it) }.getOrNull() }
             ?: NeuralTtsPace.STANDARD
-        activeTone = intent.getStringExtra(EXTRA_TONE)?.let { runCatching { NeuralTtsTone.valueOf(it) }.getOrNull() }
+        activeTone = intent.getStringExtra(AudiobookGenerationIntentExtras.TONE)?.let { runCatching { NeuralTtsTone.valueOf(it) }.getOrNull() }
             ?: NeuralTtsTone.NATURAL
-        activeScope = AudiobookGenerationScope.fromKey(intent.getStringExtra(EXTRA_SCOPE))
+        activeScope = AudiobookGenerationScope.fromKey(intent.getStringExtra(AudiobookGenerationIntentExtras.SCOPE))
         updateNotification(buildNotification(title = activeTitle, audio = null, preparing = true))
         progressJob?.cancel()
         progressJob = serviceScope.launch {
@@ -114,7 +115,7 @@ class AudiobookGenerationForegroundService : Service() {
                 }
         }
         generationJob = serviceScope.launch(Dispatchers.IO) {
-            runCatching {
+            val result = runCatching {
                 val book = requireNotNull(container.libraryRepository.getBook(bookId)) {
                     "This book is no longer in the library."
                 }
@@ -156,9 +157,23 @@ class AudiobookGenerationForegroundService : Service() {
                     tone = activeTone,
                     scope = activeScope
                 )
-            }.onFailure { error ->
+            }
+            result.exceptionOrNull()?.let { error ->
                 if (error !is CancellationException) {
                     Log.e("XReader", "Foreground audiobook generation failed for $bookId", error)
+                    runCatching {
+                        container.neuralTtsRepository.failGeneratingBookAudio(
+                            bookId = bookId,
+                            modelId = activeModelId,
+                            speakerId = activeSpeakerId,
+                            pace = activePace,
+                            tone = activeTone,
+                            scope = activeScope,
+                            error = audiobookGenerationSetupFailureMessage(error)
+                        )
+                    }.onFailure { updateError ->
+                        Log.w("XReader", "Could not mark audiobook setup failed for $bookId", updateError)
+                    }
                 }
             }
             withContext(Dispatchers.Main.immediate) {
@@ -169,10 +184,16 @@ class AudiobookGenerationForegroundService : Service() {
         }
     }
 
-    private fun cancelGeneration() {
+    private fun cancelGeneration(intent: Intent?) {
         val job = generationJob
         if (cancelingGeneration) {
             updateNotification(buildNotification(title = activeTitle, audio = null, preparing = true, canceling = true))
+            return
+        }
+        val request = intent?.toAudiobookGenerationCancelRequest()
+        if (job != null && request != null && !request.matchesActiveGeneration()) {
+            Log.w("XReader", "Ignoring stale audiobook generation cancel request: $request")
+            updateNotification(buildNotification(title = activeTitle, audio = null, preparing = true, alreadyRunning = true))
             return
         }
         if (job == null) {
@@ -214,6 +235,45 @@ class AudiobookGenerationForegroundService : Service() {
             kotlin.math.abs(speed - activePace.speed) < 0.001f &&
             tone == activeTone.name &&
             scope == activeScope.key
+
+    private fun AudiobookGenerationCancelRequest.matchesActiveGeneration(): Boolean =
+        bookId == activeBookId &&
+            modelId == activeModelId &&
+            speakerId == activeSpeakerId &&
+            kotlin.math.abs(speed - activePace.speed) < 0.001f &&
+            tone == activeTone &&
+            scope == activeScope
+
+    private fun markActiveGenerationCanceledFromDestroy() {
+        val bookId = activeBookId
+        if (!shouldCancelActiveAudiobookGenerationOnDestroy(
+                jobActive = generationJob?.isActive == true,
+                activeBookId = bookId
+            )
+        ) {
+            return
+        }
+        val activeBook = requireNotNull(bookId)
+        val modelId = activeModelId
+        val speakerId = activeSpeakerId
+        val pace = activePace
+        val tone = activeTone
+        val scope = activeScope
+        container.applicationScope.launch(Dispatchers.IO) {
+            runCatching {
+                container.neuralTtsRepository.cancelGeneratingBookAudio(
+                    bookId = activeBook,
+                    modelId = modelId,
+                    speakerId = speakerId,
+                    pace = pace,
+                    tone = tone,
+                    scope = scope
+                )
+            }.onFailure { error ->
+                Log.w("XReader", "Could not mark destroyed audiobook generation canceled for $activeBook", error)
+            }
+        }
+    }
 
     private fun BookAudioEntity?.generationNotificationKey(): GenerationNotificationKey? =
         this?.let { audio ->
@@ -276,22 +336,24 @@ class AudiobookGenerationForegroundService : Service() {
             .setContentText(audiobookGenerationStatusText(audio, preparing, alreadyRunning, canceling))
             .setSubText(audiobookGenerationProgressText(audio))
             .setContentIntent(openAppIntent())
-            .setDeleteIntent(serviceIntent(ACTION_CANCEL, REQUEST_CANCEL))
+            .setDeleteIntent(cancelServiceIntent())
             .setOngoing(audio?.status == BookAudioStatus.GENERATING || preparing)
             .setShowWhen(false)
             .setCategory(Notification.CATEGORY_PROGRESS)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
-            .addAction(notificationAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", ACTION_CANCEL, REQUEST_CANCEL))
+            .addAction(notificationAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", cancelServiceIntent()))
             .build()
 
-    private fun notificationAction(icon: Int, title: String, action: String, requestCode: Int): Action =
-        Action.Builder(Icon.createWithResource(this, icon), title, serviceIntent(action, requestCode)).build()
+    private fun notificationAction(icon: Int, title: String, intent: PendingIntent): Action =
+        Action.Builder(Icon.createWithResource(this, icon), title, intent).build()
 
-    private fun serviceIntent(action: String, requestCode: Int): PendingIntent =
+    private fun cancelServiceIntent(): PendingIntent =
         PendingIntent.getService(
             this,
-            requestCode,
-            Intent(this, AudiobookGenerationForegroundService::class.java).setAction(action),
+            REQUEST_CANCEL,
+            Intent(this, AudiobookGenerationForegroundService::class.java)
+                .setAction(ACTION_CANCEL)
+                .putActiveGenerationCancelExtras(),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
@@ -319,12 +381,6 @@ class AudiobookGenerationForegroundService : Service() {
         private const val NOTIFICATION_ID = 42_501
         private const val ACTION_START = "com.xreader.app.tts.AUDIOBOOK_GENERATION_START"
         private const val ACTION_CANCEL = "com.xreader.app.tts.AUDIOBOOK_GENERATION_CANCEL"
-        private const val EXTRA_BOOK_ID = "book_id"
-        private const val EXTRA_MODEL_ID = "model_id"
-        private const val EXTRA_SPEAKER_ID = "speaker_id"
-        private const val EXTRA_PACE = "pace"
-        private const val EXTRA_TONE = "tone"
-        private const val EXTRA_SCOPE = "scope"
         private const val REQUEST_OPEN_APP = 42_510
         private const val REQUEST_CANCEL = 42_511
 
@@ -339,12 +395,12 @@ class AudiobookGenerationForegroundService : Service() {
         ) {
             val intent = Intent(context.applicationContext, AudiobookGenerationForegroundService::class.java)
                 .setAction(ACTION_START)
-                .putExtra(EXTRA_BOOK_ID, bookId)
-                .putExtra(EXTRA_MODEL_ID, modelId)
-                .putExtra(EXTRA_SPEAKER_ID, speakerId.coerceAtLeast(0))
-                .putExtra(EXTRA_PACE, pace.name)
-                .putExtra(EXTRA_TONE, tone.name)
-                .putExtra(EXTRA_SCOPE, scope.key)
+                .putExtra(AudiobookGenerationIntentExtras.BOOK_ID, bookId)
+                .putExtra(AudiobookGenerationIntentExtras.MODEL_ID, modelId)
+                .putExtra(AudiobookGenerationIntentExtras.SPEAKER_ID, speakerId.coerceAtLeast(0))
+                .putExtra(AudiobookGenerationIntentExtras.PACE, pace.name)
+                .putExtra(AudiobookGenerationIntentExtras.TONE, tone.name)
+                .putExtra(AudiobookGenerationIntentExtras.SCOPE, scope.key)
             androidx.core.content.ContextCompat.startForegroundService(context.applicationContext, intent)
         }
 
@@ -353,7 +409,134 @@ class AudiobookGenerationForegroundService : Service() {
                 .setAction(ACTION_CANCEL)
             androidx.core.content.ContextCompat.startForegroundService(context.applicationContext, intent)
         }
+
+        fun cancel(
+            context: Context,
+            bookId: Long?,
+            modelId: String?,
+            speakerId: Int?,
+            speed: Float?,
+            tone: NeuralTtsTone?,
+            scope: AudiobookGenerationScope?,
+        ) {
+            cancel(
+                context = context,
+                bookId = bookId,
+                modelId = modelId,
+                speakerId = speakerId,
+                speed = speed,
+                toneName = tone?.name,
+                scopeKey = scope?.key
+            )
+        }
+
+        fun cancel(
+            context: Context,
+            bookId: Long?,
+            modelId: String?,
+            speakerId: Int?,
+            speed: Float?,
+            toneName: String?,
+            scopeKey: String?,
+        ) {
+            val intent = Intent(context.applicationContext, AudiobookGenerationForegroundService::class.java)
+                .setAction(ACTION_CANCEL)
+                .putGenerationCancelExtras(
+                    bookId = bookId,
+                    modelId = modelId,
+                    speakerId = speakerId,
+                    speed = speed,
+                    toneName = toneName,
+                    scopeKey = scopeKey
+                )
+            androidx.core.content.ContextCompat.startForegroundService(context.applicationContext, intent)
+        }
     }
+
+    private fun Intent.putActiveGenerationCancelExtras(): Intent =
+        putGenerationCancelExtras(
+            bookId = activeBookId,
+            modelId = activeModelId,
+            speakerId = activeSpeakerId,
+            speed = activePace.speed,
+            toneName = activeTone.name,
+            scopeKey = activeScope.key
+        )
+}
+
+internal data class AudiobookGenerationCancelRequest(
+    val bookId: Long,
+    val modelId: String,
+    val speakerId: Int,
+    val speed: Float,
+    val tone: NeuralTtsTone,
+    val scope: AudiobookGenerationScope,
+)
+
+internal fun Intent.putGenerationCancelExtras(
+    bookId: Long?,
+    modelId: String?,
+    speakerId: Int?,
+    speed: Float?,
+    toneName: String?,
+    scopeKey: String?,
+): Intent {
+    bookId?.takeIf { it > 0L }?.let { putExtra(AudiobookGenerationIntentExtras.BOOK_ID, it) }
+    modelId?.takeIf { it.isNotBlank() }?.let { putExtra(AudiobookGenerationIntentExtras.MODEL_ID, it) }
+    speakerId?.takeIf { it >= 0 }?.let { putExtra(AudiobookGenerationIntentExtras.SPEAKER_ID, it) }
+    speed?.takeIf { it > 0f }?.let { putExtra(AudiobookGenerationIntentExtras.SPEED, it) }
+    toneName?.takeIf { it.isNotBlank() }?.let { putExtra(AudiobookGenerationIntentExtras.TONE, it) }
+    scopeKey?.takeIf { it.isNotBlank() }?.let { putExtra(AudiobookGenerationIntentExtras.SCOPE, it) }
+    return this
+}
+
+internal fun Intent.toAudiobookGenerationCancelRequest(): AudiobookGenerationCancelRequest? {
+    return audiobookGenerationCancelRequest(
+        bookId = getLongExtra(AudiobookGenerationIntentExtras.BOOK_ID, -1L),
+        modelId = getStringExtra(AudiobookGenerationIntentExtras.MODEL_ID),
+        speakerId = getIntExtra(AudiobookGenerationIntentExtras.SPEAKER_ID, -1),
+        speed = getFloatExtra(AudiobookGenerationIntentExtras.SPEED, -1f),
+        toneName = getStringExtra(AudiobookGenerationIntentExtras.TONE),
+        scopeKey = getStringExtra(AudiobookGenerationIntentExtras.SCOPE)
+    )
+}
+
+internal fun audiobookGenerationCancelRequest(
+    bookId: Long?,
+    modelId: String?,
+    speakerId: Int?,
+    speed: Float?,
+    toneName: String?,
+    scopeKey: String?,
+): AudiobookGenerationCancelRequest? {
+    val parsedBookId = bookId?.takeIf { it > 0L } ?: return null
+    val parsedModelId = modelId?.takeIf { it.isNotBlank() } ?: return null
+    val parsedSpeakerId = speakerId?.takeIf { it >= 0 } ?: return null
+    val parsedSpeed = speed?.takeIf { it > 0f } ?: return null
+    val tone = toneName
+        ?.let { runCatching { NeuralTtsTone.valueOf(it) }.getOrNull() }
+        ?: return null
+    val scope = scopeKey
+        ?.let { key -> AudiobookGenerationScope.entries.firstOrNull { it.key == key } }
+        ?: return null
+    return AudiobookGenerationCancelRequest(
+        bookId = parsedBookId,
+        modelId = parsedModelId,
+        speakerId = parsedSpeakerId,
+        speed = parsedSpeed,
+        tone = tone,
+        scope = scope
+    )
+}
+
+internal object AudiobookGenerationIntentExtras {
+    const val BOOK_ID = "book_id"
+    const val MODEL_ID = "model_id"
+    const val SPEAKER_ID = "speaker_id"
+    const val PACE = "pace"
+    const val SPEED = "speed"
+    const val TONE = "tone"
+    const val SCOPE = "scope"
 }
 
 private data class GenerationNotificationKey(
@@ -379,6 +562,16 @@ internal fun audiobookGenerationStartGate(canceling: Boolean, jobActive: Boolean
         jobActive -> AudiobookGenerationStartGate.ALREADY_RUNNING
         else -> AudiobookGenerationStartGate.START
     }
+
+internal fun shouldCancelActiveAudiobookGenerationOnDestroy(jobActive: Boolean, activeBookId: Long?): Boolean =
+    jobActive && activeBookId != null
+
+internal fun audiobookGenerationSetupFailureMessage(error: Throwable): String =
+    (error.message ?: "Audiobook setup failed.")
+        .lineSequence()
+        .firstOrNull()
+        ?.takeIf { it.isNotBlank() }
+        ?: "Audiobook setup failed."
 
 internal fun shouldReplaceAudiobookGenerationNotificationForRejectedStart(
     gate: AudiobookGenerationStartGate,

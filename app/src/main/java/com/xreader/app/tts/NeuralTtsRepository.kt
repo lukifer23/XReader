@@ -623,6 +623,27 @@ class NeuralTtsRepository(
         )
     }
 
+    suspend fun failGeneratingBookAudio(
+        bookId: Long,
+        modelId: String = NeuralTtsModelCatalog.DEFAULT_MODEL_ID,
+        speakerId: Int = 0,
+        pace: NeuralTtsPace = NeuralTtsPace.STANDARD,
+        tone: NeuralTtsTone = NeuralTtsTone.NATURAL,
+        scope: AudiobookGenerationScope = AudiobookGenerationScope.FULL_BOOK,
+        error: String,
+    ): Int = withContext(Dispatchers.IO) {
+        dao.failGeneratingBookAudio(
+            bookId = bookId,
+            modelId = modelId,
+            speakerId = speakerId,
+            speed = pace.speed,
+            tone = tone.name,
+            scope = scope.key,
+            error = error.take(MAX_GENERATING_AUDIO_ERROR_LENGTH),
+            updatedAt = clock.millis()
+        )
+    }
+
     suspend fun generateBookAudio(
         bookId: Long,
         bookTitle: String,
@@ -2062,6 +2083,7 @@ private const val TARGET_LONG_GENERATION_PROGRESS_UPDATES = 120
 private const val GENERATION_PROGRESS_WRITE_INTERVAL_MS = 8_000L
 private const val GENERATION_CANCELLATION_POLL_INTERVAL_MS = 2_000L
 private const val GENERATION_HEARTBEAT_WRITE_INTERVAL_MS = 30_000L
+private const val MAX_GENERATING_AUDIO_ERROR_LENGTH = 240
 private const val PREVIEW_UI_RESERVED_CORES = 2
 private const val AUDIOBOOK_GENERATION_RESERVED_CORES = 1
 private const val MIN_CPU_TTS_THREADS = 1

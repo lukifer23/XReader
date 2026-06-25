@@ -3,6 +3,7 @@ package com.xreader.app.tts
 import android.content.pm.ServiceInfo
 import com.xreader.app.data.BookAudioEntity
 import com.xreader.app.data.BookAudioStatus
+import com.xreader.app.settings.NeuralTtsTone
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -41,6 +42,34 @@ class AudiobookGenerationForegroundServiceTest {
         assertEquals(
             false,
             shouldReplaceAudiobookGenerationNotificationForRejectedStart(AudiobookGenerationStartGate.START)
+        )
+    }
+
+    @Test
+    fun serviceDestroyCancelsOnlyKnownActiveGenerationRows() {
+        assertEquals(
+            true,
+            shouldCancelActiveAudiobookGenerationOnDestroy(jobActive = true, activeBookId = 42L)
+        )
+        assertEquals(
+            false,
+            shouldCancelActiveAudiobookGenerationOnDestroy(jobActive = false, activeBookId = 42L)
+        )
+        assertEquals(
+            false,
+            shouldCancelActiveAudiobookGenerationOnDestroy(jobActive = true, activeBookId = null)
+        )
+    }
+
+    @Test
+    fun setupFailureMessageUsesFirstUsefulLine() {
+        assertEquals(
+            "Could not index book text.",
+            audiobookGenerationSetupFailureMessage(IllegalStateException("Could not index book text.\nDetails"))
+        )
+        assertEquals(
+            "Audiobook setup failed.",
+            audiobookGenerationSetupFailureMessage(IllegalStateException(""))
         )
     }
 
@@ -134,6 +163,68 @@ class AudiobookGenerationForegroundServiceTest {
         )
 
         assertNull(audio.generationEtaLabel(nowMillis = 20_000L))
+    }
+
+    @Test
+    fun targetedCancelRequestParsesCompleteGenerationProfile() {
+        val request = audiobookGenerationCancelRequest(
+            bookId = 42L,
+            modelId = "kokoro-v1",
+            speakerId = 3,
+            speed = 1.1f,
+            toneName = NeuralTtsTone.WARM.name,
+            scopeKey = AudiobookGenerationScope.FIRST_CHAPTER.key
+        )
+
+        assertEquals(
+            AudiobookGenerationCancelRequest(
+                bookId = 42L,
+                modelId = "kokoro-v1",
+                speakerId = 3,
+                speed = 1.1f,
+                tone = NeuralTtsTone.WARM,
+                scope = AudiobookGenerationScope.FIRST_CHAPTER
+            ),
+            request
+        )
+    }
+
+    @Test
+    fun targetedCancelRequestRejectsPartialGenerationProfile() {
+        assertNull(
+            audiobookGenerationCancelRequest(
+                bookId = 42L,
+                modelId = "kokoro-v1",
+                speakerId = null,
+                speed = 1.0f,
+                toneName = NeuralTtsTone.NATURAL.name,
+                scopeKey = AudiobookGenerationScope.FULL_BOOK.key
+            )
+        )
+    }
+
+    @Test
+    fun targetedCancelRequestRejectsMalformedGenerationProfile() {
+        assertNull(
+            audiobookGenerationCancelRequest(
+                bookId = 42L,
+                modelId = "kokoro-v1",
+                speakerId = 3,
+                speed = -1f,
+                toneName = NeuralTtsTone.NATURAL.name,
+                scopeKey = AudiobookGenerationScope.FULL_BOOK.key
+            )
+        )
+        assertNull(
+            audiobookGenerationCancelRequest(
+                bookId = 42L,
+                modelId = "kokoro-v1",
+                speakerId = 3,
+                speed = 1.0f,
+                toneName = NeuralTtsTone.NATURAL.name,
+                scopeKey = "BOOKISH"
+            )
+        )
     }
 
     private fun audio(

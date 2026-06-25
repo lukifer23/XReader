@@ -6,6 +6,7 @@ import android.util.Log
 import android.webkit.WebView
 import com.xreader.app.analytics.AnalyticsExportService
 import com.xreader.app.analytics.AnalyticsRepository
+import com.xreader.app.data.BookAudioEntity
 import com.xreader.app.data.XReaderDatabase
 import com.xreader.app.dictionary.DictionaryRepository
 import com.xreader.app.importer.ImportService
@@ -145,8 +146,35 @@ class AppContainer(
         )
     }
 
-    fun cancelAudiobookGeneration() {
-        AudiobookGenerationForegroundService.cancel(appContext)
+    fun cancelAudiobookGeneration(
+        bookId: Long? = null,
+        modelId: String? = null,
+        speakerId: Int? = null,
+        speed: Float? = null,
+        tone: NeuralTtsTone? = null,
+        scope: AudiobookGenerationScope? = null,
+    ) {
+        AudiobookGenerationForegroundService.cancel(
+            context = appContext,
+            bookId = bookId,
+            modelId = modelId,
+            speakerId = speakerId,
+            speed = speed,
+            tone = tone,
+            scope = scope
+        )
+    }
+
+    fun cancelAudiobookGeneration(bookId: Long, audio: BookAudioEntity) {
+        AudiobookGenerationForegroundService.cancel(
+            context = appContext,
+            bookId = bookId,
+            modelId = audio.modelId,
+            speakerId = audio.speakerId,
+            speed = audio.speed,
+            toneName = audio.tone,
+            scopeKey = audio.scope
+        )
     }
 
     fun warmReaderPath() {

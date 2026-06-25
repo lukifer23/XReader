@@ -21,6 +21,9 @@
 - Generated-audiobook performance labels now say `x audio time` instead of ambiguous `x realtime`, making slow generation read as elapsed generation cost rather than playback speed.
 - Slow hardware-generation failures now report `audioTimeFactor` so diagnostics match the end-to-end generation metric shown in the UI.
 - Internal audiobook speed-gate helpers now use audio-time terminology, while keeping the existing manifest key for backward-compatible generated-audio metadata.
+- Audiobook generation Stop actions now carry the exact book, voice, pace, tone, and scope being generated; the foreground service ignores stale targeted cancel intents instead of letting an old notification or wrong row stop the current job.
+- Audiobook generation service teardown now marks the active generation row canceled from the application scope before canceling its service scope, preventing process/service destruction from leaving a permanently `GENERATING` audiobook row.
+- Audiobook generation setup failures after the preparing row is created now mark the exact generation row failed immediately, so indexing/planning errors do not leave a stuck active job until startup repair.
 - Library sorting now includes `Date added`, using import time independently from reading activity and honoring the option in grouped views.
 - Library search now matches multi-term queries across metadata, collections, file format, year, favorite state, and reading status such as unread, in progress, or finished.
 - Library search now normalizes pasted punctuation, separators, and accents, so queries like `red-rising`, `sci_fi`, or `cafe` match clean book metadata.

@@ -946,8 +946,8 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         postMessage("Generating ${scope.label.lowercase(Locale.US)} audio for ${book.title}")
     }
 
-    fun cancelAudiobookGeneration(book: BookEntity) {
-        container.cancelAudiobookGeneration()
+    fun cancelAudiobookGeneration(book: BookEntity, audio: BookAudioEntity) {
+        container.cancelAudiobookGeneration(book.id, audio)
         postMessage("Stopping audiobook generation for ${book.title}")
     }
 

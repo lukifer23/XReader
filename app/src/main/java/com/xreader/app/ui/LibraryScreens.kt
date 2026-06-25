@@ -343,7 +343,7 @@ internal fun LibraryRoute(
             onGenerate = { scope ->
                 viewModel.generateAudiobook(book, scope)
             },
-            onCancelGeneration = { viewModel.cancelAudiobookGeneration(book) },
+            onCancelGeneration = { audio -> viewModel.cancelAudiobookGeneration(book, audio) },
             onExportAudio = { audio -> exportAudiobookAudio(book, audio) },
             onDeleteAudio = { audio -> viewModel.deleteAudiobookAudio(book, audio) },
             onDeleteAllAudio = { viewModel.deleteAllAudiobookAudio(book) },
@@ -1310,7 +1310,7 @@ internal fun BookAudiobookDialog(
     onDismiss: () -> Unit,
     onScan: () -> Unit,
     onGenerate: (AudiobookGenerationScope) -> Unit,
-    onCancelGeneration: () -> Unit,
+    onCancelGeneration: (BookAudioEntity) -> Unit,
     onExportAudio: (BookAudioEntity) -> Unit,
     onDeleteAudio: (BookAudioEntity) -> Unit,
     onDeleteAllAudio: () -> Unit,
@@ -1798,7 +1798,7 @@ private fun AudiobookRuntimeNote() {
 private fun AudiobookStatusCard(
     audio: BookAudioEntity,
     playableSegmentFiles: Int,
-    onCancelGeneration: () -> Unit,
+    onCancelGeneration: (BookAudioEntity) -> Unit,
     onExportAudio: (BookAudioEntity) -> Unit,
     playback: AudiobookPlaybackUiState,
     onPlayAudio: (BookAudioEntity) -> Unit,
@@ -1885,7 +1885,7 @@ private fun AudiobookStatusCard(
                     modifier = Modifier.fillMaxWidth()
                 )
                 TextButton(
-                    onClick = onCancelGeneration,
+                    onClick = { onCancelGeneration(audio) },
                     modifier = Modifier.align(Alignment.End)
                 ) {
                     Text("Stop")
