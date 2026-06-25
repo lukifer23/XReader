@@ -835,6 +835,15 @@ class GeneratedAudiobookResumeTest {
                 tone = "NATURAL"
             )?.id
         )
+        assertEquals(
+            listOf(full.id, chapter.id, sample.id),
+            listOf(sample, chapter, full).playableAudiobooksForProfile(
+                modelId = "voice",
+                speakerId = 0,
+                speed = 1.0f,
+                tone = "NATURAL"
+            ).map { it.id }
+        )
     }
 
     @Test
@@ -1297,6 +1306,13 @@ class GeneratedAudiobookResumeTest {
     }
 
     @Test
+    fun generationHeartbeatWritesOnlyForLongNativeSegments() {
+        assertFalse(shouldWriteGenerationHeartbeat(lastHeartbeatWrittenAtMillis = 10_000L, nowMillis = 39_999L))
+        assertTrue(shouldWriteGenerationHeartbeat(lastHeartbeatWrittenAtMillis = 10_000L, nowMillis = 40_000L))
+        assertFalse(shouldWriteGenerationHeartbeat(lastHeartbeatWrittenAtMillis = 0L, nowMillis = 40_000L))
+    }
+
+    @Test
     fun generationProgressSkipsDuplicateAndInvalidUpdates() {
         assertFalse(
             shouldWriteGenerationProgress(
@@ -1393,6 +1409,32 @@ class GeneratedAudiobookResumeTest {
             file.readText()
         )
         assertFalse(File(dir, "segments.tsv.tmp").exists())
+    }
+
+    @Test
+    fun generatedAudiobookManifestLongReadsInProgressBeforeFinalManifest() {
+        val dir = temporaryFolder.newFolder()
+        File(dir, "manifest.txt").writeText("generationSaveMillis=11\n")
+        File(dir, "manifest.in-progress.txt").writeText("generationSaveMillis=29\n")
+
+        assertEquals(29L, dir.generatedAudiobookManifestLong("generationSaveMillis"))
+    }
+
+    @Test
+    fun generatedAudiobookManifestLongFallsBackToFinalAndRejectsInvalidValues() {
+        val dir = temporaryFolder.newFolder()
+        File(dir, "manifest.txt").writeText(
+            """
+            generationSaveMillis=42
+            bad=oops
+            negative=-10
+            """.trimIndent()
+        )
+
+        assertEquals(42L, dir.generatedAudiobookManifestLong("generationSaveMillis"))
+        assertEquals(0L, dir.generatedAudiobookManifestLong("missing"))
+        assertEquals(0L, dir.generatedAudiobookManifestLong("bad"))
+        assertEquals(0L, dir.generatedAudiobookManifestLong("negative"))
     }
 
     private fun writeSegment(dir: File, index: Int) {

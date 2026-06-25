@@ -310,6 +310,15 @@ interface NeuralTtsDao {
     @Query("SELECT * FROM book_audio WHERE bookId = :bookId")
     suspend fun bookAudioForBook(bookId: Long): List<BookAudioEntity>
 
+    @Query(
+        """
+        SELECT * FROM book_audio
+        WHERE bookId = :bookId AND modelId = :modelId AND speakerId = :speakerId AND speed = :speed AND tone = :tone
+        ORDER BY updatedAt DESC
+        """
+    )
+    suspend fun bookAudioForProfile(bookId: Long, modelId: String, speakerId: Int, speed: Float, tone: String): List<BookAudioEntity>
+
     @Query("SELECT * FROM book_audio")
     suspend fun allBookAudio(): List<BookAudioEntity>
 
@@ -318,6 +327,9 @@ interface NeuralTtsDao {
 
     @Query("SELECT * FROM book_audio WHERE status = 'GENERATING'")
     suspend fun generatingBookAudio(): List<BookAudioEntity>
+
+    @Query("SELECT COUNT(*) FROM book_audio WHERE id = :id AND status = 'GENERATING'")
+    suspend fun generatingBookAudioCount(id: Long): Int
 
     @Query("SELECT * FROM book_audio WHERE id = :id LIMIT 1")
     suspend fun bookAudioById(id: Long): BookAudioEntity?

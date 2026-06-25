@@ -74,9 +74,9 @@ class AudiobookUiFormattersTest {
             updatedAt = 1L
         )
 
-        assertEquals("WebGPU • 2.5x realtime", audio.audiobookPerformanceLabel())
-        assertEquals("13x realtime", generationRealtimeFactorLabel(audioMillis = 10_000L, computeMillis = 135_000L))
-        assertNull(generationRealtimeFactorLabel(audioMillis = 0L, computeMillis = 135_000L))
+        assertEquals("WebGPU • 2.5x audio time", audio.audiobookPerformanceLabel())
+        assertEquals("13x audio time", generationAudioTimeFactorLabel(audioMillis = 10_000L, computeMillis = 135_000L))
+        assertNull(generationAudioTimeFactorLabel(audioMillis = 0L, computeMillis = 135_000L))
         assertEquals(
             "NPU",
             audio.copy(

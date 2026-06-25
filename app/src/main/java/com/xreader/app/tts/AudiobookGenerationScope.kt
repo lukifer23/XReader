@@ -505,6 +505,21 @@ internal fun Iterable<BookAudioEntity>.bestPlayableAudiobookForProfile(
     tone: String,
     verifyFiles: Boolean = true,
 ): BookAudioEntity? =
+    playableAudiobooksForProfile(
+        modelId = modelId,
+        speakerId = speakerId,
+        speed = speed,
+        tone = tone,
+        verifyFiles = verifyFiles
+    ).firstOrNull()
+
+internal fun Iterable<BookAudioEntity>.playableAudiobooksForProfile(
+    modelId: String,
+    speakerId: Int,
+    speed: Float,
+    tone: String,
+    verifyFiles: Boolean = true,
+): List<BookAudioEntity> =
     filter { audio ->
         audio.modelId == modelId &&
             audio.speakerId == speakerId &&
@@ -522,7 +537,6 @@ internal fun Iterable<BookAudioEntity>.bestPlayableAudiobookForProfile(
                 .thenByDescending { it.playableSegmentCount() }
                 .thenByDescending { it.updatedAt }
         )
-        .firstOrNull()
 
 private fun BookAudioEntity.audiobookScopeRank(): Int =
     when (AudiobookGenerationScope.fromKey(scope)) {

@@ -92,19 +92,19 @@ class NeuralTtsGenerationConfigTest {
     }
 
     @Test
-    fun realtimeFactorUsesGeneratedAudioDurationAgainstComputeTime() {
-        assertEquals(2.5f, generationRealtimeFactor(audioMillis = 4_000L, computeMillis = 10_000L)!!, 0.0001f)
-        assertNull(generationRealtimeFactor(audioMillis = 0L, computeMillis = 10_000L))
-        assertNull(generationRealtimeFactor(audioMillis = 4_000L, computeMillis = 0L))
+    fun audioTimeFactorUsesGeneratedAudioDurationAgainstComputeTime() {
+        assertEquals(2.5f, generationAudioTimeFactor(audioMillis = 4_000L, computeMillis = 10_000L)!!, 0.0001f)
+        assertNull(generationAudioTimeFactor(audioMillis = 0L, computeMillis = 10_000L))
+        assertNull(generationAudioTimeFactor(audioMillis = 4_000L, computeMillis = 0L))
     }
 
     @Test
     fun fullBookHardwareGenerationRejectsNearRealtimeProviders() {
-        assertTrue(isUsableAudiobookHardwareRealtimeFactor(MAX_AUDIOBOOK_HARDWARE_REALTIME_FACTOR))
-        assertTrue(isUsableAudiobookHardwareRealtimeFactor(0.25f))
-        assertFalse(isUsableAudiobookHardwareRealtimeFactor(0.56f))
-        assertFalse(isUsableAudiobookHardwareRealtimeFactor(1.0f))
-        assertFalse(isUsableAudiobookHardwareRealtimeFactor(Float.NaN))
+        assertTrue(isUsableAudiobookHardwareAudioTimeFactor(MAX_AUDIOBOOK_HARDWARE_AUDIO_TIME_FACTOR))
+        assertTrue(isUsableAudiobookHardwareAudioTimeFactor(0.25f))
+        assertFalse(isUsableAudiobookHardwareAudioTimeFactor(0.56f))
+        assertFalse(isUsableAudiobookHardwareAudioTimeFactor(1.0f))
+        assertFalse(isUsableAudiobookHardwareAudioTimeFactor(Float.NaN))
     }
 
     @Test

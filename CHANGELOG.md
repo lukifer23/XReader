@@ -13,6 +13,14 @@
 
 - Documentation now records the current audiobook acceleration focus: strict hardware generation only, no CPU fallback masquerading as acceleration, and prepared QNN/NPU artifacts gated by a strict compatibility manifest.
 - Audiobook hardware readiness now probes strict QNN availability with non-mutating provider labels; real provider config files are written only when generation initializes a runtime.
+- Long native audiobook segment generation now separates lightweight cancellation polling from row-dirtying heartbeat writes, reducing Room invalidations and UI churn while generation is under hardware load.
+- Audiobook generation speed metrics and fail-fast checks now include WAV save and atomic-finalize time, while manifests record `generationSaveMillis` separately for diagnosing file-output stalls.
+- Audiobook generation now re-checks cancellation after synthesis and after segment save, preventing stop/clear actions from being missed when progress writes are intentionally coalesced.
+- Generated-audiobook playback lookup now selects likely candidates from Room first and repairs/verifies one candidate at a time, avoiding broad filesystem repair before reader playback starts.
+- Reader generated-audiobook playback now queries only the selected voice/profile rows instead of loading every generated-audio row for the book before ranking playback candidates.
+- Generated-audiobook performance labels now say `x audio time` instead of ambiguous `x realtime`, making slow generation read as elapsed generation cost rather than playback speed.
+- Slow hardware-generation failures now report `audioTimeFactor` so diagnostics match the end-to-end generation metric shown in the UI.
+- Internal audiobook speed-gate helpers now use audio-time terminology, while keeping the existing manifest key for backward-compatible generated-audio metadata.
 - Library sorting now includes `Date added`, using import time independently from reading activity and honoring the option in grouped views.
 - Library search now matches multi-term queries across metadata, collections, file format, year, favorite state, and reading status such as unread, in progress, or finished.
 - Library search now normalizes pasted punctuation, separators, and accents, so queries like `red-rising`, `sci_fi`, or `cafe` match clean book metadata.
@@ -47,7 +55,7 @@
 - Audiobook text preparation now drops standalone table-of-contents entry rows such as chapter/page listings before narration, while preserving real chapter headings.
 - Generated-audio rows now separate metadata from playback/export/delete controls and allow the control strip to wrap, avoiding cramped audiobook dialogs on phone-width screens.
 - Audiobook generation controls now explain why generation is disabled when the selected voice is missing, installing, failed, or already generating audio.
-- Audiobook generation now writes live heartbeat progress during long native segment synthesis, so active rows, notifications, and cancellation checks do not look frozen while a hardware provider is working on a large segment.
+- Audiobook generation now writes throttled live heartbeat progress during long native segment synthesis, so active rows and notifications can show liveness without forcing constant Room invalidations while a hardware provider is working on a large segment.
 - Active generated-audiobook rows now avoid repeated chapter-sidecar reads while generation is still running and reuse unchanged UI row models, reducing library/audiobook screen churn during progress updates.
 - Audiobook heartbeat cleanup now waits for the heartbeat worker to finish after segment synthesis, reducing races between long native calls, completion writes, cancellation, and delete/clear actions.
 - The global Audiobooks screen now uses one Room relation query for visible generated-audio rows and their books, avoiding a full-library/full-audio combine on every generation progress tick.

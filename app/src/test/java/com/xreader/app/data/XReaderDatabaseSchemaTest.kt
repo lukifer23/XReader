@@ -50,6 +50,11 @@ class XReaderDatabaseSchemaTest {
 
         assertEquals(listOf("bookId", "modelId", "speakerId", "speed", "tone", "scope"), columns)
         assertTrue(scopedIndex.getBoolean("unique"))
+        assertEquals(
+            "Generated-audiobook profile lookup depends on this left-prefix index.",
+            listOf("bookId", "modelId", "speakerId", "speed", "tone"),
+            columns.take(5)
+        )
     }
 
     @Test

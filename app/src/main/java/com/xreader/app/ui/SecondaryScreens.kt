@@ -1035,17 +1035,17 @@ internal fun BookAudioEntity.audiobookStatusDetail(
 
 internal fun BookAudioEntity.audiobookPerformanceLabel(): String? {
     val provider = generationProvider?.takeIf { it.isNotBlank() }?.generationProviderLabel()
-    val factor = generationRealtimeFactorLabel(generationAudioMillis, generationComputeMillis)
+    val factor = generationAudioTimeFactorLabel(generationAudioMillis, generationComputeMillis)
     return listOfNotNull(provider, factor).takeIf { it.isNotEmpty() }?.joinToString(" • ")
 }
 
-internal fun generationRealtimeFactorLabel(audioMillis: Long, computeMillis: Long): String? {
+internal fun generationAudioTimeFactorLabel(audioMillis: Long, computeMillis: Long): String? {
     if (audioMillis <= 0L || computeMillis <= 0L) return null
     val factor = computeMillis.toDouble() / audioMillis.toDouble()
     if (!factor.isFinite()) return null
     return when {
-        factor < 10.0 -> String.format(Locale.US, "%.1fx realtime", factor)
-        else -> "${factor.toInt()}x realtime"
+        factor < 10.0 -> String.format(Locale.US, "%.1fx audio time", factor)
+        else -> "${factor.toInt()}x audio time"
     }
 }
 
