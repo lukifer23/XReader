@@ -253,6 +253,59 @@ class GeneratedAudiobookResumeTest {
     }
 
     @Test
+    fun generationStartClearsStaleFieldsForFreshRuns() {
+        val dir = temporaryFolder.newFolder()
+        writeSegment(dir, index = 0)
+        val stale = audio(filePath = dir.absolutePath).copy(
+            status = BookAudioStatus.GENERATING,
+            sampleRate = 24_000,
+            fileSizeBytes = 8_000,
+            generatedAt = 20_000L,
+            playbackSegmentIndex = 2,
+            playbackPositionMs = 12_000
+        )
+
+        val fresh = stale.withAudiobookGenerationStartState(
+            canResumeExistingAudio = false,
+            target = dir,
+            reusableSegments = 0
+        )
+
+        assertEquals(0, fresh.sampleRate)
+        assertEquals(0L, fresh.fileSizeBytes)
+        assertNull(fresh.generatedAt)
+        assertEquals(0, fresh.playbackSegmentIndex)
+        assertEquals(0, fresh.playbackPositionMs)
+    }
+
+    @Test
+    fun generationStartPreservesResumeFieldsForResumableRuns() {
+        val dir = temporaryFolder.newFolder()
+        writeSegment(dir, index = 0)
+        writeSegment(dir, index = 1)
+        val resumable = audio(filePath = dir.absolutePath).copy(
+            status = BookAudioStatus.GENERATING,
+            sampleRate = 24_000,
+            fileSizeBytes = 1,
+            generatedAt = 20_000L,
+            playbackSegmentIndex = 1,
+            playbackPositionMs = 12_000
+        )
+
+        val resumed = resumable.withAudiobookGenerationStartState(
+            canResumeExistingAudio = true,
+            target = dir,
+            reusableSegments = 2
+        )
+
+        assertEquals(24_000, resumed.sampleRate)
+        assertTrue(resumed.fileSizeBytes > resumable.fileSizeBytes)
+        assertNull(resumed.generatedAt)
+        assertEquals(1, resumed.playbackSegmentIndex)
+        assertEquals(12_000, resumed.playbackPositionMs)
+    }
+
+    @Test
     fun persistedPlaybackPositionKeepsFinishedStateOutOfResumePath() {
         assertEquals(
             GeneratedAudiobookPersistedPlaybackPosition(segmentIndex = 2, positionMs = 0),

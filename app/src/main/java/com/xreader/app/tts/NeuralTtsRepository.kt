@@ -756,6 +756,10 @@ class NeuralTtsRepository(
             generationSessionStartCompletedSegments = reusableSegments,
             updatedAt = now,
             error = null
+        ).withAudiobookGenerationStartState(
+            canResumeExistingAudio = canResumeExistingAudio,
+            target = target,
+            reusableSegments = reusableSegments
         )
         dao.upsertBookAudio(generating)
         val activeAudio = requireNotNull(dao.bookAudio(bookId, modelId, speakerId, speed, tone.name, scope.key)) {
@@ -2024,6 +2028,23 @@ private fun BookAudioEntity?.canResumeGeneration(
     if (this.wordCount != wordCount) return false
     return target.isDirectory
 }
+
+internal fun BookAudioEntity.withAudiobookGenerationStartState(
+    canResumeExistingAudio: Boolean,
+    target: File,
+    reusableSegments: Int,
+): BookAudioEntity =
+    copy(
+        sampleRate = sampleRate.takeIf { canResumeExistingAudio }?.coerceAtLeast(0) ?: 0,
+        fileSizeBytes = if (canResumeExistingAudio) {
+            target.generatedAudiobookKnownFilesSizeBytes(reusableSegments)
+        } else {
+            0L
+        },
+        generatedAt = null,
+        playbackSegmentIndex = playbackSegmentIndex.takeIf { canResumeExistingAudio }?.coerceAtLeast(0) ?: 0,
+        playbackPositionMs = playbackPositionMs.takeIf { canResumeExistingAudio }?.coerceAtLeast(0) ?: 0,
+    )
 
 internal fun BookAudioEntity.generatedAudiobookKnownFilesSizeBytes(completedSegments: Int): Long =
     filePath?.let(::File)?.generatedAudiobookKnownFilesSizeBytes(completedSegments) ?: 0L
