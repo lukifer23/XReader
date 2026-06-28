@@ -121,7 +121,6 @@ class AppContainer(
     private suspend fun runNeuralTtsStartupMaintenance() {
         neuralTtsRepository.ensureCatalogSeeded()
         neuralTtsRepository.repairInterruptedModelInstalls()
-        delay(STARTUP_AUDIOBOOK_REPAIR_DELAY_MS)
         neuralTtsRepository.repairStaleGeneratingAudio()
         delay(STARTUP_OBSOLETE_TTS_STORAGE_PRUNE_DELAY_MS)
         neuralTtsRepository.pruneObsoleteCatalogStorage()
@@ -203,7 +202,6 @@ class AppContainer(
 
     private companion object {
         const val STARTUP_NEURAL_TTS_CATALOG_MAINTENANCE_DELAY_MS = 2_000L
-        const val STARTUP_AUDIOBOOK_REPAIR_DELAY_MS = 8_000L
         const val STARTUP_OBSOLETE_TTS_STORAGE_PRUNE_DELAY_MS = 20_000L
     }
 }
