@@ -30,6 +30,24 @@ class GeneratedAudiobookForegroundServiceTest {
     }
 
     @Test
+    fun playbackNotificationStateComparisonIgnoresPositionOnlyTicks() {
+        val base = AudiobookPlaybackUiState(
+            audioId = 7,
+            bookTitle = "Book",
+            profileLabel = "Kokoro",
+            playing = true,
+            segmentIndex = 2,
+            segmentCount = 10,
+            segmentPositionMs = 5_000,
+            segmentDurationMs = 60_000
+        )
+
+        assertEquals(true, samePlaybackNotificationState(base, base.copy(segmentPositionMs = 10_000, segmentDurationMs = 61_000)))
+        assertEquals(false, samePlaybackNotificationState(base, base.copy(segmentIndex = 3)))
+        assertEquals(false, samePlaybackNotificationState(base, base.copy(playing = false)))
+    }
+
+    @Test
     fun mediaSessionMetadataKeyIgnoresPositionOnlyTicks() {
         val base = AudiobookPlaybackUiState(
             audioId = 7,

@@ -21,7 +21,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 class GeneratedAudiobookForegroundService : Service() {
@@ -36,9 +35,8 @@ class GeneratedAudiobookForegroundService : Service() {
         ensureNotificationChannel()
         serviceScope.launch {
             playback.state
-                .map { state -> state.toPlaybackNotificationKey() to state }
-                .distinctUntilChanged { previous, next -> previous.first == next.first }
-                .collectLatest { (_, state) -> renderState(state) }
+                .distinctUntilChanged(::samePlaybackNotificationState)
+                .collectLatest(::renderState)
         }
     }
 
@@ -249,3 +247,17 @@ internal fun AudiobookPlaybackUiState.toPlaybackNotificationKey(): Any =
         preparing = preparing,
         error = error,
     )
+
+internal fun samePlaybackNotificationState(
+    previous: AudiobookPlaybackUiState,
+    next: AudiobookPlaybackUiState,
+): Boolean =
+    previous.foregroundActive == next.foregroundActive &&
+        previous.audioId == next.audioId &&
+        previous.bookTitle == next.bookTitle &&
+        previous.profileLabel == next.profileLabel &&
+        previous.playing == next.playing &&
+        previous.segmentIndex == next.segmentIndex &&
+        previous.segmentCount == next.segmentCount &&
+        previous.preparing == next.preparing &&
+        previous.error == next.error
