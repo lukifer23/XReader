@@ -864,7 +864,7 @@ class NeuralTtsRepository(
                     currentCoroutineContext().ensureActive()
                     if (index < reusableSegments) return@forEachIndexed
                     if (runtime == null || runtime.shouldRotateAfter(segmentsOnRuntime)) {
-                        runtime?.engine?.release()
+                        runtime?.releaseOnGenerationDispatcher()
                         runtime = withContext(generationDispatcher) {
                             traced("XReader TTS init runtime") {
                                 createOfflineTts(
@@ -1080,7 +1080,7 @@ class NeuralTtsRepository(
                 )
             } finally {
                 heartbeatJob.cancel()
-                runtime?.engine?.release()
+                runtime?.releaseOnGenerationDispatcher()
             }
         }.fold(
             onSuccess = { result ->
@@ -1210,7 +1210,13 @@ class NeuralTtsRepository(
             require(output.hasUsableNeuralPreviewAudio()) { "Neural voice preview file was incomplete." }
             output
         } finally {
-            tts.engine.release()
+            tts.releaseOnGenerationDispatcher()
+        }
+    }
+
+    private suspend fun TtsRuntime.releaseOnGenerationDispatcher() {
+        withContext(generationDispatcher + NonCancellable) {
+            engine.release()
         }
     }
 
