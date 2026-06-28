@@ -617,6 +617,10 @@ class NeuralTtsRepository(
             generationSessionStartCompletedSegments = 0,
             updatedAt = now,
             error = null
+        ).withAudiobookGenerationStartState(
+            canResumeExistingAudio = false,
+            target = target,
+            reusableSegments = 0
         )
         dao.upsertBookAudio(preparing)
         dao.bookAudio(bookId, modelId, speakerId, speed, tone.name, scope.key) ?: preparing
