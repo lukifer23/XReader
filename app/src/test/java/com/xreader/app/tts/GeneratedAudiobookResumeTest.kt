@@ -1364,6 +1364,13 @@ class GeneratedAudiobookResumeTest {
         assertFalse(shouldWriteGenerationHeartbeat(lastHeartbeatWrittenAtMillis = 10_000L, nowMillis = 39_999L))
         assertTrue(shouldWriteGenerationHeartbeat(lastHeartbeatWrittenAtMillis = 10_000L, nowMillis = 40_000L))
         assertFalse(shouldWriteGenerationHeartbeat(lastHeartbeatWrittenAtMillis = 0L, nowMillis = 40_000L))
+        assertFalse(
+            shouldWriteGenerationHeartbeat(
+                lastHeartbeatWrittenAtMillis = 10_000L,
+                nowMillis = 40_000L,
+                snapshotChanged = false
+            )
+        )
     }
 
     @Test

@@ -831,6 +831,7 @@ class NeuralTtsRepository(
             }
             val heartbeatJob = launch(Dispatchers.IO) {
                 var lastHeartbeatWrittenAtMillis = clock.millis()
+                var lastHeartbeatWrittenSnapshot: GenerationHeartbeatSnapshot? = null
                 while (isActive) {
                     delay(GENERATION_CANCELLATION_POLL_INTERVAL_MS)
                     if (dao.generatingBookAudioCount(activeAudio.id) != 1) {
@@ -840,8 +841,14 @@ class NeuralTtsRepository(
                         return@launch
                     }
                     val heartbeatAt = clock.millis()
-                    if (shouldWriteGenerationHeartbeat(lastHeartbeatWrittenAtMillis, heartbeatAt)) {
-                        val snapshot = heartbeatSnapshot.get()
+                    val snapshot = heartbeatSnapshot.get()
+                    if (
+                        shouldWriteGenerationHeartbeat(
+                            lastHeartbeatWrittenAtMillis = lastHeartbeatWrittenAtMillis,
+                            nowMillis = heartbeatAt,
+                            snapshotChanged = snapshot != lastHeartbeatWrittenSnapshot
+                        )
+                    ) {
                         val updatedRows = dao.updateBookAudioGenerationMetrics(
                             id = activeAudio.id,
                             completedSegments = snapshot.completedSegments,
@@ -858,6 +865,7 @@ class NeuralTtsRepository(
                             return@launch
                         }
                         lastHeartbeatWrittenAtMillis = heartbeatAt
+                        lastHeartbeatWrittenSnapshot = snapshot
                     }
                 }
             }
@@ -1936,9 +1944,14 @@ internal fun generationProgressWriteTimeElapsed(lastProgressWrittenAtMillis: Lon
         nowMillis > 0L &&
         nowMillis - lastProgressWrittenAtMillis >= GENERATION_PROGRESS_WRITE_INTERVAL_MS
 
-internal fun shouldWriteGenerationHeartbeat(lastHeartbeatWrittenAtMillis: Long, nowMillis: Long): Boolean =
+internal fun shouldWriteGenerationHeartbeat(
+    lastHeartbeatWrittenAtMillis: Long,
+    nowMillis: Long,
+    snapshotChanged: Boolean = true,
+): Boolean =
     lastHeartbeatWrittenAtMillis > 0L &&
         nowMillis > 0L &&
+        snapshotChanged &&
         nowMillis - lastHeartbeatWrittenAtMillis >= GENERATION_HEARTBEAT_WRITE_INTERVAL_MS
 
 internal fun generationProgressWriteSegmentStep(totalSegments: Int): Int {
