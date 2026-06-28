@@ -120,6 +120,12 @@ class NeuralTtsGenerationConfigTest {
     }
 
     @Test
+    fun audiobookGenerationMetricAccumulatorIgnoresNegativeDurations() {
+        assertEquals(1_000L, 1_000L.plusNonNegativeDuration(-25L))
+        assertEquals(1_025L, 1_000L.plusNonNegativeDuration(25L))
+    }
+
+    @Test
     fun fullBookHardwareGenerationRejectsNearRealtimeProviders() {
         assertTrue(isUsableAudiobookHardwareAudioTimeFactor(MAX_AUDIOBOOK_HARDWARE_AUDIO_TIME_FACTOR))
         assertTrue(isUsableAudiobookHardwareAudioTimeFactor(0.25f))
