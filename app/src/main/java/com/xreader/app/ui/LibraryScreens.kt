@@ -141,7 +141,6 @@ internal fun LibraryRoute(
     onToggleTheme: () -> Unit,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val readerSettings by viewModel.readerSettings.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
     var importMenuOpen by remember { mutableStateOf(false) }
@@ -325,6 +324,7 @@ internal fun LibraryRoute(
         )
     }
     audiobookTarget?.let { book ->
+        val readerSettings by viewModel.readerSettings.collectAsStateWithLifecycle()
         val neuralTtsModels by viewModel.neuralTtsModels.collectAsStateWithLifecycle()
         val audiobookHardwareReadiness by viewModel.audiobookHardwareReadiness.collectAsStateWithLifecycle()
         val bookAudioItems by remember(book.id) {
