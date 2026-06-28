@@ -247,7 +247,7 @@ internal fun BookAudioEntity.generatedAudiobookPlaybackMetadata(
     segmentCount: Int,
     chapters: List<GeneratedAudiobookChapter>,
 ): GeneratedAudiobookPlaybackMetadata {
-    val fallback = generatedAudiobookFallbackPlaybackMetadata(segmentCount, chapters)
+    val fallback by lazy { generatedAudiobookFallbackPlaybackMetadata(segmentCount, chapters) }
     if (segmentCount <= 0) return fallback
     val root = filePath?.takeIf { it.isNotBlank() }?.let(::File)?.takeIf { it.isDirectory }
         ?: return fallback
@@ -260,23 +260,24 @@ internal fun File.generatedAudiobookPlaybackMetadata(
     segmentCount: Int,
     chapters: List<GeneratedAudiobookChapter>,
 ): GeneratedAudiobookPlaybackMetadata {
-    val fallback = generatedAudiobookFallbackPlaybackMetadata(segmentCount, chapters)
+    val fallback by lazy { generatedAudiobookFallbackPlaybackMetadata(segmentCount, chapters) }
     if (segmentCount <= 0 || !isFile) return fallback
     return runCatching {
         parseGeneratedAudiobookSegmentSidecar(
             file = this,
             segmentCount = segmentCount,
             chapters = chapters,
-            retainExportRows = false
+            retainExportRows = false,
+            fallbackPlaybackMetadata = fallback
         ).playbackMetadata
-    }.getOrDefault(fallback)
+    }.getOrElse { fallback }
 }
 
 internal fun BookAudioEntity.generatedAudiobookSegmentMetadata(
     segmentCount: Int,
     chapters: List<GeneratedAudiobookChapter>,
 ): GeneratedAudiobookSegmentMetadata {
-    val fallback = generatedAudiobookFallbackSegmentMetadata(segmentCount, chapters)
+    val fallback by lazy { generatedAudiobookFallbackSegmentMetadata(segmentCount, chapters) }
     if (segmentCount <= 0) return fallback
     val root = filePath?.takeIf { it.isNotBlank() }?.let(::File)?.takeIf { it.isDirectory }
         ?: return fallback
@@ -289,14 +290,16 @@ internal fun File.generatedAudiobookSegmentMetadata(
     segmentCount: Int,
     chapters: List<GeneratedAudiobookChapter>,
 ): GeneratedAudiobookSegmentMetadata {
-    val fallback = generatedAudiobookFallbackSegmentMetadata(segmentCount, chapters)
+    val fallback by lazy { generatedAudiobookFallbackSegmentMetadata(segmentCount, chapters) }
+    val fallbackPlayback by lazy { generatedAudiobookFallbackPlaybackMetadata(segmentCount, chapters) }
     if (segmentCount <= 0 || !isFile) return fallback
     return runCatching {
         val parsed = parseGeneratedAudiobookSegmentSidecar(
             file = this,
             segmentCount = segmentCount,
             chapters = chapters,
-            retainExportRows = true
+            retainExportRows = true,
+            fallbackPlaybackMetadata = fallbackPlayback
         )
         GeneratedAudiobookSegmentMetadata(
             chapterIndexes = parsed.playbackMetadata.chapterIndexes,
@@ -307,7 +310,7 @@ internal fun File.generatedAudiobookSegmentMetadata(
                 rowsByIndex = parsed.rowsByIndex.orEmpty()
             )
         )
-    }.getOrDefault(fallback)
+    }.getOrElse { fallback }
 }
 
 internal fun List<GeneratedAudiobookChapter>.toGeneratedAudiobookChaptersTsv(): String {
@@ -374,11 +377,11 @@ private fun parseGeneratedAudiobookSegmentSidecar(
     segmentCount: Int,
     chapters: List<GeneratedAudiobookChapter>,
     retainExportRows: Boolean,
+    fallbackPlaybackMetadata: GeneratedAudiobookPlaybackMetadata = generatedAudiobookFallbackPlaybackMetadata(segmentCount, chapters),
 ): GeneratedAudiobookSegmentSidecarParse {
-    val fallback = generatedAudiobookFallbackPlaybackMetadata(segmentCount, chapters)
     val validChapterIndexes = chapters.mapTo(mutableSetOf()) { it.index }
-    val chapterIndexes = fallback.chapterIndexes.toMutableList()
-    val pauses = fallback.pauseAfterMillis.toMutableList()
+    val chapterIndexes = fallbackPlaybackMetadata.chapterIndexes.toMutableList()
+    val pauses = fallbackPlaybackMetadata.pauseAfterMillis.toMutableList()
     val rowsByIndex = if (retainExportRows) mutableMapOf<Int, String>() else null
     file.useLines { lines ->
         lines.drop(1).forEach { line ->
