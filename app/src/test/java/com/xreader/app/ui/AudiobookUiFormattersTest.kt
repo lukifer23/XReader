@@ -1153,6 +1153,27 @@ class AudiobookUiFormattersTest {
     }
 
     @Test
+    fun audiobooksScreenPlaybackCoalescesPositionTicks() {
+        val playback = AudiobookPlaybackUiState(
+            audioId = 10,
+            bookId = 7,
+            playing = true,
+            segmentIndex = 3,
+            segmentCount = 9,
+            segmentPositionMs = 42_999,
+            segmentDurationMs = 120_000
+        )
+
+        val screen = playback.forAudiobooksScreen()
+
+        assertEquals(40_000, screen.segmentPositionMs)
+        assertEquals(120_000, screen.segmentDurationMs)
+        assertEquals(screen, playback.copy(segmentPositionMs = 44_999).forAudiobooksScreen())
+        assertTrue(screen != playback.copy(segmentPositionMs = 45_000).forAudiobooksScreen())
+        assertSame(EMPTY_AUDIOBOOK_PLAYBACK_UI_STATE, AudiobookPlaybackUiState().forAudiobooksScreen())
+    }
+
+    @Test
     fun readerGeneratedReadAloudChromeIgnoresPositionOnlyPlaybackTicks() {
         val playback = AudiobookPlaybackUiState(
             audioId = 10,

@@ -616,7 +616,11 @@ internal data class AudiobookRowInvalidationKey(
 class AudiobooksViewModel(private val container: AppContainer) : ViewModel() {
     private val message = MutableStateFlow<String?>(null)
     private val playback = container.generatedAudiobookPlayback.state
-    val playbackState: StateFlow<AudiobookPlaybackUiState> = playback
+    val playbackState: StateFlow<AudiobookPlaybackUiState> =
+        playback
+            .map { it.forAudiobooksScreen() }
+            .distinctUntilChanged()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), EMPTY_AUDIOBOOK_PLAYBACK_UI_STATE)
     private val audiobookUiItemCache = BookAudiobookAudioUiItemCache()
     private val playbackSortKey =
         playback
@@ -1269,6 +1273,22 @@ internal fun AudiobookPlaybackUiState.canSkipNextChapter(chapters: List<Generate
 internal fun AudiobookPlaybackUiState.forAudiobooksScreenRow(audioId: Long): AudiobookPlaybackUiState =
     if (this.audioId == audioId && active) this else EMPTY_AUDIOBOOK_PLAYBACK_UI_STATE
 
+internal fun AudiobookPlaybackUiState.forAudiobooksScreen(): AudiobookPlaybackUiState {
+    if (!active) return EMPTY_AUDIOBOOK_PLAYBACK_UI_STATE
+    return copy(
+        segmentPositionMs = segmentPositionMs.coerceAtLeast(0)
+            .roundedDownToAudiobooksScreenPlaybackStep(),
+        segmentDurationMs = segmentDurationMs.coerceAtLeast(0)
+    )
+}
+
+private fun Int.roundedDownToAudiobooksScreenPlaybackStep(): Int =
+    if (this <= 0) {
+        0
+    } else {
+        (this / AUDIOBOOKS_SCREEN_PLAYBACK_POSITION_STEP_MS) * AUDIOBOOKS_SCREEN_PLAYBACK_POSITION_STEP_MS
+    }
+
 internal fun GeneratedAudiobookChapter.chapterRangeLabel(): String =
     when {
         segmentCount <= 1 -> "Segment ${firstSegmentIndex + 1}"
@@ -1277,6 +1297,8 @@ internal fun GeneratedAudiobookChapter.chapterRangeLabel(): String =
 
 internal fun generatedAudiobookChapterCountLabel(chapterCount: Int): String =
     if (chapterCount == 1) "1 chapter" else "$chapterCount chapters"
+
+private const val AUDIOBOOKS_SCREEN_PLAYBACK_POSITION_STEP_MS = 5_000
 
 private fun BookAudioEntity.audiobookFileSafeProfileName(): String =
     audiobookDisplayProfileLabel(includeScope = true)
