@@ -713,17 +713,18 @@ internal fun shouldEmitAudiobookPlaybackState(
     next: AudiobookPlaybackUiState,
 ): Boolean {
     if (current == next) return false
-    if (
-        current.copy(
-            segmentPositionMs = 0,
-            segmentDurationMs = 0
-        ) != next.copy(
-            segmentPositionMs = 0,
-            segmentDurationMs = 0
-        )
-    ) {
-        return true
-    }
+    if (current.audioId != next.audioId) return true
+    if (current.bookId != next.bookId) return true
+    if (current.bookTitle != next.bookTitle) return true
+    if (current.profileLabel != next.profileLabel) return true
+    if (current.playing != next.playing) return true
+    if (current.segmentIndex != next.segmentIndex) return true
+    if (current.segmentCount != next.segmentCount) return true
+    if (current.chapterIndex != next.chapterIndex) return true
+    if (current.chapterCount != next.chapterCount) return true
+    if (current.chapterTitle != next.chapterTitle) return true
+    if (current.preparing != next.preparing) return true
+    if (current.error != next.error) return true
     if (current.segmentDurationMs != next.segmentDurationMs) return true
     return kotlin.math.abs(next.segmentPositionMs - current.segmentPositionMs) >= PLAYBACK_POSITION_UI_UPDATE_STEP_MS
 }
