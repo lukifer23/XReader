@@ -77,8 +77,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     fun refreshReadAloudOptions(engineName: String? = settings.value.readAloudEngineName) {
         viewModelScope.launch {
-            container.readAloudEngine.refreshEngines()
-            container.readAloudEngine.refreshVoices(engineName)
+            container.readAloudEngine.refreshOptions(engineName)
         }
     }
 

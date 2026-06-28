@@ -176,6 +176,23 @@ class ReadAloudEngineTest {
     }
 
     @Test
+    fun readAloudOptionsCarriesEnginesAndVoicesTogether() {
+        val engine = ReadAloudEngineOption(name = null, label = "Device default", isDefault = true)
+        val voice = ReadAloudVoiceOption(
+            name = "local",
+            label = "English - Local",
+            localeTag = "en-US",
+            quality = 400,
+            latency = 100
+        )
+
+        val options = ReadAloudOptions(engines = listOf(engine), voices = listOf(voice))
+
+        assertEquals(listOf(engine), options.engines)
+        assertEquals(listOf(voice), options.voices)
+    }
+
+    @Test
     fun mediaSessionMetadataKeyIgnoresHeadingWhitespaceOnlyChanges() {
         assertEquals(
             readAloudMetadataKey(bookTitle = "Takedown", heading = "  Chapter   Seven  "),

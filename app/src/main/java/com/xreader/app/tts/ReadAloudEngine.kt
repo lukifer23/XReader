@@ -37,6 +37,11 @@ data class ReadAloudEngineOption(
     val isDefault: Boolean = false,
 )
 
+data class ReadAloudOptions(
+    val engines: List<ReadAloudEngineOption>,
+    val voices: List<ReadAloudVoiceOption>,
+)
+
 data class ReadAloudState(
     val activeBookId: Long? = null,
     val bookTitle: String? = null,
@@ -227,6 +232,19 @@ class ReadAloudEngine(
                 return@withContext emptyList()
             }
             updateVoiceOptions()
+        }
+
+    suspend fun refreshOptions(engineName: String? = activeEngineName): ReadAloudOptions =
+        withContext(Dispatchers.Main.immediate) {
+            if (!ensureReady(engineName)) {
+                _engines.value = emptyList()
+                _voices.value = emptyList()
+                return@withContext ReadAloudOptions(engines = emptyList(), voices = emptyList())
+            }
+            ReadAloudOptions(
+                engines = updateEngineOptions(),
+                voices = updateVoiceOptions()
+            )
         }
 
     fun setEngine(engineName: String?) {
