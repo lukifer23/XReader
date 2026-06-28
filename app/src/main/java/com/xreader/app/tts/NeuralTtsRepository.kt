@@ -45,8 +45,12 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
@@ -63,8 +67,14 @@ class NeuralTtsRepository(
     private val audioRoot = File(appContext.filesDir, "neural-tts/book-audio")
     private val activeModelDownloads = ConcurrentHashMap<String, Job>()
     private val previewRoot = File(appContext.cacheDir, "neural-tts/previews")
+    private val catalogSeedMutex = Mutex()
+    @Volatile
+    private var catalogSeededForProcess = false
 
-    fun observeModels(): Flow<List<NeuralTtsModelEntity>> = dao.observeModels()
+    fun observeModels(): Flow<List<NeuralTtsModelEntity>> = flow {
+        ensureCatalogSeeded()
+        emitAll(dao.observeModels())
+    }
 
     fun observeBookAudio(bookId: Long): Flow<List<BookAudioEntity>> = dao.observeBookAudio(bookId)
 
@@ -346,33 +356,40 @@ class NeuralTtsRepository(
         )
     }
 
-    suspend fun ensureCatalogSeeded() = withContext(Dispatchers.IO) {
-        NeuralTtsModelCatalog.models.forEach { spec ->
-            val existing = dao.model(spec.modelId)
-            if (existing == null) {
-                dao.upsertModel(
-                    NeuralTtsModelEntity(
-                        modelId = spec.modelId,
-                        displayName = spec.displayName,
-                        engine = spec.engine,
-                        status = NeuralTtsModelStatus.NOT_DOWNLOADED,
-                        totalBytes = spec.archiveBytes,
-                        updatedAt = clock.millis()
-                    )
-                )
-            } else if (
-                existing.displayName != spec.displayName ||
-                existing.engine != spec.engine ||
-                existing.totalBytes != spec.archiveBytes
-            ) {
-                dao.upsertModel(
-                    existing.copy(
-                        displayName = spec.displayName,
-                        engine = spec.engine,
-                        totalBytes = spec.archiveBytes,
-                        updatedAt = clock.millis()
-                    )
-                )
+    suspend fun ensureCatalogSeeded() {
+        if (catalogSeededForProcess) return
+        withContext(Dispatchers.IO) {
+            catalogSeedMutex.withLock {
+                if (catalogSeededForProcess) return@withLock
+                NeuralTtsModelCatalog.models.forEach { spec ->
+                    val existing = dao.model(spec.modelId)
+                    if (existing == null) {
+                        dao.upsertModel(
+                            NeuralTtsModelEntity(
+                                modelId = spec.modelId,
+                                displayName = spec.displayName,
+                                engine = spec.engine,
+                                status = NeuralTtsModelStatus.NOT_DOWNLOADED,
+                                totalBytes = spec.archiveBytes,
+                                updatedAt = clock.millis()
+                            )
+                        )
+                    } else if (
+                        existing.displayName != spec.displayName ||
+                        existing.engine != spec.engine ||
+                        existing.totalBytes != spec.archiveBytes
+                    ) {
+                        dao.upsertModel(
+                            existing.copy(
+                                displayName = spec.displayName,
+                                engine = spec.engine,
+                                totalBytes = spec.archiveBytes,
+                                updatedAt = clock.millis()
+                            )
+                        )
+                    }
+                }
+                catalogSeededForProcess = true
             }
         }
     }
