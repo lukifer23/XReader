@@ -108,7 +108,7 @@ class AudiobookGenerationForegroundService : Service() {
             container.neuralTtsRepository.observeBookAudio(bookId)
                 .map { rows -> rows.firstOrNull { it.matchesActiveProfile() } }
                 .distinctUntilChanged { previous, next ->
-                    previous.generationNotificationKey() == next.generationNotificationKey()
+                    generationNotificationKey(previous) == generationNotificationKey(next)
                 }
                 .collectLatest { audio ->
                     updateNotification(buildNotification(title = activeTitle, audio = audio, preparing = audio == null))
@@ -285,20 +285,6 @@ class AudiobookGenerationForegroundService : Service() {
             }
         }
     }
-
-    private fun BookAudioEntity?.generationNotificationKey(): GenerationNotificationKey? =
-        this?.let { audio ->
-            GenerationNotificationKey(
-                id = audio.id,
-                status = audio.status,
-                completedSegments = audio.completedSegments,
-                segmentCount = audio.segmentCount,
-                error = audio.error,
-                generationStartedAt = audio.generationStartedAt,
-                generationSessionStartCompletedSegments = audio.generationSessionStartCompletedSegments,
-                updatedMinuteBucket = audio.updatedAt / NOTIFICATION_UPDATE_BUCKET_MS
-            )
-        }
 
     private fun startForegroundIfNeeded(notification: Notification) {
         if (foregroundStarted) return
@@ -550,15 +536,11 @@ internal object AudiobookGenerationIntentExtras {
     const val SCOPE = "scope"
 }
 
-private data class GenerationNotificationKey(
+internal data class GenerationNotificationKey(
     val id: Long,
     val status: BookAudioStatus,
-    val completedSegments: Int,
-    val segmentCount: Int,
     val error: String?,
-    val generationStartedAt: Long?,
-    val generationSessionStartCompletedSegments: Int,
-    val updatedMinuteBucket: Long,
+    val progressText: String?,
 )
 
 internal enum class AudiobookGenerationStartGate {
@@ -622,13 +604,24 @@ internal fun audiobookGenerationStatusText(
         else -> "Audiobook generation"
     }
 
-internal fun audiobookGenerationProgressText(audio: BookAudioEntity?): String? {
+internal fun generationNotificationKey(audio: BookAudioEntity?): GenerationNotificationKey? =
+    audio?.let {
+        GenerationNotificationKey(
+            id = it.id,
+            status = it.status,
+            error = it.error,
+            progressText = audiobookGenerationProgressText(it, nowMillis = it.updatedAt)
+        )
+    }
+
+internal fun audiobookGenerationProgressText(
+    audio: BookAudioEntity?,
+    nowMillis: Long = System.currentTimeMillis(),
+): String? {
     val progress = audio?.audiobookGenerationProgressLabel() ?: return null
-    val eta = audio.generationEtaLabel()
+    val eta = audio.generationEtaLabel(nowMillis = nowMillis)
     return listOfNotNull(progress, eta).joinToString(" • ")
 }
-
-private const val NOTIFICATION_UPDATE_BUCKET_MS = 60_000L
 
 internal fun BookAudioEntity.audiobookGenerationProgressLabel(): String? {
     if (status != BookAudioStatus.GENERATING || segmentCount <= 0) return null

@@ -175,6 +175,40 @@ class AudiobookGenerationForegroundServiceTest {
     }
 
     @Test
+    fun generationNotificationKeyIgnoresHeartbeatWhenVisibleTextIsStable() {
+        val base = audio(
+            status = BookAudioStatus.GENERATING,
+            segmentCount = 10,
+            completedSegments = 3,
+            generationStartedAt = 1_000L,
+            generationSessionStartCompletedSegments = 3,
+            updatedAt = 11_000L
+        )
+
+        assertEquals(
+            generationNotificationKey(base),
+            generationNotificationKey(base.copy(updatedAt = 25_000L))
+        )
+    }
+
+    @Test
+    fun generationNotificationKeyTracksVisibleEtaTextChanges() {
+        val base = audio(
+            status = BookAudioStatus.GENERATING,
+            segmentCount = 100,
+            completedSegments = 10,
+            generationStartedAt = 1_000L,
+            generationSessionStartCompletedSegments = 0,
+            updatedAt = 61_000L
+        )
+
+        assertTrue(
+            generationNotificationKey(base) !=
+                generationNotificationKey(base.copy(updatedAt = 601_000L))
+        )
+    }
+
+    @Test
     fun etaUsesOnlySegmentsGeneratedInCurrentSession() {
         val audio = audio(
             status = BookAudioStatus.GENERATING,
@@ -269,6 +303,7 @@ class AudiobookGenerationForegroundServiceTest {
         generationStartedAt: Long? = null,
         generationSessionStartCompletedSegments: Int = 0,
         error: String? = null,
+        updatedAt: Long = 1L,
     ): BookAudioEntity =
         BookAudioEntity(
             bookId = 1,
@@ -281,7 +316,7 @@ class AudiobookGenerationForegroundServiceTest {
             completedSegments = completedSegments,
             generationStartedAt = generationStartedAt,
             generationSessionStartCompletedSegments = generationSessionStartCompletedSegments,
-            updatedAt = 1L,
+            updatedAt = updatedAt,
             error = error
         )
 }
