@@ -302,7 +302,7 @@ interface NeuralTtsDao {
         """
         SELECT * FROM book_audio
         WHERE status IN ('GENERATED', 'GENERATING') OR completedSegments > 0
-        ORDER BY updatedAt DESC
+        ORDER BY id ASC
         """
     )
     fun observeVisibleAudiobookScreenRows(): Flow<List<BookAudioWithBook>>
