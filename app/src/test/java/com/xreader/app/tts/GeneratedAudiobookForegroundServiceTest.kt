@@ -53,6 +53,25 @@ class GeneratedAudiobookForegroundServiceTest {
     }
 
     @Test
+    fun mediaSessionMetadataMatcherAvoidsPositionOnlyTickKeys() {
+        val base = AudiobookPlaybackUiState(
+            audioId = 7,
+            bookTitle = "Book",
+            profileLabel = "Kokoro",
+            playing = true,
+            segmentIndex = 2,
+            segmentCount = 10,
+            segmentPositionMs = 5_000,
+            segmentDurationMs = 60_000
+        )
+        val key = base.generatedAudiobookMetadataKey()
+
+        assertEquals(true, base.copy(segmentPositionMs = 10_000).matchesGeneratedAudiobookMetadataKey(key))
+        assertEquals(false, base.copy(segmentDurationMs = 61_000).matchesGeneratedAudiobookMetadataKey(key))
+        assertEquals(false, base.matchesGeneratedAudiobookMetadataKey(null))
+    }
+
+    @Test
     fun mediaSessionPlaybackStateKeyIgnoresPositionOnlyTicks() {
         val base = AudiobookPlaybackUiState(
             audioId = 7,
@@ -77,6 +96,26 @@ class GeneratedAudiobookForegroundServiceTest {
             base.generatedAudiobookPlaybackStateKey(),
             base.copy(segmentIndex = 3).generatedAudiobookPlaybackStateKey()
         )
+    }
+
+    @Test
+    fun mediaSessionPlaybackMatcherAvoidsPositionOnlyTickKeys() {
+        val base = AudiobookPlaybackUiState(
+            audioId = 7,
+            bookTitle = "Book",
+            profileLabel = "Kokoro",
+            playing = true,
+            segmentIndex = 2,
+            segmentCount = 10,
+            segmentPositionMs = 5_000,
+            segmentDurationMs = 60_000
+        )
+        val key = base.generatedAudiobookPlaybackStateKey()
+
+        assertEquals(true, base.copy(segmentPositionMs = 10_000).matchesGeneratedAudiobookPlaybackStateKey(key))
+        assertEquals(false, base.copy(playing = false).matchesGeneratedAudiobookPlaybackStateKey(key))
+        assertEquals(false, base.copy(segmentIndex = 3).matchesGeneratedAudiobookPlaybackStateKey(key))
+        assertEquals(false, base.matchesGeneratedAudiobookPlaybackStateKey(null))
     }
 
     @Test

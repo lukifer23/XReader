@@ -55,15 +55,13 @@ internal class GeneratedAudiobookMediaSessionController(
             stop()
             return
         }
-        val metadataKey = state.generatedAudiobookMetadataKey()
-        if (metadataKey != lastMetadataKey) {
+        if (!state.matchesGeneratedAudiobookMetadataKey(lastMetadataKey)) {
             session.setMetadata(generatedAudiobookMetadata(state))
-            lastMetadataKey = metadataKey
+            lastMetadataKey = state.generatedAudiobookMetadataKey()
         }
-        val playbackStateKey = state.generatedAudiobookPlaybackStateKey()
-        if (playbackStateKey != lastPlaybackStateKey) {
+        if (!state.matchesGeneratedAudiobookPlaybackStateKey(lastPlaybackStateKey)) {
             session.setPlaybackState(generatedAudiobookPlaybackState(state))
-            lastPlaybackStateKey = playbackStateKey
+            lastPlaybackStateKey = state.generatedAudiobookPlaybackStateKey()
         }
         if (!active) {
             session.isActive = true
@@ -103,6 +101,14 @@ internal fun AudiobookPlaybackUiState.generatedAudiobookMetadataKey(): Generated
         segmentDurationMs = segmentDurationMs.coerceAtLeast(0),
     )
 
+internal fun AudiobookPlaybackUiState.matchesGeneratedAudiobookMetadataKey(
+    key: GeneratedAudiobookMetadataKey?,
+): Boolean =
+    key != null &&
+        key.bookTitle == bookTitle &&
+        key.profileLabel == profileLabel &&
+        key.segmentDurationMs == segmentDurationMs.coerceAtLeast(0)
+
 internal data class GeneratedAudiobookPlaybackStateKey(
     val foregroundActive: Boolean,
     val playing: Boolean,
@@ -119,6 +125,16 @@ internal fun AudiobookPlaybackUiState.generatedAudiobookPlaybackStateKey(): Gene
         segmentCount = segmentCount,
         segmentDurationMs = segmentDurationMs.coerceAtLeast(0),
     )
+
+internal fun AudiobookPlaybackUiState.matchesGeneratedAudiobookPlaybackStateKey(
+    key: GeneratedAudiobookPlaybackStateKey?,
+): Boolean =
+    key != null &&
+        key.foregroundActive == foregroundActive &&
+        key.playing == playing &&
+        key.segmentIndex == segmentIndex &&
+        key.segmentCount == segmentCount &&
+        key.segmentDurationMs == segmentDurationMs.coerceAtLeast(0)
 
 private fun generatedAudiobookPlaybackState(state: AudiobookPlaybackUiState): PlaybackState {
     val total = state.segmentCount
