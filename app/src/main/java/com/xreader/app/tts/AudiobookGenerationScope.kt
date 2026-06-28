@@ -178,17 +178,7 @@ internal fun BookAudioEntity.generatedAudiobookChapters(playableSegmentCount: In
     return runCatching {
         file.useLines { lines ->
             lines.drop(1).mapNotNull { line ->
-                val columns = line.split('\t')
-                val index = columns.getOrNull(0)?.toIntOrNull() ?: return@mapNotNull null
-                val firstSegment = columns.getOrNull(1)?.toIntOrNull() ?: return@mapNotNull null
-                val count = columns.getOrNull(2)?.toIntOrNull() ?: return@mapNotNull null
-                val title = columns.getOrNull(3)?.tsvUnescaped()?.takeIf { it.isNotBlank() } ?: "Chapter ${index + 1}"
-                GeneratedAudiobookChapter(
-                    index = index,
-                    title = title,
-                    firstSegmentIndex = firstSegment,
-                    segmentCount = count
-                )
+                line.generatedAudiobookChapterRow()
             }
                 .filter { it.segmentCount > 0 && it.firstSegmentIndex >= 0 }
                 .toList()
@@ -318,16 +308,38 @@ internal fun List<GeneratedAudiobookChapter>.toGeneratedAudiobookChaptersTsv(): 
     return buildString {
         appendLine("index\tfirstSegment\tsegmentCount\ttitle")
         chapters.forEach { chapter ->
-            appendLine(
-                listOf(
-                    chapter.index.toString(),
-                    chapter.firstSegmentIndex.toString(),
-                    chapter.segmentCount.toString(),
-                    chapter.title.tsvEscaped()
-                ).joinToString("\t")
-            )
+            appendGeneratedAudiobookChapterRow(chapter)
         }
     }
+}
+
+private fun String.generatedAudiobookChapterRow(): GeneratedAudiobookChapter? {
+    val firstTab = indexOf('\t')
+    if (firstTab <= 0) return null
+    val secondTab = indexOf('\t', firstTab + 1)
+    if (secondTab <= firstTab) return null
+    val thirdTab = indexOf('\t', secondTab + 1)
+    if (thirdTab <= secondTab) return null
+    val index = substring(0, firstTab).toIntOrNull() ?: return null
+    val firstSegment = substring(firstTab + 1, secondTab).toIntOrNull() ?: return null
+    val count = substring(secondTab + 1, thirdTab).toIntOrNull() ?: return null
+    val title = substring(thirdTab + 1).tsvUnescaped().takeIf { it.isNotBlank() } ?: "Chapter ${index + 1}"
+    return GeneratedAudiobookChapter(
+        index = index,
+        title = title,
+        firstSegmentIndex = firstSegment,
+        segmentCount = count
+    )
+}
+
+private fun StringBuilder.appendGeneratedAudiobookChapterRow(chapter: GeneratedAudiobookChapter) {
+    append(chapter.index)
+    append('\t')
+    append(chapter.firstSegmentIndex)
+    append('\t')
+    append(chapter.segmentCount)
+    append('\t')
+    appendLine(chapter.title.tsvEscaped())
 }
 
 internal fun generatedAudiobookFallbackSegmentsTsv(
