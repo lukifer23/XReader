@@ -1908,9 +1908,12 @@ private fun TtsRuntime.shouldRotateAfter(generatedSegments: Int): Boolean {
 }
 
 internal fun shouldWriteGenerationCheckpoint(completedSegments: Int, totalSegments: Int): Boolean =
-    completedSegments <= 1 ||
-        completedSegments >= totalSegments ||
-        completedSegments % generationManifestCheckpointSegmentStep(totalSegments) == 0
+    completedSegments in 1..totalSegments.coerceAtLeast(1) &&
+        (
+            completedSegments <= 1 ||
+                completedSegments >= totalSegments ||
+                completedSegments % generationManifestCheckpointSegmentStep(totalSegments) == 0
+            )
 
 internal fun generationManifestCheckpointSegmentStep(totalSegments: Int): Int =
     if (totalSegments <= SMALL_GENERATION_PROGRESS_SEGMENTS) {

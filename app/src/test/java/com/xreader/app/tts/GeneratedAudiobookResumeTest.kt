@@ -1449,6 +1449,8 @@ class GeneratedAudiobookResumeTest {
     @Test
     fun generationManifestCheckpointsStayFrequentForShortJobs() {
         assertEquals(1, generationManifestCheckpointSegmentStep(12))
+        assertFalse(shouldWriteGenerationCheckpoint(completedSegments = -1, totalSegments = 12))
+        assertFalse(shouldWriteGenerationCheckpoint(completedSegments = 0, totalSegments = 12))
         assertTrue(shouldWriteGenerationCheckpoint(completedSegments = 1, totalSegments = 12))
         assertTrue(shouldWriteGenerationCheckpoint(completedSegments = 2, totalSegments = 12))
         assertTrue(shouldWriteGenerationCheckpoint(completedSegments = 4, totalSegments = 12))
@@ -1465,6 +1467,7 @@ class GeneratedAudiobookResumeTest {
         assertTrue(shouldWriteGenerationCheckpoint(completedSegments = 10, totalSegments = 1_200))
         assertFalse(shouldWriteGenerationCheckpoint(completedSegments = 1_196, totalSegments = 1_200))
         assertTrue(shouldWriteGenerationCheckpoint(completedSegments = 1_200, totalSegments = 1_200))
+        assertFalse(shouldWriteGenerationCheckpoint(completedSegments = 1_201, totalSegments = 1_200))
     }
 
     @Test
