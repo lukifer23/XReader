@@ -951,11 +951,11 @@ class NeuralTtsRepository(
                     activeSampleRate = sampleRate
                     val file = File(target, generatedAudiobookSegmentFileName(index))
                     val saveStartedAt = clock.millis()
-                    val saved = traced("XReader TTS save segment") {
+                    val savedBytes = traced("XReader TTS save segment") {
                         generated.saveGeneratedAudiobookSegment(file)
                     }
                     val segmentSaveMillis = (clock.millis() - saveStartedAt).coerceAtLeast(0L)
-                    require(saved) { "Could not save generated segment ${index + 1}." }
+                    require(savedBytes > 0L) { "Could not save generated segment ${index + 1}." }
                     ensureAudiobookGenerationStillActive(
                         audioId = activeAudio.id,
                         segmentNumber = index + 1
@@ -995,7 +995,7 @@ class NeuralTtsRepository(
                             "Use a faster QNN/OpenCL/NNAPI build before generating this book."
                     }
                     completedSegments = index + 1
-                    generatedSegmentFileSizeBytes += file.length().coerceAtLeast(0L)
+                    generatedSegmentFileSizeBytes += savedBytes
                     segmentsOnRuntime += 1
                     heartbeatSnapshot.set(
                         GenerationHeartbeatSnapshot(
@@ -2191,30 +2191,31 @@ private fun File.replaceWithTempFile(temp: File) {
     }
 }
 
-internal fun GeneratedAudio.saveGeneratedAudiobookSegment(file: File): Boolean {
+internal fun GeneratedAudio.saveGeneratedAudiobookSegment(file: File): Long {
     file.parentFile?.mkdirs()
     val index = file.name
         .removePrefix("segment-")
         .removeSuffix(".wav")
         .toIntOrNull()
         ?.minus(1)
-        ?: return false
-    val temp = File(file.parentFile ?: return false, generatedAudiobookTempSegmentFileName(index))
+        ?: return 0L
+    val temp = File(file.parentFile ?: return 0L, generatedAudiobookTempSegmentFileName(index))
     temp.delete()
     if (!save(temp.absolutePath)) {
         temp.delete()
-        return false
+        return 0L
     }
-    if (temp.length() <= WAV_HEADER_BYTES) {
+    val savedBytes = temp.length()
+    if (savedBytes <= WAV_HEADER_BYTES) {
         temp.delete()
-        return false
+        return 0L
     }
     return runCatching {
         file.replaceWithTempFile(temp)
-        true
+        savedBytes
     }.getOrElse {
         temp.delete()
-        false
+        0L
     }
 }
 
