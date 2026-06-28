@@ -2137,14 +2137,7 @@ internal fun String.tsvEscaped(): String =
         .replace("\n", "\\n")
 
 internal fun reusableGeneratedAudiobookSegments(directory: File, expectedSegments: Int): Int {
-    if (expectedSegments <= 0 || !directory.isDirectory) return 0
-    var reusable = 0
-    repeat(expectedSegments) { index ->
-        val file = File(directory, generatedAudiobookSegmentFileName(index))
-        if (!file.isFile || file.length() <= WAV_HEADER_BYTES) return reusable
-        reusable = index + 1
-    }
-    return reusable
+    return directory.countContiguousGeneratedAudiobookSegments(expectedSegments)
 }
 
 internal fun generatedAudiobookSegmentFileName(index: Int): String =
