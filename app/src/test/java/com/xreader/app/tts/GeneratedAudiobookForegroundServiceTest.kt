@@ -83,6 +83,34 @@ class GeneratedAudiobookForegroundServiceTest {
     }
 
     @Test
+    fun mediaSessionMetadataKeyIgnoresProfileWhitespaceOnlyChanges() {
+        val base = AudiobookPlaybackUiState(
+            audioId = 7,
+            bookTitle = "Book",
+            profileLabel = "  Kokoro   Natural  ",
+            playing = true,
+            segmentIndex = 2,
+            segmentCount = 10,
+            segmentPositionMs = 5_000,
+            segmentDurationMs = 60_000
+        )
+
+        assertEquals(
+            base.generatedAudiobookMetadataKey(),
+            base.copy(profileLabel = "Kokoro Natural").generatedAudiobookMetadataKey()
+        )
+        assertEquals(
+            true,
+            base.copy(profileLabel = "Kokoro Natural").matchesGeneratedAudiobookMetadataKey(base.generatedAudiobookMetadataKey())
+        )
+        assertNotEquals(
+            base.generatedAudiobookMetadataKey(),
+            base.copy(profileLabel = "Kokoro Expressive").generatedAudiobookMetadataKey()
+        )
+        assertNull(normalizedTtsMediaSubtitle("   "))
+    }
+
+    @Test
     fun mediaSessionMetadataMatcherAvoidsPositionOnlyTickKeys() {
         val base = AudiobookPlaybackUiState(
             audioId = 7,

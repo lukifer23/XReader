@@ -97,7 +97,7 @@ internal data class GeneratedAudiobookMetadataKey(
 internal fun AudiobookPlaybackUiState.generatedAudiobookMetadataKey(): GeneratedAudiobookMetadataKey =
     GeneratedAudiobookMetadataKey(
         bookTitle = bookTitle,
-        profileLabel = profileLabel,
+        profileLabel = normalizedTtsMediaSubtitle(profileLabel),
         segmentDurationMs = segmentDurationMs.coerceAtLeast(0),
     )
 
@@ -106,7 +106,7 @@ internal fun AudiobookPlaybackUiState.matchesGeneratedAudiobookMetadataKey(
 ): Boolean =
     key != null &&
         key.bookTitle == bookTitle &&
-        key.profileLabel == profileLabel &&
+        key.profileLabel == normalizedTtsMediaSubtitle(profileLabel) &&
         key.segmentDurationMs == segmentDurationMs.coerceAtLeast(0)
 
 internal data class GeneratedAudiobookPlaybackStateKey(
@@ -168,10 +168,7 @@ private fun generatedAudiobookMetadata(state: AudiobookPlaybackUiState): MediaMe
             if (state.segmentDurationMs > 0) {
                 putLong(MediaMetadata.METADATA_KEY_DURATION, state.segmentDurationMs.toLong())
             }
-            state.profileLabel
-                ?.replace(Regex("\\s+"), " ")
-                ?.trim()
-                ?.takeIf { it.isNotBlank() }
+            normalizedTtsMediaSubtitle(state.profileLabel)
                 ?.let { putString(MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE, it) }
         }
         .build()

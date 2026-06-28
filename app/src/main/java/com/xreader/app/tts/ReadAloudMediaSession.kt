@@ -95,10 +95,7 @@ internal data class ReadAloudMetadataKey(
 internal fun readAloudMetadataKey(bookTitle: String, heading: String?): ReadAloudMetadataKey =
     ReadAloudMetadataKey(
         bookTitle = bookTitle,
-        heading = heading
-            ?.replace(Regex("\\s+"), " ")
-            ?.trim()
-            ?.takeIf { it.isNotBlank() },
+        heading = normalizedTtsMediaSubtitle(heading),
     )
 
 internal fun readAloudMediaActions(
@@ -146,10 +143,7 @@ private fun readAloudMediaMetadata(bookTitle: String, heading: String?): MediaMe
         .putString(MediaMetadata.METADATA_KEY_TITLE, bookTitle)
         .putString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE, bookTitle)
         .apply {
-            heading
-                ?.replace(Regex("\\s+"), " ")
-                ?.trim()
-                ?.takeIf { it.isNotBlank() }
+            normalizedTtsMediaSubtitle(heading)
                 ?.let {
                     putString(MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE, it)
                 }
