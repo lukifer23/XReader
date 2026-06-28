@@ -1270,7 +1270,7 @@ class AudiobookUiFormattersTest {
     }
 
     @Test
-    fun audiobookUiInvalidationKeyIgnoresGeneratingHeartbeatOnlyTimestamps() {
+    fun audiobookUiInvalidationKeyIgnoresGeneratingHeartbeatTimingAndTimestamps() {
         val base = audio(4).copy(
             status = BookAudioStatus.GENERATING,
             segmentCount = 10,
@@ -1284,13 +1284,16 @@ class AudiobookUiFormattersTest {
             base.audiobookUiInvalidationKey(),
             base.copy(updatedAt = 2_000L).audiobookUiInvalidationKey()
         )
-        assertTrue(
-            base.audiobookUiInvalidationKey() !=
-                base.copy(completedSegments = 4).audiobookUiInvalidationKey()
+        assertEquals(
+            base.audiobookUiInvalidationKey(),
+            base.copy(
+                generationAudioMillis = 36_000L,
+                generationComputeMillis = 14_000L
+            ).audiobookUiInvalidationKey()
         )
         assertTrue(
             base.audiobookUiInvalidationKey() !=
-                base.copy(generationComputeMillis = 14_000L).audiobookUiInvalidationKey()
+                base.copy(completedSegments = 4).audiobookUiInvalidationKey()
         )
     }
 
@@ -1312,7 +1315,14 @@ class AudiobookUiFormattersTest {
         )
         val heartbeat = listOf(
             audioRow(ready, title = "Ready"),
-            audioRow(generating.copy(updatedAt = 9_000L), title = "Generating")
+            audioRow(
+                generating.copy(
+                    generationAudioMillis = 36_000L,
+                    generationComputeMillis = 14_000L,
+                    updatedAt = 9_000L
+                ),
+                title = "Generating"
+            )
         )
         val progress = listOf(
             audioRow(ready, title = "Ready"),

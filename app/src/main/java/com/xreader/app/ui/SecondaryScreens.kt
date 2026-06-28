@@ -1053,8 +1053,7 @@ internal fun BookAudioEntity.audiobookStatusDetail(
         BookAudioStatus.GENERATED -> "Ready"
         BookAudioStatus.GENERATING -> listOfNotNull(
             "Generating",
-            generationEtaLabel(),
-            audiobookPerformanceLabel()
+            generationEtaLabel()
         ).joinToString(" • ")
         BookAudioStatus.CANCELED -> "Stopped"
         BookAudioStatus.FAILED -> error ?: "Failed"
