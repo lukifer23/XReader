@@ -20,6 +20,18 @@ class ReadAloudControlsTest {
     }
 
     @Test
+    fun statusTextDropsBlankHeadingWithoutExtraSeparators() {
+        val state = ReadAloudState(
+            playing = true,
+            currentChunk = 0,
+            totalChunks = 3,
+            currentHeading = "   "
+        )
+
+        assertEquals("Read aloud - 1/3", readAloudStatusText(state))
+    }
+
+    @Test
     fun statusTextIncludesActiveSleepTimerCompactly() {
         val state = ReadAloudState(
             playing = true,

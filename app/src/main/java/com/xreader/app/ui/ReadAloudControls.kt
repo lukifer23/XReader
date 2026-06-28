@@ -1,6 +1,7 @@
 package com.xreader.app.ui
 
 import com.xreader.app.tts.ReadAloudState
+import com.xreader.app.tts.normalizedTtsMediaSubtitle
 import kotlin.math.ceil
 
 internal val ReadAloudState.active: Boolean
@@ -9,12 +10,9 @@ internal val ReadAloudState.active: Boolean
 internal fun readAloudStatusText(readAloud: ReadAloudState): String {
     val progress = readAloudProgressText(readAloud)
     val sleepTimer = readAloudSleepTimerText(readAloud)
-    val heading = readAloud.currentHeading
-        ?.replace(Regex("\\s+"), " ")
-        ?.trim()
-        ?.takeIf { it.isNotBlank() }
+    val heading = normalizedTtsMediaSubtitle(readAloud.currentHeading)
     val status = if (readAloud.paused) "Paused" else "Read aloud"
-    return listOfNotNull(status, progress, sleepTimer, heading).joinToString(" - ")
+    return joinedReadAloudStatus(status, progress, sleepTimer, heading)
 }
 
 internal fun readAloudProgressText(readAloud: ReadAloudState): String? {
@@ -47,4 +45,22 @@ private fun formatSleepTimerMinutes(minutes: Long): String {
     val hours = minutes / 60L
     val remaining = minutes % 60L
     return if (remaining == 0L) "${hours}h" else "${hours}h ${remaining}m"
+}
+
+private fun joinedReadAloudStatus(
+    status: String,
+    progress: String?,
+    sleepTimer: String?,
+    heading: String?,
+): String = buildString {
+    append(status)
+    appendReadAloudStatusPart(progress)
+    appendReadAloudStatusPart(sleepTimer)
+    appendReadAloudStatusPart(heading)
+}
+
+private fun StringBuilder.appendReadAloudStatusPart(part: String?) {
+    if (part == null) return
+    append(" - ")
+    append(part)
 }
