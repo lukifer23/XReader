@@ -415,13 +415,12 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         val audiobookScans: Map<Long, AudiobookScanUiState>,
     )
 
-    private val bookItems = combine(
+    private val allBookItems = combine(
         allBooks,
-        query,
         states,
         bookCollectionNames,
         pendingRemovalIds
-    ) { currentAllBooks, currentQuery, currentStates, currentBookCollections, removingIds ->
+    ) { currentAllBooks, currentStates, currentBookCollections, removingIds ->
         withContext(Dispatchers.Default) {
             val statesByBook = currentStates.associateBy { it.bookId }
             val collectionsByBook = currentBookCollections
@@ -432,10 +431,19 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
                         .map { CollectionUiItem(id = it.collectionId, name = it.name) }
                 }
             val visibleAllBooks = currentAllBooks.withoutPendingRemovalIds(removingIds)
-            val allItems = visibleAllBooks.map { BookListItem(it, statesByBook[it.id], collectionsByBook[it.id].orEmpty()) }
+            visibleAllBooks.map { BookListItem(it, statesByBook[it.id], collectionsByBook[it.id].orEmpty()) }
+        }
+    }
+
+    private val bookItems = combine(
+        allBookItems,
+        query
+    ) { allItems, currentQuery ->
+        withContext(Dispatchers.Default) {
+            val projection = allItems.toLibraryBooksProjection(currentQuery)
             LibraryBooksState(
-                queriedItems = allItems.filteredForLibraryQuery(currentQuery),
-                allItems = allItems
+                queriedItems = projection.queriedItems,
+                allItems = projection.allItems
             )
         }
     }
@@ -1292,6 +1300,17 @@ private data class AudiobookHardwareReadinessKey(
 
 internal fun List<BookEntity>.withoutPendingRemovalIds(pendingIds: Set<Long>): List<BookEntity> =
     if (pendingIds.isEmpty()) this else filterNot { it.id in pendingIds }
+
+internal data class LibraryBooksProjection(
+    val queriedItems: List<BookListItem>,
+    val allItems: List<BookListItem>,
+)
+
+internal fun List<BookListItem>.toLibraryBooksProjection(query: String): LibraryBooksProjection =
+    LibraryBooksProjection(
+        queriedItems = filteredForLibraryQuery(query),
+        allItems = this
+    )
 
 private fun List<OpdsLink>.preferredCatalogDownload(): OpdsLink? =
     minWithOrNull(

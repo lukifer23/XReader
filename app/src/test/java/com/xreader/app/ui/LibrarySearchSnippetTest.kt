@@ -32,6 +32,19 @@ class LibrarySearchSnippetTest {
     }
 
     @Test
+    fun libraryBooksProjectionKeepsAllItemsWhileFilteringQueryItems() {
+        val books = listOf(
+            item(title = "Red Rising", author = "Pierce Brown"),
+            item(title = "Dune", author = "Frank Herbert")
+        )
+
+        val projection = books.toLibraryBooksProjection("pierce")
+
+        assertEquals(listOf("Red Rising"), projection.queriedItems.map { it.book.title })
+        assertEquals(listOf("Red Rising", "Dune"), projection.allItems.map { it.book.title })
+    }
+
+    @Test
     fun libraryQueryMatchesTermsAcrossDifferentFields() {
         val books = listOf(
             item(title = "Golden Son", author = "Pierce Brown", series = "Red Rising", year = 2015),
