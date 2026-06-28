@@ -720,6 +720,26 @@ class AudiobookUiFormattersTest {
     }
 
     @Test
+    fun audiobookUiCacheReusesGeneratingFallbackChaptersAcrossHeartbeats() {
+        val cache = BookAudiobookAudioUiItemCache()
+        val generating = audio(1).copy(
+            status = BookAudioStatus.GENERATING,
+            segmentCount = 10,
+            completedSegments = 3,
+            updatedAt = 1L
+        )
+
+        val first = cache.toUiItems(listOf(generating)).single()
+        val heartbeat = cache.toUiItems(listOf(generating.copy(updatedAt = 10_000L))).single()
+        val progressed = cache.toUiItems(listOf(generating.copy(completedSegments = 4, updatedAt = 20_000L))).single()
+
+        assertSame(first.chapters, heartbeat.chapters)
+        assertEquals(3, heartbeat.playableSegmentFiles)
+        assertEquals(4, progressed.playableSegmentFiles)
+        assertEquals(4, progressed.chapters.single().segmentCount)
+    }
+
+    @Test
     fun audiobookDisplayProfileLabelCanIncludeOrOmitScope() {
         val sample = audio(1).copy(
             modelDisplayName = "Kokoro v1.0",

@@ -191,13 +191,21 @@ internal class BookAudiobookAudioUiItemCache {
         val key = audio.audiobookMetadataInvalidationKey()
         items[audio.id]?.takeIf { it.key == key }?.let { cached ->
             val liveGeneratingPlayableCount = audio.playableSegmentCount()
+            val liveGeneratingChapters = if (audio.status == BookAudioStatus.GENERATING) {
+                cached.generatingChapters.takeIf {
+                    cached.generatingPlayableSegmentFiles == liveGeneratingPlayableCount
+                } ?: audio.fallbackGeneratedAudiobookChapters(liveGeneratingPlayableCount).also { chapters ->
+                    items[audio.id] = cached.copy(
+                        generatingPlayableSegmentFiles = liveGeneratingPlayableCount,
+                        generatingChapters = chapters
+                    )
+                }
+            } else {
+                cached.chapters
+            }
             return BookAudiobookAudioUiItem(
                 audio = audio,
-                chapters = if (audio.status == BookAudioStatus.GENERATING) {
-                    audio.fallbackGeneratedAudiobookChapters(liveGeneratingPlayableCount)
-                } else {
-                    cached.chapters
-                },
+                chapters = liveGeneratingChapters,
                 playableSegmentFiles = if (audio.status == BookAudioStatus.GENERATING) {
                     liveGeneratingPlayableCount
                 } else {
@@ -209,7 +217,9 @@ internal class BookAudiobookAudioUiItemCache {
         items[audio.id] = CachedBookAudiobookAudioMetadata(
             key = key,
             chapters = item.chapters,
-            playableSegmentFiles = item.playableSegmentFiles
+            playableSegmentFiles = item.playableSegmentFiles,
+            generatingPlayableSegmentFiles = item.playableSegmentFiles.takeIf { audio.status == BookAudioStatus.GENERATING },
+            generatingChapters = item.chapters.takeIf { audio.status == BookAudioStatus.GENERATING }.orEmpty()
         )
         return item
     }
@@ -229,6 +239,8 @@ private data class CachedBookAudiobookAudioMetadata(
     val key: AudiobookMetadataInvalidationKey,
     val chapters: List<GeneratedAudiobookChapter>,
     val playableSegmentFiles: Int,
+    val generatingPlayableSegmentFiles: Int? = null,
+    val generatingChapters: List<GeneratedAudiobookChapter> = emptyList(),
 )
 
 private fun BookAudioEntity.audiobookMetadataInvalidationKey(): AudiobookMetadataInvalidationKey =
