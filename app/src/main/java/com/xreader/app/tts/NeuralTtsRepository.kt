@@ -1468,7 +1468,7 @@ class NeuralTtsRepository(
             )
             val startedAt = clock.millis()
             runCatching {
-                OfflineTts(config = ttsConfig(spec, modelDir, tone, provider, hostThreadCount))
+                OfflineTts(config = ttsConfig(spec, modelDir, tone, provider, hostThreadCount, workload))
             }.onSuccess { engine ->
                 val initializationMillis = (clock.millis() - startedAt).coerceAtLeast(0L)
                 TtsAccelerationRuntime.recordProviderInitialized(provider)
@@ -1547,6 +1547,7 @@ class NeuralTtsRepository(
         tone: NeuralTtsTone,
         provider: String,
         hostThreadCount: Int,
+        workload: NeuralTtsRuntimeWorkload,
     ): OfflineTtsConfig {
         val selectedModelFile = neuralTtsModelFileForProvider(
             spec = spec,
@@ -1568,7 +1569,7 @@ class NeuralTtsRepository(
             provider = provider,
             isKitten = false
         ).apply {
-            maxNumSentences = KOKORO_MAX_NUM_SENTENCES
+            maxNumSentences = kokoroMaxNumSentences(workload)
             silenceScale = tone.silenceScale
         }
     }
@@ -1714,6 +1715,12 @@ internal enum class NeuralTtsRuntimeWorkload {
     PREVIEW,
     AUDIOBOOK_GENERATION,
 }
+
+internal fun kokoroMaxNumSentences(workload: NeuralTtsRuntimeWorkload): Int =
+    when (workload) {
+        NeuralTtsRuntimeWorkload.PREVIEW -> KOKORO_PREVIEW_MAX_NUM_SENTENCES
+        NeuralTtsRuntimeWorkload.AUDIOBOOK_GENERATION -> KOKORO_AUDIOBOOK_GENERATION_MAX_NUM_SENTENCES
+    }
 
 internal fun neuralTtsHostThreadCount(
     provider: String,
@@ -2074,7 +2081,8 @@ private inline fun <T> traced(name: String, block: () -> T): T {
 }
 
 private const val WEBGPU_SEGMENTS_PER_RUNTIME = 128
-internal const val KOKORO_MAX_NUM_SENTENCES = 1
+internal const val KOKORO_PREVIEW_MAX_NUM_SENTENCES = 1
+internal const val KOKORO_AUDIOBOOK_GENERATION_MAX_NUM_SENTENCES = 2
 private const val GENERATION_MANIFEST_CHECKPOINT_SEGMENTS = 4
 private const val SMALL_GENERATION_PROGRESS_SEGMENTS = 24
 private const val INITIAL_GENERATION_PROGRESS_SEGMENTS = 8

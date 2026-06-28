@@ -519,7 +519,7 @@ private fun List<GeneratedAudiobookUiItem>.sortedForAudiobooksScreen(
 ): List<GeneratedAudiobookUiItem> =
     sortedWith(
         compareBy<GeneratedAudiobookUiItem> { it.audiobookScreenPriority(playback) }
-            .thenByDescending { it.audio.updatedAt }
+            .thenByDescending { it.audio.audiobookScreenSortMillis() }
             .thenBy { it.book.sortTitle.lowercase(Locale.US) }
             .thenBy { it.audio.id }
     )
@@ -564,6 +564,14 @@ private fun GeneratedAudiobookUiItem.audiobookScreenPriority(playback: Audiobook
         else -> 5
     }
 
+private fun BookAudioEntity.audiobookScreenSortMillis(): Long =
+    when (status) {
+        BookAudioStatus.GENERATING -> generationStartedAt ?: updatedAt
+        BookAudioStatus.GENERATED -> generatedAt ?: updatedAt
+        BookAudioStatus.CANCELED,
+        BookAudioStatus.FAILED -> updatedAt
+    }
+
 internal fun List<BookAudioWithBook>.toGeneratedAudiobookUiItems(
     audioItems: List<BookAudiobookAudioUiItem>,
 ): List<GeneratedAudiobookUiItem> {
@@ -591,6 +599,21 @@ private fun BookAudioWithBook.toGeneratedAudiobookUiItem(
     )
 }
 
+internal fun List<BookAudioWithBook>.audiobookRowsInvalidationKey(): List<AudiobookRowInvalidationKey> =
+    map { row ->
+        AudiobookRowInvalidationKey(
+            audioId = row.audio.id,
+            book = row.book,
+            audio = row.audio.audiobookUiInvalidationKey()
+        )
+    }.sortedBy { it.audioId }
+
+internal data class AudiobookRowInvalidationKey(
+    val audioId: Long,
+    val book: BookEntity,
+    val audio: AudiobookUiInvalidationKey,
+)
+
 class AudiobooksViewModel(private val container: AppContainer) : ViewModel() {
     private val message = MutableStateFlow<String?>(null)
     private val playback = container.generatedAudiobookPlayback.state
@@ -602,6 +625,9 @@ class AudiobooksViewModel(private val container: AppContainer) : ViewModel() {
 
     private val audiobookRows: StateFlow<List<GeneratedAudiobookUiItem>> =
         container.neuralTtsRepository.observeVisibleAudiobookScreenRows()
+            .distinctUntilChanged { previous, next ->
+                previous.audiobookRowsInvalidationKey() == next.audiobookRowsInvalidationKey()
+            }
             .map { rows ->
                 withContext(Dispatchers.IO) {
                     val audioItems = audiobookUiItemCache.toUiItems(rows.map { it.audio })

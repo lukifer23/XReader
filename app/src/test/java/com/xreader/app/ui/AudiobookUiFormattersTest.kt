@@ -605,6 +605,30 @@ class AudiobookUiFormattersTest {
     }
 
     @Test
+    fun audiobooksScreenKeepsGeneratingRowsStableAcrossHeartbeatUpdates() {
+        val firstStarted = item(
+            audio(1).copy(
+                status = BookAudioStatus.GENERATING,
+                generationStartedAt = 1_000L,
+                updatedAt = 10_000L
+            )
+        )
+        val secondStarted = item(
+            audio(2).copy(
+                status = BookAudioStatus.GENERATING,
+                generationStartedAt = 2_000L,
+                updatedAt = 3_000L
+            )
+        )
+        val heartbeat = firstStarted.copy(audio = firstStarted.audio.copy(updatedAt = 50_000L))
+
+        val sorted = listOf(heartbeat, secondStarted)
+            .sortedForAudiobooksScreen(AudiobookPlaybackUiState())
+
+        assertEquals(listOf(2L, 1L), sorted.map { it.audio.id })
+    }
+
+    @Test
     fun audiobooksScreenSearchMatchesBookAuthorVoiceScopeAndStatus() {
         val ready = item(
             playableAudio(1).copy(
@@ -964,6 +988,54 @@ class AudiobookUiFormattersTest {
     }
 
     @Test
+    fun audiobookUiItemCacheKeepsGeneratingProgressLiveWithoutReparsingSidecars() {
+        val dir = kotlin.io.path.createTempDirectory("xreader-audio-ui-cache-progress").toFile()
+        try {
+            File(dir, "chapters.tsv").writeText(
+                """
+                index	firstSegment	segmentCount	title
+                0	0	5	Original
+                """.trimIndent()
+            )
+            val cache = BookAudiobookAudioUiItemCache()
+            val audio = playableAudio(1).copy(
+                status = BookAudioStatus.GENERATING,
+                filePath = dir.absolutePath,
+                scope = AudiobookGenerationScope.FULL_BOOK.key,
+                scopeLabel = AudiobookGenerationScope.FULL_BOOK.label,
+                segmentCount = 5,
+                completedSegments = 1,
+                updatedAt = 1_000L
+            )
+
+            assertEquals(1, cache.toUiItems(listOf(audio)).single().playableSegmentFiles)
+
+            File(dir, "chapters.tsv").writeText(
+                """
+                index	firstSegment	segmentCount	title
+                0	0	5	Changed
+                """.trimIndent()
+            )
+            val progress = audio.copy(
+                completedSegments = 3,
+                generationAudioMillis = 30_000L,
+                generationComputeMillis = 12_000L,
+                updatedAt = 2_000L
+            )
+            val item = cache.toUiItems(listOf(progress)).single()
+
+            assertEquals(3, item.playableSegmentFiles)
+            assertEquals(listOf("Full book"), item.chapters.map { it.title })
+            assertEquals(listOf(3), item.chapters.map { it.segmentCount })
+            assertEquals(3, item.audio.completedSegments)
+            assertEquals(30_000L, item.audio.generationAudioMillis)
+            assertEquals(12_000L, item.audio.generationComputeMillis)
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
     fun audiobookUiItemCachePrunesRowsOutsideActiveSet() {
         val dir = kotlin.io.path.createTempDirectory("xreader-audio-ui-cache-prune").toFile()
         try {
@@ -1168,12 +1240,66 @@ class AudiobookUiFormattersTest {
 
         assertTrue(
             base.audiobookUiInvalidationKey() !=
-            base.copy(updatedAt = 2_000L).audiobookUiInvalidationKey()
+                base.copy(updatedAt = 2_000L).audiobookUiInvalidationKey()
         )
         assertTrue(
             base.audiobookUiInvalidationKey() !=
                 base.copy(generatedAt = 2_000L).audiobookUiInvalidationKey()
         )
+    }
+
+    @Test
+    fun audiobookUiInvalidationKeyIgnoresGeneratingHeartbeatOnlyTimestamps() {
+        val base = audio(4).copy(
+            status = BookAudioStatus.GENERATING,
+            segmentCount = 10,
+            completedSegments = 3,
+            generationAudioMillis = 30_000L,
+            generationComputeMillis = 12_000L,
+            updatedAt = 1_000L
+        )
+
+        assertEquals(
+            base.audiobookUiInvalidationKey(),
+            base.copy(updatedAt = 2_000L).audiobookUiInvalidationKey()
+        )
+        assertTrue(
+            base.audiobookUiInvalidationKey() !=
+                base.copy(completedSegments = 4).audiobookUiInvalidationKey()
+        )
+        assertTrue(
+            base.audiobookUiInvalidationKey() !=
+                base.copy(generationComputeMillis = 14_000L).audiobookUiInvalidationKey()
+        )
+    }
+
+    @Test
+    fun audiobooksScreenRowInvalidationIgnoresGeneratingHeartbeatOnlyAndOrderChanges() {
+        val generating = audio(4).copy(
+            status = BookAudioStatus.GENERATING,
+            segmentCount = 10,
+            completedSegments = 3,
+            generationStartedAt = 1_000L,
+            generationAudioMillis = 30_000L,
+            generationComputeMillis = 12_000L,
+            updatedAt = 1_000L
+        )
+        val ready = playableAudio(5)
+        val previous = listOf(
+            audioRow(generating, title = "Generating"),
+            audioRow(ready, title = "Ready")
+        )
+        val heartbeat = listOf(
+            audioRow(ready, title = "Ready"),
+            audioRow(generating.copy(updatedAt = 9_000L), title = "Generating")
+        )
+        val progress = listOf(
+            audioRow(ready, title = "Ready"),
+            audioRow(generating.copy(completedSegments = 4, updatedAt = 10_000L), title = "Generating")
+        )
+
+        assertEquals(previous.audiobookRowsInvalidationKey(), heartbeat.audiobookRowsInvalidationKey())
+        assertTrue(previous.audiobookRowsInvalidationKey() != progress.audiobookRowsInvalidationKey())
     }
 
     @Test
@@ -1277,5 +1403,20 @@ class AudiobookUiFormattersTest {
             audio = audio,
             chapters = chapters,
             playableSegmentFiles = playableSegmentFiles
+        )
+
+    private fun audioRow(
+        audio: BookAudioEntity,
+        title: String = "Book ${audio.id}",
+        author: String = "Author",
+    ): BookAudioWithBook =
+        BookAudioWithBook(
+            audio = audio,
+            book = book(
+                id = audio.bookId,
+                title = title,
+                author = author,
+                suffix = "audio-row-${audio.id}"
+            )
         )
 }

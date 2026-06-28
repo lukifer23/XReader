@@ -142,7 +142,7 @@ internal data class AudiobookUiInvalidationKey(
     val generationStartedAt: Long?,
     val generationSessionStartCompletedSegments: Int,
     val generatedAt: Long?,
-    val updatedAt: Long,
+    val updatedAt: Long?,
     val error: String?,
 )
 
@@ -170,7 +170,7 @@ internal fun BookAudioEntity.audiobookUiInvalidationKey(): AudiobookUiInvalidati
         generationStartedAt = generationStartedAt,
         generationSessionStartCompletedSegments = generationSessionStartCompletedSegments,
         generatedAt = generatedAt,
-        updatedAt = updatedAt,
+        updatedAt = updatedAt.takeUnless { status == BookAudioStatus.GENERATING },
         error = error
     )
 
@@ -190,10 +190,19 @@ internal class BookAudiobookAudioUiItemCache {
     private fun toUiItemLocked(audio: BookAudioEntity): BookAudiobookAudioUiItem {
         val key = audio.audiobookMetadataInvalidationKey()
         items[audio.id]?.takeIf { it.key == key }?.let { cached ->
+            val liveGeneratingPlayableCount = audio.playableSegmentCount()
             return BookAudiobookAudioUiItem(
                 audio = audio,
-                chapters = cached.chapters,
-                playableSegmentFiles = cached.playableSegmentFiles
+                chapters = if (audio.status == BookAudioStatus.GENERATING) {
+                    audio.fallbackGeneratedAudiobookChapters(liveGeneratingPlayableCount)
+                } else {
+                    cached.chapters
+                },
+                playableSegmentFiles = if (audio.status == BookAudioStatus.GENERATING) {
+                    liveGeneratingPlayableCount
+                } else {
+                    cached.playableSegmentFiles
+                }
             )
         }
         val item = audio.toBookAudiobookAudioUiItem()
@@ -211,7 +220,7 @@ private data class AudiobookMetadataInvalidationKey(
     val status: BookAudioStatus,
     val filePath: String?,
     val segmentCount: Int,
-    val completedSegments: Int,
+    val completedSegments: Int?,
     val generatedAt: Long?,
     val updatedAt: Long?,
 )
@@ -228,7 +237,7 @@ private fun BookAudioEntity.audiobookMetadataInvalidationKey(): AudiobookMetadat
         status = status,
         filePath = filePath,
         segmentCount = segmentCount,
-        completedSegments = completedSegments,
+        completedSegments = completedSegments.takeUnless { status == BookAudioStatus.GENERATING },
         generatedAt = generatedAt,
         updatedAt = updatedAt.takeUnless { status == BookAudioStatus.GENERATING }
     )

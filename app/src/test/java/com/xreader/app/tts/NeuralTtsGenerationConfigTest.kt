@@ -25,7 +25,8 @@ class NeuralTtsGenerationConfigTest {
 
     @Test
     fun kokoroUsesRuntimeSupportedSentenceBatchForGenerationFlow() {
-        assertEquals(1, KOKORO_MAX_NUM_SENTENCES)
+        assertEquals(1, kokoroMaxNumSentences(NeuralTtsRuntimeWorkload.PREVIEW))
+        assertEquals(2, kokoroMaxNumSentences(NeuralTtsRuntimeWorkload.AUDIOBOOK_GENERATION))
     }
 
     @Test
