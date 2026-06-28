@@ -608,16 +608,31 @@ internal fun List<BookAudioWithBook>.audiobookRowsInvalidationKey(): List<Audiob
     map { row ->
         AudiobookRowInvalidationKey(
             audioId = row.audio.id,
-            book = row.book,
+            book = row.book.audiobookBookInvalidationKey(),
             audio = row.audio.audiobookUiInvalidationKey()
         )
     }.sortedBy { it.audioId }
 
 internal data class AudiobookRowInvalidationKey(
     val audioId: Long,
-    val book: BookEntity,
+    val book: AudiobookBookInvalidationKey,
     val audio: AudiobookUiInvalidationKey,
 )
+
+internal data class AudiobookBookInvalidationKey(
+    val id: Long,
+    val title: String,
+    val author: String,
+    val sortTitle: String,
+)
+
+private fun BookEntity.audiobookBookInvalidationKey(): AudiobookBookInvalidationKey =
+    AudiobookBookInvalidationKey(
+        id = id,
+        title = title,
+        author = author,
+        sortTitle = sortTitle
+    )
 
 class AudiobooksViewModel(private val container: AppContainer) : ViewModel() {
     private val message = MutableStateFlow<String?>(null)

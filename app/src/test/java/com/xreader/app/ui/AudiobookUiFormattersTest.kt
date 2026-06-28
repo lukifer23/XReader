@@ -1372,6 +1372,36 @@ class AudiobookUiFormattersTest {
     }
 
     @Test
+    fun audiobooksScreenRowInvalidationIgnoresUnrenderedBookMetadata() {
+        val row = audioRow(playableAudio(7), title = "Rendered", author = "Visible Author")
+        val metadataOnly = row.copy(
+            book = row.book.copy(
+                description = "Updated description",
+                genre = "New genre",
+                year = 2026,
+                favorite = true,
+                finished = true,
+                updatedAt = row.book.updatedAt + 1_000
+            )
+        )
+
+        assertEquals(
+            listOf(row).audiobookRowsInvalidationKey(),
+            listOf(metadataOnly).audiobookRowsInvalidationKey()
+        )
+    }
+
+    @Test
+    fun audiobooksScreenRowInvalidationTracksVisibleAndSortableBookFields() {
+        val row = audioRow(playableAudio(8), title = "Rendered", author = "Visible Author")
+        val baseKey = listOf(row).audiobookRowsInvalidationKey()
+
+        assertTrue(baseKey != listOf(row.copy(book = row.book.copy(title = "Changed"))).audiobookRowsInvalidationKey())
+        assertTrue(baseKey != listOf(row.copy(book = row.book.copy(author = "Changed"))).audiobookRowsInvalidationKey())
+        assertTrue(baseKey != listOf(row.copy(book = row.book.copy(sortTitle = "changed"))).audiobookRowsInvalidationKey())
+    }
+
+    @Test
     fun audiobookGenerationBlockedReasonIncludesHardwareReadinessAfterInstall() {
         val hardwareReason = "No strict hardware TTS provider is available."
 
