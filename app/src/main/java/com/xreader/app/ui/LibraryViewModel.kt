@@ -33,10 +33,9 @@ import com.xreader.app.tts.AudiobookGenerationScope
 import com.xreader.app.tts.AudiobookGenerationHardwareReadiness
 import com.xreader.app.tts.EMPTY_AUDIOBOOK_PLAYBACK_UI_STATE
 import com.xreader.app.tts.GeneratedAudiobookChapter
-import com.xreader.app.tts.GeneratedAudiobookFileSnapshot
 import com.xreader.app.tts.PreparedAudiobookPlan
 import com.xreader.app.tts.fallbackGeneratedAudiobookChapters
-import com.xreader.app.tts.generatedAudiobookChapters
+import com.xreader.app.tts.generatedAudiobookFileSnapshot
 import com.xreader.app.tts.playableSegmentCount
 import com.xreader.app.tts.prepareAudiobookPlan
 import kotlinx.coroutines.CancellationException
@@ -312,27 +311,11 @@ private fun BookAudioEntity.audiobookMetadataInvalidationKey(): AudiobookMetadat
     )
 
 internal fun BookAudioEntity.toBookAudiobookAudioUiItem(): BookAudiobookAudioUiItem {
-    val snapshot = generatedAudiobookUiSnapshot()
+    val snapshot = generatedAudiobookFileSnapshot()
     return BookAudiobookAudioUiItem(
         audio = snapshot.audio,
         chapters = snapshot.chapters,
         playableSegmentFiles = snapshot.playableSegmentCount
-    )
-}
-
-private fun BookAudioEntity.generatedAudiobookUiSnapshot(): GeneratedAudiobookFileSnapshot {
-    val playableCount = playableSegmentCount()
-    val chapters = if (status == BookAudioStatus.GENERATING) {
-        fallbackGeneratedAudiobookChapters(playableCount)
-    } else {
-        generatedAudiobookChapters(playableCount)
-            .ifEmpty { fallbackGeneratedAudiobookChapters(playableCount) }
-    }
-    return GeneratedAudiobookFileSnapshot(
-        audio = this,
-        playableSegmentFiles = emptyList(),
-        knownPlayableSegmentCount = playableCount,
-        chapters = chapters
     )
 }
 
