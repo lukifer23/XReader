@@ -1,11 +1,23 @@
 package com.xreader.app.tts
 
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
 class GeneratedAudiobookForegroundServiceTest {
+    @Test
+    fun compactNotificationIndexesAvoidIntermediateLists() {
+        assertArrayEquals(intArrayOf(), compactNotificationActionIndexes(-1))
+        assertArrayEquals(intArrayOf(), compactNotificationActionIndexes(0))
+        assertArrayEquals(intArrayOf(0), compactNotificationActionIndexes(1))
+        assertArrayEquals(intArrayOf(0, 1), compactNotificationActionIndexes(2))
+        assertArrayEquals(intArrayOf(0, 1, 2), compactNotificationActionIndexes(3))
+        assertArrayEquals(intArrayOf(1, 2, 3), compactNotificationActionIndexes(4))
+        assertArrayEquals(intArrayOf(2, 3, 4), compactNotificationActionIndexes(5))
+    }
+
     @Test
     fun playbackNotificationKeyIgnoresPositionOnlyTicks() {
         val base = AudiobookPlaybackUiState(

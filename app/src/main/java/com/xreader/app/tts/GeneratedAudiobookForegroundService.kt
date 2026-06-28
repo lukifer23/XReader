@@ -113,7 +113,7 @@ class GeneratedAudiobookForegroundService : Service() {
 
     private fun buildNotification(state: AudiobookPlaybackUiState): Notification {
         val actions = notificationActions(state)
-        val compactIndexes = actions.indices.toList().takeLast(actions.size.coerceAtMost(3)).toIntArray()
+        val compactIndexes = compactNotificationActionIndexes(actions.size)
         return Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_monochrome)
             .setContentTitle(state.bookTitle?.takeIf { it.isNotBlank() } ?: "XReader audiobook")
@@ -221,6 +221,13 @@ internal fun notificationProgressText(state: AudiobookPlaybackUiState): String? 
     if (total <= 0) return null
     val current = state.segmentIndex.coerceIn(0, total - 1) + 1
     return "$current/$total"
+}
+
+internal fun compactNotificationActionIndexes(actionCount: Int): IntArray {
+    val boundedCount = actionCount.coerceAtLeast(0)
+    val compactCount = boundedCount.coerceAtMost(3)
+    val start = boundedCount - compactCount
+    return IntArray(compactCount) { offset -> start + offset }
 }
 
 private data class PlaybackNotificationKey(

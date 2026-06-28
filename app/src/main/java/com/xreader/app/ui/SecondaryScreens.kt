@@ -584,9 +584,11 @@ internal fun List<BookAudioWithBook>.toGeneratedAudiobookUiItems(
     audioItems: List<BookAudiobookAudioUiItem>,
 ): List<GeneratedAudiobookUiItem> {
     if (size == audioItems.size) {
-        return zip(audioItems).mapNotNull { (row, audioItem) ->
-            row.toGeneratedAudiobookUiItem(audioItem)
+        val items = ArrayList<GeneratedAudiobookUiItem>(size)
+        for (index in indices) {
+            get(index).toGeneratedAudiobookUiItem(audioItems[index])?.let(items::add)
         }
+        return items
     }
 
     val audioItemsById = audioItems.associateBy { it.audio.id }
