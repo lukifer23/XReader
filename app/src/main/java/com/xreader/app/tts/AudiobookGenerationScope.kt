@@ -433,16 +433,27 @@ private fun generatedAudiobookSegmentsTsvFromRows(
     buildString {
         appendLine("index\tchapterIndex\tpauseAfterMs\ttext")
         repeat(segmentCount.coerceAtLeast(0)) { index ->
-            appendLine(
-                rowsByIndex[index] ?: listOf(
-                        index.toString(),
-                        chapterIndexes.getOrElse(index) { 0 }.toString(),
-                        DEFAULT_AUDIOBOOK_SEGMENT_PAUSE_MS.toString(),
-                        ""
-                    ).joinToString("\t")
+            rowsByIndex[index]?.let { row ->
+                appendLine(row)
+            } ?: appendGeneratedAudiobookFallbackSegmentRow(
+                index = index,
+                chapterIndex = chapterIndexes.getOrElse(index) { 0 }
             )
         }
     }
+
+private fun StringBuilder.appendGeneratedAudiobookFallbackSegmentRow(
+    index: Int,
+    chapterIndex: Int,
+) {
+    append(index)
+    append('\t')
+    append(chapterIndex)
+    append('\t')
+    append(DEFAULT_AUDIOBOOK_SEGMENT_PAUSE_MS)
+    append('\t')
+    appendLine()
+}
 
 internal fun File.generatedAudiobookExportSegmentsTsv(
     segmentCount: Int,
