@@ -1477,7 +1477,9 @@ class AudiobookUiFormattersTest {
         )
 
         assertEquals(previous.audiobookRowsInvalidationKey(), heartbeat.audiobookRowsInvalidationKey())
+        assertTrue(sameAudiobookScreenRows(previous, heartbeat))
         assertTrue(previous.audiobookRowsInvalidationKey() != progress.audiobookRowsInvalidationKey())
+        assertEquals(false, sameAudiobookScreenRows(previous, progress))
     }
 
     @Test
@@ -1491,6 +1493,7 @@ class AudiobookUiFormattersTest {
         assertEquals(listOf(1L, 2L), ordered.map { it.audioId })
         assertEquals(listOf(2L, 1L), reordered.map { it.audioId })
         assertTrue(ordered != reordered)
+        assertEquals(false, sameAudiobookScreenRows(listOf(first, second), listOf(second, first)))
     }
 
     @Test
@@ -1511,6 +1514,7 @@ class AudiobookUiFormattersTest {
             listOf(row).audiobookRowsInvalidationKey(),
             listOf(metadataOnly).audiobookRowsInvalidationKey()
         )
+        assertTrue(sameAudiobookScreenRows(listOf(row), listOf(metadataOnly)))
     }
 
     @Test
@@ -1521,6 +1525,9 @@ class AudiobookUiFormattersTest {
         assertTrue(baseKey != listOf(row.copy(book = row.book.copy(title = "Changed"))).audiobookRowsInvalidationKey())
         assertTrue(baseKey != listOf(row.copy(book = row.book.copy(author = "Changed"))).audiobookRowsInvalidationKey())
         assertTrue(baseKey != listOf(row.copy(book = row.book.copy(sortTitle = "changed"))).audiobookRowsInvalidationKey())
+        assertEquals(false, sameAudiobookScreenRows(listOf(row), listOf(row.copy(book = row.book.copy(title = "Changed")))))
+        assertEquals(false, sameAudiobookScreenRows(listOf(row), listOf(row.copy(book = row.book.copy(author = "Changed")))))
+        assertEquals(false, sameAudiobookScreenRows(listOf(row), listOf(row.copy(book = row.book.copy(sortTitle = "changed")))))
     }
 
     @Test

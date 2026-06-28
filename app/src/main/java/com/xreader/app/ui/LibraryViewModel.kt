@@ -184,38 +184,38 @@ internal fun sameAudiobookUiInvalidationRows(
 ): Boolean {
     if (previous.size != next.size) return false
     return previous.indices.all { index ->
-        previous[index].sameAudiobookUiInvalidationRow(next[index])
+        sameAudiobookUiInvalidationRow(previous[index], next[index])
     }
 }
 
-private fun BookAudioEntity.sameAudiobookUiInvalidationRow(other: BookAudioEntity): Boolean =
-    id == other.id &&
-        bookId == other.bookId &&
-        modelId == other.modelId &&
-        modelDisplayName == other.modelDisplayName &&
-        speakerId == other.speakerId &&
-        speed == other.speed &&
-        tone == other.tone &&
-        scope == other.scope &&
-        scopeLabel == other.scopeLabel &&
-        status == other.status &&
-        filePath == other.filePath &&
-        segmentCount == other.segmentCount &&
-        completedSegments == other.completedSegments &&
-        wordCount == other.wordCount &&
-        sampleRate == other.sampleRate &&
-        fileSizeBytes == other.fileSizeBytes &&
-        generationProvider == other.generationProvider &&
-        generationAudioMillis.takeUnless { status == BookAudioStatus.GENERATING }.orZero() ==
-            other.generationAudioMillis.takeUnless { other.status == BookAudioStatus.GENERATING }.orZero() &&
-        generationComputeMillis.takeUnless { status == BookAudioStatus.GENERATING }.orZero() ==
-            other.generationComputeMillis.takeUnless { other.status == BookAudioStatus.GENERATING }.orZero() &&
-        generationStartedAt == other.generationStartedAt &&
-        generationSessionStartCompletedSegments == other.generationSessionStartCompletedSegments &&
-        generatedAt == other.generatedAt &&
-        updatedAt.takeUnless { status == BookAudioStatus.GENERATING } ==
-            other.updatedAt.takeUnless { other.status == BookAudioStatus.GENERATING } &&
-        error == other.error
+internal fun sameAudiobookUiInvalidationRow(previous: BookAudioEntity, next: BookAudioEntity): Boolean =
+    previous.id == next.id &&
+        previous.bookId == next.bookId &&
+        previous.modelId == next.modelId &&
+        previous.modelDisplayName == next.modelDisplayName &&
+        previous.speakerId == next.speakerId &&
+        previous.speed == next.speed &&
+        previous.tone == next.tone &&
+        previous.scope == next.scope &&
+        previous.scopeLabel == next.scopeLabel &&
+        previous.status == next.status &&
+        previous.filePath == next.filePath &&
+        previous.segmentCount == next.segmentCount &&
+        previous.completedSegments == next.completedSegments &&
+        previous.wordCount == next.wordCount &&
+        previous.sampleRate == next.sampleRate &&
+        previous.fileSizeBytes == next.fileSizeBytes &&
+        previous.generationProvider == next.generationProvider &&
+        previous.generationAudioMillis.takeUnless { previous.status == BookAudioStatus.GENERATING }.orZero() ==
+            next.generationAudioMillis.takeUnless { next.status == BookAudioStatus.GENERATING }.orZero() &&
+        previous.generationComputeMillis.takeUnless { previous.status == BookAudioStatus.GENERATING }.orZero() ==
+            next.generationComputeMillis.takeUnless { next.status == BookAudioStatus.GENERATING }.orZero() &&
+        previous.generationStartedAt == next.generationStartedAt &&
+        previous.generationSessionStartCompletedSegments == next.generationSessionStartCompletedSegments &&
+        previous.generatedAt == next.generatedAt &&
+        previous.updatedAt.takeUnless { previous.status == BookAudioStatus.GENERATING } ==
+            next.updatedAt.takeUnless { next.status == BookAudioStatus.GENERATING } &&
+        previous.error == next.error
 
 private fun Long?.orZero(): Long = this ?: 0L
 

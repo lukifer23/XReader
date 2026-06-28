@@ -617,6 +617,27 @@ internal fun List<BookAudioWithBook>.audiobookRowsInvalidationKey(): List<Audiob
         )
     }
 
+internal fun sameAudiobookScreenRows(
+    previous: List<BookAudioWithBook>,
+    next: List<BookAudioWithBook>,
+): Boolean {
+    if (previous.size != next.size) return false
+    return previous.indices.all { index ->
+        previous[index].sameAudiobookScreenRow(next[index])
+    }
+}
+
+private fun BookAudioWithBook.sameAudiobookScreenRow(other: BookAudioWithBook): Boolean =
+    audio.id == other.audio.id &&
+        book.sameAudiobookScreenBook(other.book) &&
+        sameAudiobookUiInvalidationRow(audio, other.audio)
+
+private fun BookEntity.sameAudiobookScreenBook(other: BookEntity): Boolean =
+    id == other.id &&
+        title == other.title &&
+        author == other.author &&
+        sortTitle == other.sortTitle
+
 internal data class AudiobookRowInvalidationKey(
     val audioId: Long,
     val book: AudiobookBookInvalidationKey,
@@ -654,9 +675,7 @@ class AudiobooksViewModel(private val container: AppContainer) : ViewModel() {
 
     private val audiobookRows: StateFlow<List<GeneratedAudiobookUiItem>> =
         container.neuralTtsRepository.observeVisibleAudiobookScreenRows()
-            .distinctUntilChanged { previous, next ->
-                previous.audiobookRowsInvalidationKey() == next.audiobookRowsInvalidationKey()
-            }
+            .distinctUntilChanged(::sameAudiobookScreenRows)
             .map { rows ->
                 withContext(Dispatchers.IO) {
                     val audioItems = audiobookUiItemCache.toUiItemsForRows(rows)
