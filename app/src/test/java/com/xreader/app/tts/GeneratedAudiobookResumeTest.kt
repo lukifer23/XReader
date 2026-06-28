@@ -758,7 +758,7 @@ class GeneratedAudiobookResumeTest {
     }
 
     @Test
-    fun generatedAudiobookFileSnapshotUsesVerifiedFilesAndRecoveredProgressWhenStopped() {
+    fun generatedAudiobookFileSnapshotTrustsStoppedDatabaseProgressWithoutScanningFiles() {
         val dir = temporaryFolder.newFolder()
         writeSegment(dir, index = 0)
         writeSegment(dir, index = 1)
@@ -770,14 +770,14 @@ class GeneratedAudiobookResumeTest {
             completedSegments = 0
         ).generatedAudiobookFileSnapshot()
 
-        assertEquals(2, snapshot.audio.completedSegments)
-        assertEquals(2, snapshot.playableSegmentCount)
-        assertEquals(listOf("First chapter"), snapshot.chapters.map { it.title })
-        assertEquals(2, snapshot.chapters.single().segmentCount)
+        assertEquals(0, snapshot.audio.completedSegments)
+        assertEquals(0, snapshot.playableSegmentCount)
+        assertTrue(snapshot.playableSegmentFiles.isEmpty())
+        assertTrue(snapshot.chapters.isEmpty())
     }
 
     @Test
-    fun generatedAudiobookFileSnapshotLowersStaleStoppedProgress() {
+    fun generatedAudiobookFileSnapshotDoesNotVerifyStoppedSegmentFilesOnPassiveUiPath() {
         val dir = temporaryFolder.newFolder()
         writeSegment(dir, index = 0)
 
@@ -788,9 +788,10 @@ class GeneratedAudiobookResumeTest {
             completedSegments = 4
         ).generatedAudiobookFileSnapshot()
 
-        assertEquals(1, snapshot.audio.completedSegments)
-        assertEquals(1, snapshot.playableSegmentCount)
-        assertEquals(1, snapshot.chapters.single().segmentCount)
+        assertEquals(4, snapshot.audio.completedSegments)
+        assertEquals(4, snapshot.playableSegmentCount)
+        assertTrue(snapshot.playableSegmentFiles.isEmpty())
+        assertEquals(4, snapshot.chapters.single().segmentCount)
     }
 
     @Test

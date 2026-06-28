@@ -262,7 +262,7 @@ private fun BookAudioEntity.generatedAudiobookUiSnapshot(): GeneratedAudiobookFi
     return GeneratedAudiobookFileSnapshot(
         audio = this,
         playableSegmentFiles = emptyList(),
-        activeGenerationPlayableSegmentCount = playableCount,
+        knownPlayableSegmentCount = playableCount,
         chapters = chapters
     )
 }

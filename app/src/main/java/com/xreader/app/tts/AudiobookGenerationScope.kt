@@ -140,42 +140,25 @@ data class GeneratedAudiobookPlaybackMetadata(
 data class GeneratedAudiobookFileSnapshot(
     val audio: BookAudioEntity,
     val playableSegmentFiles: List<File>,
-    val activeGenerationPlayableSegmentCount: Int? = null,
+    val knownPlayableSegmentCount: Int? = null,
     val chapters: List<GeneratedAudiobookChapter>,
 ) {
-    val playableSegmentCount: Int get() = activeGenerationPlayableSegmentCount ?: playableSegmentFiles.size
+    val playableSegmentCount: Int get() = knownPlayableSegmentCount ?: playableSegmentFiles.size
 }
 
 internal fun BookAudioEntity.generatedAudiobookFileSnapshot(): GeneratedAudiobookFileSnapshot {
-    if (status == BookAudioStatus.GENERATING) {
-        val playableCount = playableSegmentCount()
-        return GeneratedAudiobookFileSnapshot(
-            audio = this,
-            playableSegmentFiles = emptyList(),
-            activeGenerationPlayableSegmentCount = playableCount,
-            chapters = fallbackGeneratedAudiobookChapters(playableCount)
-        )
-    }
-
-    val root = filePath
-        ?.takeIf { it.isNotBlank() }
-        ?.let(::File)
-    val playableFiles = if (root != null) {
-        root.contiguousGeneratedAudiobookSegmentFiles(segmentCount)
+    val playableCount = playableSegmentCount()
+    val chapters = if (status == BookAudioStatus.GENERATING) {
+        fallbackGeneratedAudiobookChapters(playableCount)
     } else {
-        emptyList()
-    }
-    val playableCount = playableFiles.size
-    val verifiedAudio = if (playableCount == completedSegments) {
-        this
-    } else {
-        copy(completedSegments = playableCount)
+        generatedAudiobookChapters(playableCount)
+            .ifEmpty { fallbackGeneratedAudiobookChapters(playableCount) }
     }
     return GeneratedAudiobookFileSnapshot(
-        audio = verifiedAudio,
-        playableSegmentFiles = playableFiles,
-        activeGenerationPlayableSegmentCount = null,
-        chapters = verifiedAudio.generatedAudiobookChapters(playableCount)
+        audio = this,
+        playableSegmentFiles = emptyList(),
+        knownPlayableSegmentCount = playableCount,
+        chapters = chapters
     )
 }
 
