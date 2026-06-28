@@ -1392,6 +1392,59 @@ class AudiobookUiFormattersTest {
     }
 
     @Test
+    fun audiobookUiInvalidationRowsCompareWithoutMaterializingKeys() {
+        val base = playableAudio(4).copy(
+            playbackSegmentIndex = 1,
+            playbackPositionMs = 2_000,
+            updatedAt = 1_000L
+        )
+
+        assertTrue(
+            sameAudiobookUiInvalidationRows(
+                listOf(base),
+                listOf(base.copy(playbackSegmentIndex = 3, playbackPositionMs = 45_000))
+            )
+        )
+        assertEquals(
+            false,
+            sameAudiobookUiInvalidationRows(listOf(base), listOf(base.copy(completedSegments = 3)))
+        )
+        assertEquals(
+            false,
+            sameAudiobookUiInvalidationRows(listOf(base), listOf(base.copy(updatedAt = 2_000L)))
+        )
+    }
+
+    @Test
+    fun audiobookUiInvalidationRowsIgnoreGeneratingHeartbeatOnlyUpdates() {
+        val base = audio(4).copy(
+            status = BookAudioStatus.GENERATING,
+            segmentCount = 10,
+            completedSegments = 3,
+            generationAudioMillis = 30_000L,
+            generationComputeMillis = 12_000L,
+            updatedAt = 1_000L
+        )
+
+        assertTrue(
+            sameAudiobookUiInvalidationRows(
+                listOf(base),
+                listOf(
+                    base.copy(
+                        generationAudioMillis = 36_000L,
+                        generationComputeMillis = 14_000L,
+                        updatedAt = 2_000L
+                    )
+                )
+            )
+        )
+        assertEquals(
+            false,
+            sameAudiobookUiInvalidationRows(listOf(base), listOf(base.copy(completedSegments = 4)))
+        )
+    }
+
+    @Test
     fun audiobooksScreenRowInvalidationIgnoresGeneratingHeartbeatOnlyAndOrderChanges() {
         val generating = audio(4).copy(
             status = BookAudioStatus.GENERATING,

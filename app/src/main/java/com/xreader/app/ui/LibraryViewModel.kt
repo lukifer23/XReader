@@ -178,6 +178,47 @@ internal fun BookAudioEntity.audiobookUiInvalidationKey(): AudiobookUiInvalidati
 internal fun List<BookAudioEntity>.audiobookUiInvalidationKeys(): List<AudiobookUiInvalidationKey> =
     map { it.audiobookUiInvalidationKey() }
 
+internal fun sameAudiobookUiInvalidationRows(
+    previous: List<BookAudioEntity>,
+    next: List<BookAudioEntity>,
+): Boolean {
+    if (previous.size != next.size) return false
+    return previous.indices.all { index ->
+        previous[index].sameAudiobookUiInvalidationRow(next[index])
+    }
+}
+
+private fun BookAudioEntity.sameAudiobookUiInvalidationRow(other: BookAudioEntity): Boolean =
+    id == other.id &&
+        bookId == other.bookId &&
+        modelId == other.modelId &&
+        modelDisplayName == other.modelDisplayName &&
+        speakerId == other.speakerId &&
+        speed == other.speed &&
+        tone == other.tone &&
+        scope == other.scope &&
+        scopeLabel == other.scopeLabel &&
+        status == other.status &&
+        filePath == other.filePath &&
+        segmentCount == other.segmentCount &&
+        completedSegments == other.completedSegments &&
+        wordCount == other.wordCount &&
+        sampleRate == other.sampleRate &&
+        fileSizeBytes == other.fileSizeBytes &&
+        generationProvider == other.generationProvider &&
+        generationAudioMillis.takeUnless { status == BookAudioStatus.GENERATING }.orZero() ==
+            other.generationAudioMillis.takeUnless { other.status == BookAudioStatus.GENERATING }.orZero() &&
+        generationComputeMillis.takeUnless { status == BookAudioStatus.GENERATING }.orZero() ==
+            other.generationComputeMillis.takeUnless { other.status == BookAudioStatus.GENERATING }.orZero() &&
+        generationStartedAt == other.generationStartedAt &&
+        generationSessionStartCompletedSegments == other.generationSessionStartCompletedSegments &&
+        generatedAt == other.generatedAt &&
+        updatedAt.takeUnless { status == BookAudioStatus.GENERATING } ==
+            other.updatedAt.takeUnless { other.status == BookAudioStatus.GENERATING } &&
+        error == other.error
+
+private fun Long?.orZero(): Long = this ?: 0L
+
 internal class BookAudiobookAudioUiItemCache {
     private val items = linkedMapOf<Long, CachedBookAudiobookAudioMetadata>()
 
@@ -945,9 +986,7 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
 
     fun observeBookAudio(bookId: Long): Flow<List<BookAudiobookAudioUiItem>> =
         container.neuralTtsRepository.observeBookAudio(bookId)
-            .distinctUntilChanged { previous, next ->
-                previous.audiobookUiInvalidationKeys() == next.audiobookUiInvalidationKeys()
-            }
+            .distinctUntilChanged(::sameAudiobookUiInvalidationRows)
             .map { rows ->
                 withContext(Dispatchers.IO) {
                     audiobookUiItemCache.toUiItems(rows)
