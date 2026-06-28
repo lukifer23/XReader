@@ -501,6 +501,7 @@ data class GeneratedAudiobookUiItem(
     val audio: BookAudioEntity,
     val chapters: List<GeneratedAudiobookChapter> = emptyList(),
     val playableSegmentFiles: Int = 0,
+    val searchText: String = generatedAudiobookSearchText(book, audio),
 )
 
 private data class AudiobookRowsSortKey(
@@ -537,12 +538,14 @@ internal fun List<GeneratedAudiobookUiItem>.filteredForAudiobooksScreen(
         .filter { it.isNotBlank() }
     if (terms.isEmpty()) return this
     return filter { item ->
-        val searchable = item.audiobookSearchText()
-        terms.all { term -> term in searchable }
+        terms.all { term -> term in item.searchText }
     }
 }
 
-private fun GeneratedAudiobookUiItem.audiobookSearchText(): String =
+private fun generatedAudiobookSearchText(
+    book: BookEntity,
+    audio: BookAudioEntity,
+): String =
     buildString {
         append(book.title)
         append(' ')
@@ -600,7 +603,8 @@ private fun BookAudioWithBook.toGeneratedAudiobookUiItem(
         book = book,
         audio = audioItem.audio,
         chapters = audioItem.chapters,
-        playableSegmentFiles = audioItem.playableSegmentFiles
+        playableSegmentFiles = audioItem.playableSegmentFiles,
+        searchText = generatedAudiobookSearchText(book, audioItem.audio)
     )
 }
 

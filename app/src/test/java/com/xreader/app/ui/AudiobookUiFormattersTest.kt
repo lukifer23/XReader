@@ -709,6 +709,18 @@ class AudiobookUiFormattersTest {
     }
 
     @Test
+    fun audiobooksScreenSearchUsesPrecomputedSearchText() {
+        val row = item(
+            playableAudio(1).copy(modelDisplayName = "Kokoro v1.0"),
+            bookTitle = "Visible Book",
+            author = "Visible Author"
+        ).copy(searchText = "cached phrase only")
+
+        assertEquals(listOf(1L), listOf(row).filteredForAudiobooksScreen("cached phrase").map { it.audio.id })
+        assertTrue(listOf(row).filteredForAudiobooksScreen("visible kokoro").isEmpty())
+    }
+
+    @Test
     fun audiobooksScreenMaterializesRowsInRoomOrderWithoutIdRemap() {
         val firstAudio = playableAudio(1).copy(bookId = 101, updatedAt = 30L)
         val hiddenAudio = audio(2).copy(bookId = 102, status = BookAudioStatus.CANCELED, completedSegments = 0)
