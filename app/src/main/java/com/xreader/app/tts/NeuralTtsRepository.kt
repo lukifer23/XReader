@@ -819,7 +819,8 @@ class NeuralTtsRepository(
                 provider = activeProvider,
                 audioMillis = generationAudioMillis,
                 computeMillis = generationComputeMillis,
-                sampleRate = activeSampleRate ?: spec.sampleRate
+                sampleRate = activeSampleRate ?: spec.sampleRate,
+                fileSizeBytes = generatedSegmentFileSizeBytes
             )
         )
         runCatching {
@@ -856,6 +857,7 @@ class NeuralTtsRepository(
                             generationAudioMillis = snapshot.audioMillis,
                             generationComputeMillis = snapshot.computeMillis,
                             sampleRate = snapshot.sampleRate,
+                            fileSizeBytes = snapshot.fileSizeBytes,
                             updatedAt = heartbeatAt
                         )
                         if (updatedRows != 1) {
@@ -899,7 +901,8 @@ class NeuralTtsRepository(
                                 provider = activeProvider,
                                 audioMillis = generationAudioMillis,
                                 computeMillis = generationComputeMillis,
-                                sampleRate = activeSampleRate ?: sampleRate
+                                sampleRate = activeSampleRate ?: sampleRate,
+                                fileSizeBytes = generatedSegmentFileSizeBytes
                             )
                         )
                         writeAudiobookManifest(
@@ -1000,7 +1003,8 @@ class NeuralTtsRepository(
                             provider = tts.provider,
                             audioMillis = generationAudioMillis,
                             computeMillis = generationComputeMillis,
-                            sampleRate = sampleRate
+                            sampleRate = sampleRate,
+                            fileSizeBytes = generatedSegmentFileSizeBytes
                         )
                     )
                     val progressWriteAt = clock.millis()
@@ -1020,6 +1024,7 @@ class NeuralTtsRepository(
                             generationAudioMillis = generationAudioMillis,
                             generationComputeMillis = generationComputeMillis,
                             sampleRate = sampleRate,
+                            fileSizeBytes = generatedSegmentFileSizeBytes,
                             updatedAt = progressWriteAt
                         )
                         if (updatedRows != 1) {
@@ -1720,6 +1725,7 @@ private data class GenerationHeartbeatSnapshot(
     val audioMillis: Long,
     val computeMillis: Long,
     val sampleRate: Int,
+    val fileSizeBytes: Long,
 )
 
 internal data class AudiobookGenerationMetricTotals(

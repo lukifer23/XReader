@@ -380,6 +380,7 @@ interface NeuralTtsDao {
             generationAudioMillis = :generationAudioMillis,
             generationComputeMillis = :generationComputeMillis,
             sampleRate = :sampleRate,
+            fileSizeBytes = :fileSizeBytes,
             updatedAt = :updatedAt
         WHERE id = :id AND status = 'GENERATING'
         """
@@ -391,6 +392,7 @@ interface NeuralTtsDao {
         generationAudioMillis: Long,
         generationComputeMillis: Long,
         sampleRate: Int,
+        fileSizeBytes: Long,
         updatedAt: Long,
     ): Int
 
