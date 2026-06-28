@@ -100,6 +100,26 @@ class NeuralTtsGenerationConfigTest {
     }
 
     @Test
+    fun audiobookGenerationMetricsKeepSaveTimeOutOfComputeSpeed() {
+        val totals = AudiobookGenerationMetricTotals(
+            audioMillis = 1_000L,
+            computeMillis = 500L,
+            saveMillis = 250L
+        ).plusSegment(
+            AudiobookGeneratedSegmentMetrics(
+                audioMillis = 2_000L,
+                computeMillis = 700L,
+                saveMillis = 900L
+            )
+        )
+
+        assertEquals(3_000L, totals.audioMillis)
+        assertEquals(1_200L, totals.computeMillis)
+        assertEquals(1_150L, totals.saveMillis)
+        assertEquals(0.4f, generationAudioTimeFactor(totals.audioMillis, totals.computeMillis)!!, 0.0001f)
+    }
+
+    @Test
     fun fullBookHardwareGenerationRejectsNearRealtimeProviders() {
         assertTrue(isUsableAudiobookHardwareAudioTimeFactor(MAX_AUDIOBOOK_HARDWARE_AUDIO_TIME_FACTOR))
         assertTrue(isUsableAudiobookHardwareAudioTimeFactor(0.25f))

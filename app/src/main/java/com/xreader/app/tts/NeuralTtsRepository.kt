@@ -934,12 +934,25 @@ class NeuralTtsRepository(
                         audioId = activeAudio.id,
                         segmentNumber = index + 1
                     )
-                    val segmentGenerationMillis = segmentComputeMillis + segmentSaveMillis
-                    generationComputeMillis += segmentGenerationMillis
-                    generationSaveMillis += segmentSaveMillis
-                    generationAudioMillis += generated.audioDurationMillis()
-                    sessionComputeMillis += segmentGenerationMillis
-                    sessionAudioMillis += generated.audioDurationMillis()
+                    val segmentMetrics = AudiobookGeneratedSegmentMetrics(
+                        audioMillis = generated.audioDurationMillis(),
+                        computeMillis = segmentComputeMillis,
+                        saveMillis = segmentSaveMillis
+                    )
+                    val totalMetrics = AudiobookGenerationMetricTotals(
+                        audioMillis = generationAudioMillis,
+                        computeMillis = generationComputeMillis,
+                        saveMillis = generationSaveMillis
+                    ).plusSegment(segmentMetrics)
+                    val sessionMetrics = AudiobookGenerationMetricTotals(
+                        audioMillis = sessionAudioMillis,
+                        computeMillis = sessionComputeMillis
+                    ).plusSegment(segmentMetrics)
+                    generationAudioMillis = totalMetrics.audioMillis
+                    generationComputeMillis = totalMetrics.computeMillis
+                    generationSaveMillis = totalMetrics.saveMillis
+                    sessionAudioMillis = sessionMetrics.audioMillis
+                    sessionComputeMillis = sessionMetrics.computeMillis
                     sessionGeneratedSegments += 1
                     require(
                         !isSustainedUnusableAudiobookHardwareGenerationSpeed(
@@ -1672,6 +1685,27 @@ private data class GenerationHeartbeatSnapshot(
     val computeMillis: Long,
     val sampleRate: Int,
 )
+
+internal data class AudiobookGenerationMetricTotals(
+    val audioMillis: Long = 0L,
+    val computeMillis: Long = 0L,
+    val saveMillis: Long = 0L,
+)
+
+internal data class AudiobookGeneratedSegmentMetrics(
+    val audioMillis: Long,
+    val computeMillis: Long,
+    val saveMillis: Long,
+)
+
+internal fun AudiobookGenerationMetricTotals.plusSegment(
+    segment: AudiobookGeneratedSegmentMetrics,
+): AudiobookGenerationMetricTotals =
+    copy(
+        audioMillis = audioMillis + segment.audioMillis.coerceAtLeast(0L),
+        computeMillis = computeMillis + segment.computeMillis.coerceAtLeast(0L),
+        saveMillis = saveMillis + segment.saveMillis.coerceAtLeast(0L),
+    )
 
 data class AudiobookGenerationHardwareReadiness(
     val ready: Boolean,
