@@ -1499,27 +1499,25 @@ class NeuralTtsRepository(
         File(target, CHAPTERS_FILE).writeAtomically { writer ->
             writer.appendLine("index\tfirstSegment\tsegmentCount\ttitle")
             prepared.chapters.forEach { chapter ->
-                writer.appendLine(
-                    listOf(
-                        chapter.index.toString(),
-                        chapter.firstSegmentIndex.toString(),
-                        chapter.segmentCount.toString(),
-                        chapter.title.tsvEscaped()
-                    ).joinToString("\t")
-                )
+                writer.append(chapter.index.toString())
+                    .append('\t')
+                    .append(chapter.firstSegmentIndex.toString())
+                    .append('\t')
+                    .append(chapter.segmentCount.toString())
+                    .append('\t')
+                    .appendLine(chapter.title.tsvEscaped())
             }
         }
         File(target, SEGMENTS_FILE).writeAtomically { writer ->
             writer.appendLine("index\tchapterIndex\tpauseAfterMs\ttext")
             prepared.segments.forEachIndexed { index, segment ->
-                writer.appendLine(
-                    listOf(
-                        index.toString(),
-                        prepared.segmentChapterIndexes.getOrElse(index) { 0 }.toString(),
-                        prepared.segmentPauseMillis.getOrElse(index) { DEFAULT_AUDIOBOOK_SEGMENT_PAUSE_MS }.toString(),
-                        segment.tsvEscaped()
-                    ).joinToString("\t")
-                )
+                writer.append(index.toString())
+                    .append('\t')
+                    .append(prepared.segmentChapterIndexes.getOrElse(index) { 0 }.toString())
+                    .append('\t')
+                    .append(prepared.segmentPauseMillis.getOrElse(index) { DEFAULT_AUDIOBOOK_SEGMENT_PAUSE_MS }.toString())
+                    .append('\t')
+                    .appendLine(segment.tsvEscaped())
             }
         }
     }

@@ -414,27 +414,7 @@ internal object NeuralTtsText {
             .replace(AUDIOBOOK_WHITESPACE_REGEX, " ")
             .trim()
         if (clean.isBlank()) return true
-        val phrases = listOf(
-            "all rights reserved",
-            "work of fiction",
-            "resemblance to actual events",
-            "registered trademarks",
-            "copyright",
-            "published by",
-            "printed in",
-            "first printing",
-            "cover design",
-            "designed by",
-            "visit us on",
-            "world wide web",
-            "for information address",
-            "library of congress",
-            "table of contents",
-            "contents",
-            "about the author",
-            "also by",
-        )
-        if (phrases.any { it in clean }) return true
+        if (AUDIOBOOK_PUBLISHER_BOILERPLATE_PHRASES.any { it in clean }) return true
         return clean.matches(AUDIOBOOK_PUBLISHER_ISBN_REGEX)
     }
 
@@ -621,6 +601,26 @@ private val AUDIOBOOK_PAGE_MARKER_REGEX = Regex("(?i)(page\\s+)?\\d{1,4}")
 private val AUDIOBOOK_ROMAN_MARKER_REGEX = Regex("(?i)[ivxlcdm]{1,8}")
 private val AUDIOBOOK_PUBLISHER_KEY_REGEX = Regex("[^a-z0-9&' ]")
 private val AUDIOBOOK_PUBLISHER_ISBN_REGEX = Regex("""(?:isbn|ebook isbn|print isbn)\s+.*""")
+private val AUDIOBOOK_PUBLISHER_BOILERPLATE_PHRASES = listOf(
+    "all rights reserved",
+    "work of fiction",
+    "resemblance to actual events",
+    "registered trademarks",
+    "copyright",
+    "published by",
+    "printed in",
+    "first printing",
+    "cover design",
+    "designed by",
+    "visit us on",
+    "world wide web",
+    "for information address",
+    "library of congress",
+    "table of contents",
+    "contents",
+    "about the author",
+    "also by",
+)
 private val AUDIOBOOK_NUMBER_HEADING_REGEX = Regex("""\d{1,3}""")
 private val AUDIOBOOK_WORD_NUMBER_REGEX = Regex("""(?i)$AUDIOBOOK_WORD_NUMBER_PATTERN""")
 private val AUDIOBOOK_CHAPTER_TOKEN_SPLIT_REGEX = Regex("[- ]")
