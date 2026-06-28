@@ -1428,7 +1428,11 @@ class GeneratedAudiobookResumeTest {
         }
 
         val expected = 64L + 64L + "final".length + "progress".length + "chapters".length + "segments".length
+        val expectedSidecars = ("final".length + "progress".length + "chapters".length + "segments".length).toLong()
 
+        assertEquals(64L + 64L, dir.generatedAudiobookSegmentFilesSizeBytes(completedSegments = 2))
+        assertEquals(expectedSidecars, dir.generatedAudiobookSidecarSizeBytes())
+        assertEquals(expected, dir.generatedAudiobookKnownFileSizeBytes(segmentFileSizeBytes = 64L + 64L))
         assertEquals(expected, dir.generatedAudiobookKnownFilesSizeBytes(completedSegments = 2))
         assertEquals(expected, audio(filePath = dir.absolutePath).generatedAudiobookKnownFilesSizeBytes(completedSegments = 2))
     }

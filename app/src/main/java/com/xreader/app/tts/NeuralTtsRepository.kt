@@ -810,6 +810,11 @@ class NeuralTtsRepository(
         var sessionAudioMillis = 0L
         var sessionComputeMillis = 0L
         var sessionGeneratedSegments = 0
+        var generatedSegmentFileSizeBytes = if (canResumeExistingAudio) {
+            target.generatedAudiobookSegmentFilesSizeBytes(reusableSegments)
+        } else {
+            0L
+        }
         val heartbeatSnapshot = AtomicReference(
             GenerationHeartbeatSnapshot(
                 completedSegments = completedSegments,
@@ -981,6 +986,7 @@ class NeuralTtsRepository(
                             "Use a faster QNN/OpenCL/NNAPI build before generating this book."
                     }
                     completedSegments = index + 1
+                    generatedSegmentFileSizeBytes += file.length().coerceAtLeast(0L)
                     segmentsOnRuntime += 1
                     heartbeatSnapshot.set(
                         GenerationHeartbeatSnapshot(
@@ -1076,6 +1082,7 @@ class NeuralTtsRepository(
                     generationAudioMillis = generationAudioMillis,
                     generationComputeMillis = generationComputeMillis,
                     sessionStartCompletedSegments = reusableSegments,
+                    fileSizeBytes = target.generatedAudiobookKnownFileSizeBytes(generatedSegmentFileSizeBytes),
                     error = null
                 )
             } finally {
@@ -1089,21 +1096,6 @@ class NeuralTtsRepository(
             },
             onFailure = { error ->
                 if (error is CancellationException) {
-                    val canceled = finalizedGeneratedAudiobookEntity(
-                        audio = activeAudio,
-                        target = target,
-                        status = BookAudioStatus.CANCELED,
-                        scope = scope,
-                        segmentCount = prepared.segments.size,
-                        completedSegments = completedSegments,
-                        wordCount = prepared.wordCount,
-                        sampleRate = activeSampleRate ?: 0,
-                        generationProvider = activeProvider,
-                        generationAudioMillis = generationAudioMillis,
-                        generationComputeMillis = generationComputeMillis,
-                        sessionStartCompletedSegments = reusableSegments,
-                        error = null
-                    )
                     withContext(NonCancellable) {
                         writeAudiobookManifest(
                             target = target,
@@ -1126,25 +1118,27 @@ class NeuralTtsRepository(
                             status = BookAudioStatus.CANCELED,
                             error = null
                         )
+                        val canceled = finalizedGeneratedAudiobookEntity(
+                            audio = activeAudio,
+                            target = target,
+                            status = BookAudioStatus.CANCELED,
+                            scope = scope,
+                            segmentCount = prepared.segments.size,
+                            completedSegments = completedSegments,
+                            wordCount = prepared.wordCount,
+                            sampleRate = activeSampleRate ?: 0,
+                            generationProvider = activeProvider,
+                            generationAudioMillis = generationAudioMillis,
+                            generationComputeMillis = generationComputeMillis,
+                            sessionStartCompletedSegments = reusableSegments,
+                            fileSizeBytes = target.generatedAudiobookKnownFileSizeBytes(generatedSegmentFileSizeBytes),
+                            error = null
+                        )
                         dao.upsertBookAudio(canceled)
                     }
                     throw error
                 }
-                val failed = finalizedGeneratedAudiobookEntity(
-                    audio = activeAudio,
-                    target = target,
-                    status = BookAudioStatus.FAILED,
-                    scope = scope,
-                    segmentCount = prepared.segments.size,
-                    completedSegments = completedSegments,
-                    wordCount = prepared.wordCount,
-                    sampleRate = activeSampleRate ?: 0,
-                    generationProvider = activeProvider,
-                    generationAudioMillis = generationAudioMillis,
-                    generationComputeMillis = generationComputeMillis,
-                    sessionStartCompletedSegments = reusableSegments,
-                    error = error.message ?: "Neural audiobook generation failed for $bookTitle"
-                )
+                val failureMessage = error.message ?: "Neural audiobook generation failed for $bookTitle"
                 writeAudiobookManifest(
                     target = target,
                     title = bookTitle,
@@ -1164,7 +1158,23 @@ class NeuralTtsRepository(
                     runtimeInitializationCount = runtimeInitializationCount,
                     runtimeInitializationMillis = runtimeInitializationMillis,
                     status = BookAudioStatus.FAILED,
-                    error = failed.error
+                    error = failureMessage
+                )
+                val failed = finalizedGeneratedAudiobookEntity(
+                    audio = activeAudio,
+                    target = target,
+                    status = BookAudioStatus.FAILED,
+                    scope = scope,
+                    segmentCount = prepared.segments.size,
+                    completedSegments = completedSegments,
+                    wordCount = prepared.wordCount,
+                    sampleRate = activeSampleRate ?: 0,
+                    generationProvider = activeProvider,
+                    generationAudioMillis = generationAudioMillis,
+                    generationComputeMillis = generationComputeMillis,
+                    sessionStartCompletedSegments = reusableSegments,
+                    fileSizeBytes = target.generatedAudiobookKnownFileSizeBytes(generatedSegmentFileSizeBytes),
+                    error = failureMessage
                 )
                 dao.upsertBookAudio(failed)
                 failed
@@ -1440,6 +1450,7 @@ class NeuralTtsRepository(
         generationAudioMillis: Long,
         generationComputeMillis: Long,
         sessionStartCompletedSegments: Int,
+        fileSizeBytes: Long,
         error: String?,
     ): BookAudioEntity {
         val boundedTotal = segmentCount.coerceAtLeast(0)
@@ -1459,7 +1470,7 @@ class NeuralTtsRepository(
             completedSegments = boundedCompleted,
             wordCount = wordCount.coerceAtLeast(0),
             sampleRate = sampleRate.coerceAtLeast(0),
-            fileSizeBytes = target.generatedAudiobookKnownFilesSizeBytes(boundedCompleted),
+            fileSizeBytes = fileSizeBytes.coerceAtLeast(0L),
             generationProvider = generationProvider,
             generationAudioMillis = generationAudioMillis.coerceAtLeast(0L),
             generationComputeMillis = generationComputeMillis.coerceAtLeast(0L),
@@ -2071,11 +2082,25 @@ internal fun shouldPersistGeneratedAudiobookPlaybackPosition(
 
 internal fun File.generatedAudiobookKnownFilesSizeBytes(completedSegments: Int): Long {
     if (!isDirectory) return 0L
+    return generatedAudiobookSegmentFilesSizeBytes(completedSegments) + generatedAudiobookSidecarSizeBytes()
+}
+
+internal fun File.generatedAudiobookKnownFileSizeBytes(segmentFileSizeBytes: Long): Long =
+    segmentFileSizeBytes.coerceAtLeast(0L) + generatedAudiobookSidecarSizeBytes()
+
+internal fun File.generatedAudiobookSegmentFilesSizeBytes(completedSegments: Int): Long {
+    if (!isDirectory) return 0L
     var total = 0L
     repeat(completedSegments.coerceAtLeast(0)) { index ->
         val segment = File(this, generatedAudiobookSegmentFileName(index))
         if (segment.isFile) total += segment.length()
     }
+    return total
+}
+
+internal fun File.generatedAudiobookSidecarSizeBytes(): Long {
+    if (!isDirectory) return 0L
+    var total = 0L
     listOf("manifest.txt", "manifest.in-progress.txt", "chapters.tsv", "segments.tsv").forEach { name ->
         val sidecar = File(this, name)
         if (sidecar.isFile) total += sidecar.length()
