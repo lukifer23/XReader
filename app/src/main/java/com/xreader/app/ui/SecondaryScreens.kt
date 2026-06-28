@@ -611,7 +611,7 @@ internal fun List<BookAudioWithBook>.audiobookRowsInvalidationKey(): List<Audiob
             book = row.book.audiobookBookInvalidationKey(),
             audio = row.audio.audiobookUiInvalidationKey()
         )
-    }.sortedBy { it.audioId }
+    }
 
 internal data class AudiobookRowInvalidationKey(
     val audioId: Long,

@@ -1396,7 +1396,6 @@ class AudiobookUiFormattersTest {
             audioRow(ready, title = "Ready")
         )
         val heartbeat = listOf(
-            audioRow(ready, title = "Ready"),
             audioRow(
                 generating.copy(
                     generationAudioMillis = 36_000L,
@@ -1404,15 +1403,29 @@ class AudiobookUiFormattersTest {
                     updatedAt = 9_000L
                 ),
                 title = "Generating"
-            )
+            ),
+            audioRow(ready, title = "Ready")
         )
         val progress = listOf(
-            audioRow(ready, title = "Ready"),
-            audioRow(generating.copy(completedSegments = 4, updatedAt = 10_000L), title = "Generating")
+            audioRow(generating.copy(completedSegments = 4, updatedAt = 10_000L), title = "Generating"),
+            audioRow(ready, title = "Ready")
         )
 
         assertEquals(previous.audiobookRowsInvalidationKey(), heartbeat.audiobookRowsInvalidationKey())
         assertTrue(previous.audiobookRowsInvalidationKey() != progress.audiobookRowsInvalidationKey())
+    }
+
+    @Test
+    fun audiobooksScreenRowInvalidationPreservesDaoOrderWithoutSorting() {
+        val first = audioRow(playableAudio(1), title = "First")
+        val second = audioRow(playableAudio(2), title = "Second")
+
+        val ordered = listOf(first, second).audiobookRowsInvalidationKey()
+        val reordered = listOf(second, first).audiobookRowsInvalidationKey()
+
+        assertEquals(listOf(1L, 2L), ordered.map { it.audioId })
+        assertEquals(listOf(2L, 1L), reordered.map { it.audioId })
+        assertTrue(ordered != reordered)
     }
 
     @Test
