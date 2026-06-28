@@ -4,8 +4,11 @@ import android.content.pm.ServiceInfo
 import com.xreader.app.data.BookAudioEntity
 import com.xreader.app.data.BookAudioStatus
 import com.xreader.app.settings.NeuralTtsTone
+import kotlinx.coroutines.CancellationException
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AudiobookGenerationForegroundServiceTest {
@@ -70,6 +73,38 @@ class AudiobookGenerationForegroundServiceTest {
         assertEquals(
             "Audiobook setup failed.",
             audiobookGenerationSetupFailureMessage(IllegalStateException(""))
+        )
+    }
+
+    @Test
+    fun setupFailureMarkerOnlyOwnsPreGenerationSetupWindow() {
+        assertTrue(
+            shouldMarkAudiobookSetupFailure(
+                error = IllegalStateException("Planning failed"),
+                preparingRowCreated = true,
+                repositoryGenerationStarted = false
+            )
+        )
+        assertFalse(
+            shouldMarkAudiobookSetupFailure(
+                error = IllegalStateException("Book missing"),
+                preparingRowCreated = false,
+                repositoryGenerationStarted = false
+            )
+        )
+        assertFalse(
+            shouldMarkAudiobookSetupFailure(
+                error = IllegalStateException("Provider failed"),
+                preparingRowCreated = true,
+                repositoryGenerationStarted = true
+            )
+        )
+        assertFalse(
+            shouldMarkAudiobookSetupFailure(
+                error = CancellationException("Stopped"),
+                preparingRowCreated = true,
+                repositoryGenerationStarted = false
+            )
         )
     }
 

@@ -115,6 +115,8 @@ class AudiobookGenerationForegroundService : Service() {
                 }
         }
         generationJob = serviceScope.launch(Dispatchers.IO) {
+            var preparingRowCreated = false
+            var repositoryGenerationStarted = false
             val result = runCatching {
                 val book = requireNotNull(container.libraryRepository.getBook(bookId)) {
                     "This book is no longer in the library."
@@ -141,12 +143,14 @@ class AudiobookGenerationForegroundService : Service() {
                     tone = activeTone,
                     scope = activeScope
                 )
+                preparingRowCreated = true
                 val indexedRows = withContext(Dispatchers.IO) {
                     container.libraryRepository.indexedRowsForBook(bookId)
                 }
                 val plan = withContext(Dispatchers.Default) {
                     prepareAudiobookPlan(indexedRows, activeScope)
                 }
+                repositoryGenerationStarted = true
                 container.neuralTtsRepository.generatePreparedBookAudio(
                     bookId = book.id,
                     bookTitle = book.title,
@@ -159,7 +163,12 @@ class AudiobookGenerationForegroundService : Service() {
                 )
             }
             result.exceptionOrNull()?.let { error ->
-                if (error !is CancellationException) {
+                if (shouldMarkAudiobookSetupFailure(
+                        error = error,
+                        preparingRowCreated = preparingRowCreated,
+                        repositoryGenerationStarted = repositoryGenerationStarted
+                    )
+                ) {
                     Log.e("XReader", "Foreground audiobook generation failed for $bookId", error)
                     runCatching {
                         container.neuralTtsRepository.failGeneratingBookAudio(
@@ -174,6 +183,8 @@ class AudiobookGenerationForegroundService : Service() {
                     }.onFailure { updateError ->
                         Log.w("XReader", "Could not mark audiobook setup failed for $bookId", updateError)
                     }
+                } else if (error !is CancellationException) {
+                    Log.e("XReader", "Foreground audiobook generation failed for $bookId", error)
                 }
             }
             withContext(Dispatchers.Main.immediate) {
@@ -565,6 +576,15 @@ internal fun audiobookGenerationStartGate(canceling: Boolean, jobActive: Boolean
 
 internal fun shouldCancelActiveAudiobookGenerationOnDestroy(jobActive: Boolean, activeBookId: Long?): Boolean =
     jobActive && activeBookId != null
+
+internal fun shouldMarkAudiobookSetupFailure(
+    error: Throwable,
+    preparingRowCreated: Boolean,
+    repositoryGenerationStarted: Boolean,
+): Boolean =
+    error !is CancellationException &&
+        preparingRowCreated &&
+        !repositoryGenerationStarted
 
 internal fun audiobookGenerationSetupFailureMessage(error: Throwable): String =
     (error.message ?: "Audiobook setup failed.")
