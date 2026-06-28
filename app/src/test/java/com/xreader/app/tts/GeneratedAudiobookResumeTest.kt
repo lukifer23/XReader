@@ -1254,6 +1254,29 @@ class GeneratedAudiobookResumeTest {
     }
 
     @Test
+    fun generatedAudiobookChaptersSortOutOfOrderSidecarRowsDuringSanitize() {
+        val dir = temporaryFolder.newFolder()
+        repeat(5) { index -> writeSegment(dir, index) }
+        File(dir, "chapters.tsv").writeText(
+            """
+            index	firstSegment	segmentCount	title
+            2	3	2	Third
+            0	0	1	First
+            1	1	2	Second
+            """.trimIndent()
+        )
+
+        val chapters = audio(filePath = dir.absolutePath).copy(
+            segmentCount = 5,
+            completedSegments = 5
+        ).generatedAudiobookChapters()
+
+        assertEquals(listOf("First", "Second", "Third"), chapters.map { it.title })
+        assertEquals(listOf(0, 1, 3), chapters.map { it.firstSegmentIndex })
+        assertEquals(listOf(1, 2, 2), chapters.map { it.segmentCount })
+    }
+
+    @Test
     fun segmentChapterIndexesIgnoreInvalidSidecarChapterIds() {
         val dir = temporaryFolder.newFolder()
         repeat(4) { index -> writeSegment(dir, index) }

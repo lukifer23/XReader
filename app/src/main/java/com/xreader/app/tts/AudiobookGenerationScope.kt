@@ -190,7 +190,6 @@ internal fun BookAudioEntity.generatedAudiobookChapters(playableSegmentCount: In
                 )
             }
                 .filter { it.segmentCount > 0 && it.firstSegmentIndex >= 0 }
-                .sortedBy { it.firstSegmentIndex }
                 .toList()
                 .sanitizeGeneratedAudiobookChapters(playableCount)
                 .ifEmpty { fallbackGeneratedAudiobookChapters(playableCount) }
