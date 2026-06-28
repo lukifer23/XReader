@@ -127,6 +127,7 @@ import com.xreader.app.tts.playableSegmentFiles
 import com.xreader.app.tts.nextChapterStart
 import com.xreader.app.tts.previousChapterStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -492,7 +493,6 @@ private fun BookAnalyticsRow(row: BookAnalytics) {
 @Immutable
 data class AudiobooksUiState(
     val rows: List<GeneratedAudiobookUiItem> = emptyList(),
-    val playback: AudiobookPlaybackUiState = EMPTY_AUDIOBOOK_PLAYBACK_UI_STATE,
     val message: String? = null,
 )
 
@@ -647,15 +647,18 @@ class AudiobooksViewModel(private val container: AppContainer) : ViewModel() {
     val uiState: StateFlow<AudiobooksUiState> =
         combine(
             sortedAudiobookRows,
-            playback,
             message
-        ) { sortedRows, currentPlayback, currentMessage ->
+        ) { sortedRows, currentMessage ->
             AudiobooksUiState(
                 rows = sortedRows,
-                playback = currentPlayback,
                 message = currentMessage
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AudiobooksUiState())
+
+    fun playbackForRow(audioId: Long): Flow<AudiobookPlaybackUiState> =
+        playback
+            .map { it.forAudiobooksScreenRow(audioId) }
+            .distinctUntilChanged()
 
     fun clearMessage() {
         message.value = null
@@ -812,10 +815,13 @@ internal fun AudiobooksRoute(
                     }
                 }
                 items(visibleRows, key = { "${it.book.id}:${it.audio.id}" }) { item ->
+                    val rowPlayback by remember(viewModel, item.audio.id) {
+                        viewModel.playbackForRow(item.audio.id)
+                    }.collectAsStateWithLifecycle(EMPTY_AUDIOBOOK_PLAYBACK_UI_STATE)
                     GeneratedAudiobookScreenRow(
                         item = item,
                         chapters = item.chapters,
-                        playback = state.playback.forAudiobooksScreenRow(item.audio.id),
+                        playback = rowPlayback,
                         onOpenBook = { openReaderAt(item.book.id) },
                         onPlay = { viewModel.play(item) },
                         onPause = { viewModel.pause(item) },
@@ -856,10 +862,13 @@ internal fun AudiobooksRoute(
         )
     }
     chapterPicker?.let { item ->
+        val pickerPlayback by remember(viewModel, item.audio.id) {
+            viewModel.playbackForRow(item.audio.id)
+        }.collectAsStateWithLifecycle(EMPTY_AUDIOBOOK_PLAYBACK_UI_STATE)
         AudiobookChapterPickerDialog(
             title = item.book.title,
             chapters = item.chapters,
-            playback = state.playback.takeIf { it.audioId == item.audio.id },
+            playback = pickerPlayback.takeIf { it.audioId == item.audio.id },
             onDismiss = { chapterPicker = null },
             onChapter = { chapter ->
                 chapterPicker = null
