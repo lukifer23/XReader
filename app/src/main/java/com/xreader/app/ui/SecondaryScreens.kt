@@ -610,15 +610,6 @@ private fun BookAudioWithBook.toGeneratedAudiobookUiItem(
     )
 }
 
-internal fun List<BookAudioWithBook>.audiobookRowsInvalidationKey(): List<AudiobookRowInvalidationKey> =
-    map { row ->
-        AudiobookRowInvalidationKey(
-            audioId = row.audio.id,
-            book = row.book.audiobookBookInvalidationKey(),
-            audio = row.audio.audiobookUiInvalidationKey()
-        )
-    }
-
 internal fun sameAudiobookScreenRows(
     previous: List<BookAudioWithBook>,
     next: List<BookAudioWithBook>,
@@ -639,27 +630,6 @@ private fun BookEntity.sameAudiobookScreenBook(other: BookEntity): Boolean =
         title == other.title &&
         author == other.author &&
         sortTitle == other.sortTitle
-
-internal data class AudiobookRowInvalidationKey(
-    val audioId: Long,
-    val book: AudiobookBookInvalidationKey,
-    val audio: AudiobookUiInvalidationKey,
-)
-
-internal data class AudiobookBookInvalidationKey(
-    val id: Long,
-    val title: String,
-    val author: String,
-    val sortTitle: String,
-)
-
-private fun BookEntity.audiobookBookInvalidationKey(): AudiobookBookInvalidationKey =
-    AudiobookBookInvalidationKey(
-        id = id,
-        title = title,
-        author = author,
-        sortTitle = sortTitle
-    )
 
 class AudiobooksViewModel(private val container: AppContainer) : ViewModel() {
     private val message = MutableStateFlow<String?>(null)

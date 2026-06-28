@@ -175,9 +175,6 @@ internal fun BookAudioEntity.audiobookUiInvalidationKey(): AudiobookUiInvalidati
         error = error
     )
 
-internal fun List<BookAudioEntity>.audiobookUiInvalidationKeys(): List<AudiobookUiInvalidationKey> =
-    map { it.audiobookUiInvalidationKey() }
-
 internal fun sameAudiobookUiInvalidationRows(
     previous: List<BookAudioEntity>,
     next: List<BookAudioEntity>,

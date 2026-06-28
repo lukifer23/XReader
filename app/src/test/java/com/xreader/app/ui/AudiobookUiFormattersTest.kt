@@ -1323,10 +1323,7 @@ class AudiobookUiFormattersTest {
             base.audiobookUiInvalidationKey() !=
                 base.copy(completedSegments = 3).audiobookUiInvalidationKey()
         )
-        assertTrue(
-            listOf(base).audiobookUiInvalidationKeys() !=
-                listOf(base.copy(status = BookAudioStatus.CANCELED)).audiobookUiInvalidationKeys()
-        )
+        assertEquals(false, sameAudiobookUiInvalidationRows(listOf(base), listOf(base.copy(status = BookAudioStatus.CANCELED))))
     }
 
     @Test
@@ -1476,9 +1473,7 @@ class AudiobookUiFormattersTest {
             audioRow(ready, title = "Ready")
         )
 
-        assertEquals(previous.audiobookRowsInvalidationKey(), heartbeat.audiobookRowsInvalidationKey())
         assertTrue(sameAudiobookScreenRows(previous, heartbeat))
-        assertTrue(previous.audiobookRowsInvalidationKey() != progress.audiobookRowsInvalidationKey())
         assertEquals(false, sameAudiobookScreenRows(previous, progress))
     }
 
@@ -1487,12 +1482,6 @@ class AudiobookUiFormattersTest {
         val first = audioRow(playableAudio(1), title = "First")
         val second = audioRow(playableAudio(2), title = "Second")
 
-        val ordered = listOf(first, second).audiobookRowsInvalidationKey()
-        val reordered = listOf(second, first).audiobookRowsInvalidationKey()
-
-        assertEquals(listOf(1L, 2L), ordered.map { it.audioId })
-        assertEquals(listOf(2L, 1L), reordered.map { it.audioId })
-        assertTrue(ordered != reordered)
         assertEquals(false, sameAudiobookScreenRows(listOf(first, second), listOf(second, first)))
     }
 
@@ -1510,21 +1499,13 @@ class AudiobookUiFormattersTest {
             )
         )
 
-        assertEquals(
-            listOf(row).audiobookRowsInvalidationKey(),
-            listOf(metadataOnly).audiobookRowsInvalidationKey()
-        )
         assertTrue(sameAudiobookScreenRows(listOf(row), listOf(metadataOnly)))
     }
 
     @Test
     fun audiobooksScreenRowInvalidationTracksVisibleAndSortableBookFields() {
         val row = audioRow(playableAudio(8), title = "Rendered", author = "Visible Author")
-        val baseKey = listOf(row).audiobookRowsInvalidationKey()
 
-        assertTrue(baseKey != listOf(row.copy(book = row.book.copy(title = "Changed"))).audiobookRowsInvalidationKey())
-        assertTrue(baseKey != listOf(row.copy(book = row.book.copy(author = "Changed"))).audiobookRowsInvalidationKey())
-        assertTrue(baseKey != listOf(row.copy(book = row.book.copy(sortTitle = "changed"))).audiobookRowsInvalidationKey())
         assertEquals(false, sameAudiobookScreenRows(listOf(row), listOf(row.copy(book = row.book.copy(title = "Changed")))))
         assertEquals(false, sameAudiobookScreenRows(listOf(row), listOf(row.copy(book = row.book.copy(author = "Changed")))))
         assertEquals(false, sameAudiobookScreenRows(listOf(row), listOf(row.copy(book = row.book.copy(sortTitle = "changed")))))
