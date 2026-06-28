@@ -655,7 +655,7 @@ class AudiobooksViewModel(private val container: AppContainer) : ViewModel() {
             }
             .map { rows ->
                 withContext(Dispatchers.IO) {
-                    val audioItems = audiobookUiItemCache.toUiItems(rows.map { it.audio })
+                    val audioItems = audiobookUiItemCache.toUiItemsForRows(rows)
                     rows.toGeneratedAudiobookUiItems(audioItems)
                 }
             }

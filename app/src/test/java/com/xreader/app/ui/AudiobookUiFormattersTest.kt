@@ -746,6 +746,24 @@ class AudiobookUiFormattersTest {
     }
 
     @Test
+    fun audiobookUiCacheMaterializesBookRowsWithoutIntermediateAudioList() {
+        val cache = BookAudiobookAudioUiItemCache()
+        val firstAudio = playableAudio(1).copy(bookId = 101, completedSegments = 2, segmentCount = 4)
+        val secondAudio = playableAudio(2).copy(bookId = 102, completedSegments = 3, segmentCount = 6)
+        val firstRows = listOf(
+            BookAudioWithBook(firstAudio, book(id = 101, title = "First")),
+            BookAudioWithBook(secondAudio, book(id = 102, title = "Second"))
+        )
+
+        val firstItems = cache.toUiItemsForRows(firstRows)
+        val secondItems = cache.toUiItemsForRows(listOf(BookAudioWithBook(secondAudio, book(id = 102, title = "Second"))))
+
+        assertEquals(listOf(1L, 2L), firstItems.map { it.audio.id })
+        assertEquals(listOf(2L), secondItems.map { it.audio.id })
+        assertEquals(6, secondItems.single().playableSegmentFiles)
+    }
+
+    @Test
     fun audiobookUiCacheReusesGeneratingFallbackChaptersAcrossHeartbeats() {
         val cache = BookAudiobookAudioUiItemCache()
         val generating = audio(1).copy(

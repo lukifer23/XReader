@@ -11,6 +11,7 @@ import androidx.lifecycle.viewModelScope
 import com.xreader.app.AppContainer
 import com.xreader.app.data.BookAudioEntity
 import com.xreader.app.data.BookAudioStatus
+import com.xreader.app.data.BookAudioWithBook
 import com.xreader.app.data.BookEntity
 import com.xreader.app.data.CollectionEntity
 import com.xreader.app.data.LibrarySearchRow
@@ -182,9 +183,27 @@ internal class BookAudiobookAudioUiItemCache {
 
     @Synchronized
     fun toUiItems(rows: List<BookAudioEntity>): List<BookAudiobookAudioUiItem> {
-        val activeIds = rows.mapTo(mutableSetOf()) { it.id }
+        val activeIds = HashSet<Long>(rows.size)
+        val uiItems = ArrayList<BookAudiobookAudioUiItem>(rows.size)
+        rows.forEach { audio ->
+            activeIds += audio.id
+            uiItems += toUiItemLocked(audio)
+        }
         items.keys.retainAll(activeIds)
-        return rows.map { audio -> toUiItemLocked(audio) }
+        return uiItems
+    }
+
+    @Synchronized
+    fun toUiItemsForRows(rows: List<BookAudioWithBook>): List<BookAudiobookAudioUiItem> {
+        val activeIds = HashSet<Long>(rows.size)
+        val uiItems = ArrayList<BookAudiobookAudioUiItem>(rows.size)
+        rows.forEach { row ->
+            val audio = row.audio
+            activeIds += audio.id
+            uiItems += toUiItemLocked(audio)
+        }
+        items.keys.retainAll(activeIds)
+        return uiItems
     }
 
     private fun toUiItemLocked(audio: BookAudioEntity): BookAudiobookAudioUiItem {
