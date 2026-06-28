@@ -173,7 +173,8 @@ internal fun BookAudioEntity.generatedAudiobookChapters(playableSegmentCount: In
         ?: return emptyList()
     val file = File(root, "chapters.tsv")
     val playableCount = playableSegmentCount ?: playableSegmentFiles().size
-    if (!file.isFile) return fallbackGeneratedAudiobookChapters(playableCount)
+    val fallback by lazy { fallbackGeneratedAudiobookChapters(playableCount) }
+    if (!file.isFile) return fallback
     return runCatching {
         file.useLines { lines ->
             lines.drop(1).mapNotNull { line ->
@@ -192,9 +193,9 @@ internal fun BookAudioEntity.generatedAudiobookChapters(playableSegmentCount: In
                 .filter { it.segmentCount > 0 && it.firstSegmentIndex >= 0 }
                 .toList()
                 .sanitizeGeneratedAudiobookChapters(playableCount)
-                .ifEmpty { fallbackGeneratedAudiobookChapters(playableCount) }
+                .ifEmpty { fallback }
         }
-    }.getOrDefault(fallbackGeneratedAudiobookChapters(playableCount))
+    }.getOrElse { fallback }
 }
 
 internal fun BookAudioEntity.fallbackGeneratedAudiobookChapters(playableCount: Int): List<GeneratedAudiobookChapter> {
