@@ -280,6 +280,7 @@ class NeuralTtsRepository(
                 dao.updateBookAudioProgress(
                     id = audio.id,
                     completedSegments = reusableSegments,
+                    fileSizeBytes = root.generatedAudiobookKnownFilesSizeBytes(reusableSegments),
                     updatedAt = clock.millis()
                 )
             }

@@ -359,13 +359,16 @@ interface NeuralTtsDao {
     @Query(
         """
         UPDATE book_audio
-        SET completedSegments = :completedSegments, updatedAt = :updatedAt
+        SET completedSegments = :completedSegments,
+            fileSizeBytes = :fileSizeBytes,
+            updatedAt = :updatedAt
         WHERE id = :id AND status = 'GENERATING'
         """
     )
     suspend fun updateBookAudioProgress(
         id: Long,
         completedSegments: Int,
+        fileSizeBytes: Long,
         updatedAt: Long,
     ): Int
 
