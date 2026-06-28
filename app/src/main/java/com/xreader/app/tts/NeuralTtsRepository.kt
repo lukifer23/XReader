@@ -1224,7 +1224,10 @@ class NeuralTtsRepository(
 
     private suspend fun TtsRuntime.releaseOnGenerationDispatcher() {
         withContext(generationDispatcher + NonCancellable) {
-            engine.release()
+            runCatching { engine.release() }
+                .onFailure { error ->
+                    Log.w(tag, "Could not release neural TTS runtime provider=$provider.", error)
+                }
         }
     }
 
