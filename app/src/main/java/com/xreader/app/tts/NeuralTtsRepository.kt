@@ -241,12 +241,12 @@ class NeuralTtsRepository(
     private suspend fun repairCompletedGeneratingAudio(
         audio: BookAudioEntity,
         reconcileIncomplete: Boolean,
-    ) = withContext(Dispatchers.IO) {
-        if (audio.status != BookAudioStatus.GENERATING) return@withContext
-        if (audio.segmentCount <= 0) return@withContext
+    ) {
+        if (audio.status != BookAudioStatus.GENERATING) return
+        if (audio.segmentCount <= 0) return
         val root = audio.filePath?.let(::File)
         if (root == null || !root.isDirectory) {
-            if (!reconcileIncomplete) return@withContext
+            if (!reconcileIncomplete) return
             audio.filePath?.takeIf { it.isNotBlank() }?.let { path ->
                 rewriteAudiobookRecoveryManifest(
                     target = File(path),
@@ -262,7 +262,7 @@ class NeuralTtsRepository(
                 status = BookAudioStatus.FAILED,
                 error = "Generated audio files are missing. Start generation again."
             )
-            return@withContext
+            return
         }
         val reusableSegments = reusableGeneratedAudiobookSegments(root, audio.segmentCount)
         if (reusableSegments < audio.segmentCount) {
@@ -288,7 +288,7 @@ class NeuralTtsRepository(
                     error = null
                 )
             }
-            return@withContext
+            return
         }
         val now = clock.millis()
         dao.upsertBookAudio(
@@ -303,18 +303,18 @@ class NeuralTtsRepository(
         )
     }
 
-    private suspend fun repairBookAudioFilesystemState(audio: BookAudioEntity) = withContext(Dispatchers.IO) {
+    private suspend fun repairBookAudioFilesystemState(audio: BookAudioEntity) {
         repairCompletedGeneratingAudio(
             audio = audio,
             reconcileIncomplete = audio.updatedAt < clock.millis() - STALE_GENERATING_AUDIO_REPAIR_AGE_MS
         )
-        if (audio.status == BookAudioStatus.GENERATING) return@withContext
+        if (audio.status == BookAudioStatus.GENERATING) return
         val root = audio.filePath?.let(::File)?.takeIf { it.isDirectory }
         val expectedPlayable = audio.segmentCount.coerceAtLeast(0)
-        if (expectedPlayable <= 0) return@withContext
+        if (expectedPlayable <= 0) return
         val verifiedPlayable = root?.let { reusableGeneratedAudiobookSegments(it, expectedPlayable) } ?: 0
         if (verifiedPlayable == audio.playableSegmentCount()) {
-            return@withContext
+            return
         }
         val now = clock.millis()
         dao.upsertBookAudio(
