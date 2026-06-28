@@ -1698,6 +1698,13 @@ class NeuralTtsRepository(
     }
 }
 
+private val GENERATED_AUDIOBOOK_SIDECAR_FILES = arrayOf(
+    "manifest.txt",
+    "manifest.in-progress.txt",
+    "chapters.tsv",
+    "segments.tsv"
+)
+
 private data class TtsRuntime(
     val engine: OfflineTts,
     val provider: String,
@@ -2123,7 +2130,7 @@ internal fun File.generatedAudiobookSegmentFilesSizeBytes(completedSegments: Int
 internal fun File.generatedAudiobookSidecarSizeBytes(): Long {
     if (!isDirectory) return 0L
     var total = 0L
-    listOf("manifest.txt", "manifest.in-progress.txt", "chapters.tsv", "segments.tsv").forEach { name ->
+    GENERATED_AUDIOBOOK_SIDECAR_FILES.forEach { name ->
         val sidecar = File(this, name)
         if (sidecar.isFile) total += sidecar.length()
     }
@@ -2149,11 +2156,11 @@ internal fun generatedAudiobookTempSegmentFileName(index: Int): String =
 internal fun File.deleteStaleGeneratedAudiobookTempSegments(): Int {
     if (!isDirectory) return 0
     var deleted = 0
-    listFiles()
-        ?.filter { file -> file.isFile && file.name.startsWith("segment-") && file.name.endsWith(".wav.tmp") }
-        ?.forEach { file ->
-            if (file.delete()) deleted += 1
+    listFiles()?.forEach { file ->
+        if (file.isFile && file.name.startsWith("segment-") && file.name.endsWith(".wav.tmp") && file.delete()) {
+            deleted += 1
         }
+    }
     return deleted
 }
 

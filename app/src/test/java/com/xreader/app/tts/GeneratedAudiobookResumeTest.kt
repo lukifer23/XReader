@@ -1496,6 +1496,21 @@ class GeneratedAudiobookResumeTest {
     }
 
     @Test
+    fun deleteStaleGeneratedAudiobookTempSegmentsRemovesOnlySegmentTemps() {
+        val dir = temporaryFolder.newFolder()
+        writeSegment(dir, index = 0)
+        val staleTemp = File(dir, generatedAudiobookTempSegmentFileName(1)).apply { writeBytes(ByteArray(64)) }
+        val nonSegmentTemp = File(dir, "manifest.txt.tmp").apply { writeText("keep") }
+        val wrongExtension = File(dir, "segment-00003.tmp").apply { writeText("keep") }
+
+        assertEquals(1, dir.deleteStaleGeneratedAudiobookTempSegments())
+        assertFalse(staleTemp.exists())
+        assertTrue(File(dir, generatedAudiobookSegmentFileName(0)).isFile)
+        assertTrue(nonSegmentTemp.isFile)
+        assertTrue(wrongExtension.isFile)
+    }
+
+    @Test
     fun atomicTextWriteReplacesExistingFileWithoutLeavingTempFile() {
         val dir = temporaryFolder.newFolder()
         val file = File(dir, "manifest.in-progress.txt").apply { writeText("old") }
