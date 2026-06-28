@@ -137,11 +137,9 @@ class NeuralTtsRepository(
         tone: NeuralTtsTone = NeuralTtsTone.NATURAL,
         scope: AudiobookGenerationScope = AudiobookGenerationScope.FULL_BOOK,
     ): BookAudioEntity? = withContext(Dispatchers.IO) {
-        dao.bookAudio(bookId, modelId, speakerId, pace.speed, tone.name, scope.key)?.let {
-            repairBookAudioFilesystemState(it)
-        }
-        dao.generatedBookAudio(bookId, modelId, speakerId, pace.speed, tone.name, scope.key)
-            ?.takeIf { it.hasCompletePlayableAudiobook() }
+        dao.bookAudio(bookId, modelId, speakerId, pace.speed, tone.name, scope.key)
+            ?.let { repairBookAudioFilesystemState(it) }
+            ?.takeIf { it.hasVerifiedCompleteGeneratedAudiobook() }
     }
 
     suspend fun bestPlayableBookAudio(
@@ -167,8 +165,7 @@ class NeuralTtsRepository(
             )
             .firstNotNullOfOrNull { candidate ->
                 repairBookAudioFilesystemState(candidate)
-                dao.bookAudioById(candidate.id)
-                    ?.takeIf { it.playableSegmentFiles().isNotEmpty() }
+                    .takeIf { it.playableSegmentCount() > 0 }
             }
     }
 
@@ -251,111 +248,110 @@ class NeuralTtsRepository(
     private suspend fun repairCompletedGeneratingAudio(
         audio: BookAudioEntity,
         reconcileIncomplete: Boolean,
-    ) {
-        if (audio.status != BookAudioStatus.GENERATING) return
-        if (audio.segmentCount <= 0) return
+    ): BookAudioEntity {
+        if (audio.status != BookAudioStatus.GENERATING) return audio
+        if (audio.segmentCount <= 0) return audio
         val root = audio.filePath?.let(::File)
         if (root == null || !root.isDirectory) {
-            if (!reconcileIncomplete) return
+            if (!reconcileIncomplete) return audio
+            val failed = audio.copy(
+                status = BookAudioStatus.FAILED,
+                completedSegments = 0,
+                fileSizeBytes = 0L,
+                updatedAt = clock.millis(),
+                error = "Generated audio files are missing. Start generation again."
+            )
             audio.filePath?.takeIf { it.isNotBlank() }?.let { path ->
                 rewriteAudiobookRecoveryManifest(
                     target = File(path),
-                    status = BookAudioStatus.FAILED,
-                    completedSegments = 0,
-                    updatedAt = clock.millis(),
-                    error = "Generated audio files are missing. Start generation again."
+                    status = failed.status,
+                    completedSegments = failed.completedSegments,
+                    updatedAt = failed.updatedAt,
+                    error = failed.error
                 )
             }
-            markStaleGeneratingAudio(
-                audio = audio,
-                completedSegments = 0,
-                status = BookAudioStatus.FAILED,
-                error = "Generated audio files are missing. Start generation again."
-            )
-            return
+            dao.upsertBookAudio(failed)
+            return failed
         }
         val reusableSegments = reusableGeneratedAudiobookSegments(root, audio.segmentCount)
         if (reusableSegments < audio.segmentCount) {
+            var current = audio
             if (reusableSegments > audio.completedSegments) {
-                dao.updateBookAudioProgress(
-                    id = audio.id,
+                current = audio.copy(
                     completedSegments = reusableSegments,
                     fileSizeBytes = root.generatedAudiobookKnownFilesSizeBytes(reusableSegments),
                     updatedAt = clock.millis()
                 )
+                dao.updateBookAudioProgress(
+                    id = audio.id,
+                    completedSegments = current.completedSegments,
+                    fileSizeBytes = current.fileSizeBytes,
+                    updatedAt = current.updatedAt
+                )
             }
             if (reconcileIncomplete) {
-                rewriteAudiobookRecoveryManifest(
-                    target = root,
+                val canceled = current.copy(
                     status = BookAudioStatus.CANCELED,
-                    completedSegments = reusableSegments,
+                    completedSegments = reusableSegments.coerceIn(0, audio.segmentCount.coerceAtLeast(0)),
+                    fileSizeBytes = root.generatedAudiobookKnownFilesSizeBytes(reusableSegments),
                     updatedAt = clock.millis(),
                     error = null
                 )
-                markStaleGeneratingAudio(
-                    audio = audio,
-                    completedSegments = reusableSegments,
-                    status = BookAudioStatus.CANCELED,
-                    error = null
+                rewriteAudiobookRecoveryManifest(
+                    target = root,
+                    status = canceled.status,
+                    completedSegments = canceled.completedSegments,
+                    updatedAt = canceled.updatedAt,
+                    error = canceled.error
                 )
+                dao.upsertBookAudio(canceled)
+                return canceled
             }
-            return
+            return current
         }
         val now = clock.millis()
-        dao.upsertBookAudio(
-            audio.copy(
-                status = BookAudioStatus.GENERATED,
-                completedSegments = audio.segmentCount,
-                fileSizeBytes = root.generatedAudiobookKnownFilesSizeBytes(audio.segmentCount),
-                generatedAt = audio.generatedAt ?: now,
-                updatedAt = now,
-                error = null
-            )
+        val generated = audio.copy(
+            status = BookAudioStatus.GENERATED,
+            completedSegments = audio.segmentCount,
+            fileSizeBytes = root.generatedAudiobookKnownFilesSizeBytes(audio.segmentCount),
+            generatedAt = audio.generatedAt ?: now,
+            updatedAt = now,
+            error = null
         )
+        dao.upsertBookAudio(generated)
+        return generated
     }
 
-    private suspend fun repairBookAudioFilesystemState(audio: BookAudioEntity) {
-        repairCompletedGeneratingAudio(
+    private suspend fun repairBookAudioFilesystemState(audio: BookAudioEntity): BookAudioEntity {
+        val repairedGenerating = repairCompletedGeneratingAudio(
             audio = audio,
             reconcileIncomplete = audio.updatedAt < clock.millis() - STALE_GENERATING_AUDIO_REPAIR_AGE_MS
         )
-        if (audio.status == BookAudioStatus.GENERATING) return
-        val root = audio.filePath?.let(::File)?.takeIf { it.isDirectory }
-        val expectedPlayable = audio.segmentCount.coerceAtLeast(0)
-        if (expectedPlayable <= 0) return
+        if (repairedGenerating.status == BookAudioStatus.GENERATING) return repairedGenerating
+        val root = repairedGenerating.filePath?.let(::File)?.takeIf { it.isDirectory }
+        val expectedPlayable = repairedGenerating.segmentCount.coerceAtLeast(0)
+        if (expectedPlayable <= 0) return repairedGenerating
         val verifiedPlayable = root?.let { reusableGeneratedAudiobookSegments(it, expectedPlayable) } ?: 0
-        if (verifiedPlayable == audio.playableSegmentCount()) {
-            return
+        if (verifiedPlayable == repairedGenerating.playableSegmentCount()) {
+            return repairedGenerating
         }
         val now = clock.millis()
-        dao.upsertBookAudio(
-            audio.copy(
-                status = if (verifiedPlayable > 0) BookAudioStatus.CANCELED else BookAudioStatus.FAILED,
-                completedSegments = verifiedPlayable,
-                fileSizeBytes = audio.generatedAudiobookKnownFilesSizeBytes(verifiedPlayable),
-                generatedAt = if (verifiedPlayable > 0) audio.generatedAt else null,
-                updatedAt = now,
-                error = if (verifiedPlayable > 0) null else "Generated audio files are missing. Start generation again."
-            )
+        val repaired = repairedGenerating.copy(
+            status = if (verifiedPlayable > 0) BookAudioStatus.CANCELED else BookAudioStatus.FAILED,
+            completedSegments = verifiedPlayable,
+            fileSizeBytes = repairedGenerating.generatedAudiobookKnownFilesSizeBytes(verifiedPlayable),
+            generatedAt = if (verifiedPlayable > 0) repairedGenerating.generatedAt else null,
+            updatedAt = now,
+            error = if (verifiedPlayable > 0) null else "Generated audio files are missing. Start generation again."
         )
+        dao.upsertBookAudio(repaired)
+        return repaired
     }
 
-    private suspend fun markStaleGeneratingAudio(
-        audio: BookAudioEntity,
-        completedSegments: Int,
-        status: BookAudioStatus,
-        error: String?,
-    ) {
-        dao.upsertBookAudio(
-            audio.copy(
-                status = status,
-                completedSegments = completedSegments.coerceIn(0, audio.segmentCount.coerceAtLeast(0)),
-                fileSizeBytes = audio.generatedAudiobookKnownFilesSizeBytes(completedSegments),
-                updatedAt = clock.millis(),
-                error = error
-            )
-        )
-    }
+    private fun BookAudioEntity.hasVerifiedCompleteGeneratedAudiobook(): Boolean =
+        status == BookAudioStatus.GENERATED &&
+            segmentCount > 0 &&
+            completedSegments == segmentCount
 
     suspend fun ensureCatalogSeeded() {
         if (catalogSeededForProcess) return
