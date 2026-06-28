@@ -32,6 +32,7 @@ import java.time.Clock
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicReference
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import kotlinx.coroutines.asCoroutineDispatcher
@@ -780,6 +781,15 @@ class NeuralTtsRepository(
         var sessionAudioMillis = 0L
         var sessionComputeMillis = 0L
         var sessionGeneratedSegments = 0
+        val heartbeatSnapshot = AtomicReference(
+            GenerationHeartbeatSnapshot(
+                completedSegments = completedSegments,
+                provider = activeProvider,
+                audioMillis = generationAudioMillis,
+                computeMillis = generationComputeMillis,
+                sampleRate = activeSampleRate ?: spec.sampleRate
+            )
+        )
         runCatching {
             val modelDir = requireNotNull(model.localPath)
             var runtime: TtsRuntime? = null
@@ -799,13 +809,14 @@ class NeuralTtsRepository(
                     }
                     val heartbeatAt = clock.millis()
                     if (shouldWriteGenerationHeartbeat(lastHeartbeatWrittenAtMillis, heartbeatAt)) {
+                        val snapshot = heartbeatSnapshot.get()
                         val updatedRows = dao.updateBookAudioGenerationMetrics(
                             id = activeAudio.id,
-                            completedSegments = completedSegments,
-                            generationProvider = activeProvider,
-                            generationAudioMillis = generationAudioMillis,
-                            generationComputeMillis = generationComputeMillis,
-                            sampleRate = activeSampleRate ?: spec.sampleRate,
+                            completedSegments = snapshot.completedSegments,
+                            generationProvider = snapshot.provider,
+                            generationAudioMillis = snapshot.audioMillis,
+                            generationComputeMillis = snapshot.computeMillis,
+                            sampleRate = snapshot.sampleRate,
                             updatedAt = heartbeatAt
                         )
                         if (updatedRows != 1) {
@@ -842,6 +853,15 @@ class NeuralTtsRepository(
                         activeHostThreadCount = activeRuntime.hostThreadCount
                         runtimeInitializationCount += 1
                         runtimeInitializationMillis += activeRuntime.initializationMillis
+                        heartbeatSnapshot.set(
+                            GenerationHeartbeatSnapshot(
+                                completedSegments = completedSegments,
+                                provider = activeProvider,
+                                audioMillis = generationAudioMillis,
+                                computeMillis = generationComputeMillis,
+                                sampleRate = activeSampleRate ?: sampleRate
+                            )
+                        )
                         writeAudiobookManifest(
                             target = target,
                             title = bookTitle,
@@ -920,6 +940,15 @@ class NeuralTtsRepository(
                     }
                     completedSegments = index + 1
                     segmentsOnRuntime += 1
+                    heartbeatSnapshot.set(
+                        GenerationHeartbeatSnapshot(
+                            completedSegments = completedSegments,
+                            provider = tts.provider,
+                            audioMillis = generationAudioMillis,
+                            computeMillis = generationComputeMillis,
+                            sampleRate = sampleRate
+                        )
+                    )
                     val progressWriteAt = clock.millis()
                     if (
                         shouldWriteGenerationProgress(
@@ -1617,6 +1646,14 @@ private data class TtsRuntime(
 private data class GeneratedTtsSegment(
     val audio: GeneratedAudio,
     val computeMillis: Long,
+)
+
+private data class GenerationHeartbeatSnapshot(
+    val completedSegments: Int,
+    val provider: String?,
+    val audioMillis: Long,
+    val computeMillis: Long,
+    val sampleRate: Int,
 )
 
 data class AudiobookGenerationHardwareReadiness(
