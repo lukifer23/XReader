@@ -2022,7 +2022,8 @@ private fun GeneratedAudiobookList(
     onDeleteAudio: (BookAudioEntity) -> Unit,
     onShowChapters: (BookAudiobookAudioUiItem) -> Unit,
 ) {
-    var expanded by remember(items.map { it.audio.id } to selectedAudioId) { mutableStateOf(false) }
+    val listIdentity = generatedAudiobookItemsIdentityKey(items)
+    var expanded by remember(listIdentity, selectedAudioId) { mutableStateOf(false) }
     val visibleAudio = remember(items, selectedAudioId, expanded) {
         visibleGeneratedAudiobookItems(items, selectedAudioId, expanded)
     }
@@ -2755,6 +2756,23 @@ internal fun visibleGeneratedAudiobookItems(
     } else {
         collapsed.dropLast(1) + selected
     }
+}
+
+internal data class GeneratedAudiobookItemsIdentityKey(
+    val count: Int,
+    val hash: Int,
+)
+
+internal fun generatedAudiobookItemsIdentityKey(items: List<BookAudiobookAudioUiItem>): GeneratedAudiobookItemsIdentityKey {
+    var hash = 1
+    items.forEach { item ->
+        val id = item.audio.id
+        hash = 31 * hash + (id xor (id ushr 32)).toInt()
+    }
+    return GeneratedAudiobookItemsIdentityKey(
+        count = items.size,
+        hash = hash
+    )
 }
 
 internal fun BookAudioEntity.estimatedDurationLabel(): String? =

@@ -257,6 +257,32 @@ class AudiobookUiFormattersTest {
     }
 
     @Test
+    fun generatedAudiobookItemsIdentityKeyTracksOnlyListIdentity() {
+        val items = listOf(
+            bookAudioItem(audio(1).copy(updatedAt = 10L)),
+            bookAudioItem(audio(2).copy(updatedAt = 20L))
+        )
+
+        assertEquals(
+            generatedAudiobookItemsIdentityKey(items),
+            generatedAudiobookItemsIdentityKey(
+                listOf(
+                    bookAudioItem(audio(1).copy(updatedAt = 100L, completedSegments = 4)),
+                    bookAudioItem(audio(2).copy(updatedAt = 200L, completedSegments = 8))
+                )
+            )
+        )
+        assertTrue(
+            generatedAudiobookItemsIdentityKey(items) !=
+                generatedAudiobookItemsIdentityKey(items.reversed())
+        )
+        assertTrue(
+            generatedAudiobookItemsIdentityKey(items) !=
+                generatedAudiobookItemsIdentityKey(items + bookAudioItem(audio(3)))
+        )
+    }
+
+    @Test
     fun playbackTimeLabelHandlesMissingAndKnownDuration() {
         assertNull(AudiobookPlaybackUiState().segmentTimeLabel())
         assertEquals(
