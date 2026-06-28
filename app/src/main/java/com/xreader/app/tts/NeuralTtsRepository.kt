@@ -19,6 +19,7 @@ import com.xreader.app.data.NeuralTtsModelStatus
 import com.xreader.app.settings.NeuralTtsPace
 import com.xreader.app.settings.NeuralTtsTone
 import java.io.BufferedInputStream
+import java.io.BufferedWriter
 import java.io.File
 import java.io.FileInputStream
 import java.io.IOException
@@ -1507,25 +1508,25 @@ class NeuralTtsRepository(
         File(target, CHAPTERS_FILE).writeAtomically { writer ->
             writer.appendLine("index\tfirstSegment\tsegmentCount\ttitle")
             prepared.chapters.forEach { chapter ->
-                writer.append(chapter.index.toString())
-                    .append('\t')
-                    .append(chapter.firstSegmentIndex.toString())
-                    .append('\t')
-                    .append(chapter.segmentCount.toString())
-                    .append('\t')
-                    .appendLine(chapter.title.tsvEscaped())
+                writer.appendDecimal(chapter.index)
+                writer.append('\t')
+                writer.appendDecimal(chapter.firstSegmentIndex)
+                writer.append('\t')
+                writer.appendDecimal(chapter.segmentCount)
+                writer.append('\t')
+                writer.appendLine(chapter.title.tsvEscaped())
             }
         }
         File(target, SEGMENTS_FILE).writeAtomically { writer ->
             writer.appendLine("index\tchapterIndex\tpauseAfterMs\ttext")
             prepared.segments.forEachIndexed { index, segment ->
-                writer.append(index.toString())
-                    .append('\t')
-                    .append(prepared.segmentChapterIndexes.getOrElse(index) { 0 }.toString())
-                    .append('\t')
-                    .append(prepared.segmentPauseMillis.getOrElse(index) { DEFAULT_AUDIOBOOK_SEGMENT_PAUSE_MS }.toString())
-                    .append('\t')
-                    .appendLine(segment.tsvEscaped())
+                writer.appendDecimal(index)
+                writer.append('\t')
+                writer.appendDecimal(prepared.segmentChapterIndexes.getOrElse(index) { 0 })
+                writer.append('\t')
+                writer.appendDecimal(prepared.segmentPauseMillis.getOrElse(index) { DEFAULT_AUDIOBOOK_SEGMENT_PAUSE_MS })
+                writer.append('\t')
+                writer.appendLine(segment.tsvEscaped())
             }
         }
     }
@@ -2182,6 +2183,36 @@ internal fun File.writeAtomically(block: (java.io.BufferedWriter) -> Unit) {
     val temp = File(parentFile ?: return bufferedWriter().use(block), "$name.tmp")
     temp.bufferedWriter().use(block)
     replaceWithTempFile(temp)
+}
+
+private fun BufferedWriter.appendDecimal(value: Int): BufferedWriter =
+    appendDecimal(value.toLong())
+
+private fun BufferedWriter.appendDecimal(value: Long): BufferedWriter {
+    if (value == 0L) {
+        append('0')
+        return this
+    }
+    if (value == Long.MIN_VALUE) {
+        append("-9223372036854775808")
+        return this
+    }
+    var remaining = value
+    if (remaining < 0L) {
+        append('-')
+        remaining = -remaining
+    }
+    var divisor = 1L
+    while (remaining / divisor >= 10L) {
+        divisor *= 10L
+    }
+    while (divisor > 0L) {
+        val digit = (remaining / divisor).toInt()
+        append(('0'.code + digit).toChar())
+        remaining %= divisor
+        divisor /= 10L
+    }
+    return this
 }
 
 private fun File.replaceWithTempFile(temp: File) {
