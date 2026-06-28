@@ -295,10 +295,13 @@ data class LibraryUiState(
     val repairingBookIds: Set<Long> = emptySet(),
     val audiobookScans: Map<Long, AudiobookScanUiState> = emptyMap(),
     val audiobookPlayback: AudiobookPlaybackUiState = EMPTY_AUDIOBOOK_PLAYBACK_UI_STATE,
+    val opdsCatalog: OpdsCatalogUiState = OpdsCatalogUiState(),
+)
+
+data class LibraryMetadataOptionsUiState(
     val authorOptions: List<String> = emptyList(),
     val genreOptions: List<String> = emptyList(),
     val seriesOptions: List<String> = emptyList(),
-    val opdsCatalog: OpdsCatalogUiState = OpdsCatalogUiState(),
 )
 
 data class OpdsCatalogUiState(
@@ -344,7 +347,7 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         container.libraryRepository.observeGenres(),
         container.libraryRepository.observeSeries()
     ) { authors, genres, series ->
-        LibraryMetadataOptionsState(
+        LibraryMetadataOptionsUiState(
             authorOptions = authors,
             genreOptions = genres,
             seriesOptions = series
@@ -394,18 +397,11 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         val allItems: List<BookListItem>,
     )
 
-    private data class LibraryMetadataOptionsState(
-        val authorOptions: List<String>,
-        val genreOptions: List<String>,
-        val seriesOptions: List<String>,
-    )
-
     private data class LibrarySupportState(
         val collections: List<CollectionUiItem>,
         val bookHealth: Map<Long, BookHealthUiState>,
         val repairingBookIds: Set<Long>,
         val audiobookScans: Map<Long, AudiobookScanUiState>,
-        val metadataOptions: LibraryMetadataOptionsState,
     )
 
     private data class LibraryRuntimeSupportState(
@@ -462,13 +458,12 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         )
     }
 
-    private val supportState = combine(runtimeSupportState, metadataOptions) { runtime, options ->
+    private val supportState = runtimeSupportState.map { runtime ->
         LibrarySupportState(
             collections = runtime.collections.toUiItems(),
             bookHealth = runtime.bookHealth,
             repairingBookIds = runtime.repairingBookIds,
-            audiobookScans = runtime.audiobookScans,
-            metadataOptions = options
+            audiobookScans = runtime.audiobookScans
         )
     }
 
@@ -509,12 +504,13 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
                 repairingBookIds = support.repairingBookIds,
                 audiobookScans = support.audiobookScans,
                 audiobookPlayback = playback,
-                authorOptions = support.metadataOptions.authorOptions,
-                genreOptions = support.metadataOptions.genreOptions,
-                seriesOptions = support.metadataOptions.seriesOptions,
                 opdsCatalog = chrome.opdsCatalog
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState())
+
+    val metadataOptionsState: StateFlow<LibraryMetadataOptionsUiState> =
+        metadataOptions
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryMetadataOptionsUiState())
 
     val readerSettings: StateFlow<ReaderSettings> =
         container.settingsRepository.settings

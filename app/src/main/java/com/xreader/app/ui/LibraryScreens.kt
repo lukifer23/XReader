@@ -122,6 +122,7 @@ import com.xreader.app.tts.audiobookGenerationProgressLabel
 import com.xreader.app.tts.canDeleteGeneratedAudiobook
 import com.xreader.app.tts.generationEtaLabel
 import com.xreader.app.tts.segmentLimit
+import kotlinx.coroutines.flow.StateFlow
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.ceil
@@ -278,6 +279,7 @@ internal fun LibraryRoute(
     ) { padding ->
         LibraryScreen(
             state = state,
+            metadataOptionsState = viewModel.metadataOptionsState,
             onQuery = viewModel::setQuery,
             onSearch = viewModel::searchLibrary,
             onGroup = viewModel::setGroup,
@@ -467,6 +469,7 @@ private fun LibraryImportActionButton(
 @Composable
 internal fun LibraryScreen(
     state: LibraryUiState,
+    metadataOptionsState: StateFlow<LibraryMetadataOptionsUiState>,
     onQuery: (String) -> Unit,
     onSearch: () -> Unit,
     onGroup: (LibraryGroup) -> Unit,
@@ -646,6 +649,7 @@ internal fun LibraryScreen(
         }
     }
     editing?.let { book ->
+        val metadataOptions by metadataOptionsState.collectAsStateWithLifecycle()
         LaunchedEffect(book.id) {
             onRefreshBookHealth(book.id)
         }
@@ -653,9 +657,9 @@ internal fun LibraryScreen(
             book = book,
             health = state.bookHealth[book.id],
             repairing = book.id in state.repairingBookIds,
-            authorOptions = state.authorOptions,
-            genreOptions = state.genreOptions,
-            seriesOptions = state.seriesOptions,
+            authorOptions = metadataOptions.authorOptions,
+            genreOptions = metadataOptions.genreOptions,
+            seriesOptions = metadataOptions.seriesOptions,
             onDismiss = { editing = null },
             onRefreshHealth = { onRefreshBookHealth(book.id) },
             onRepairBook = { onRepairBook(book) },
