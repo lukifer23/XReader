@@ -605,6 +605,24 @@ class AudiobookUiFormattersTest {
     }
 
     @Test
+    fun audiobooksScreenSortUsesPrecomputedSortTitle() {
+        val sameTimestamp = 100L
+        val zeta = item(
+            playableAudio(1).copy(status = BookAudioStatus.GENERATED, generatedAt = sameTimestamp, updatedAt = sameTimestamp),
+            bookTitle = "Zeta"
+        )
+        val alpha = item(
+            playableAudio(2).copy(status = BookAudioStatus.GENERATED, generatedAt = sameTimestamp, updatedAt = sameTimestamp),
+            bookTitle = "The Alpha"
+        ).let { it.copy(book = it.book.copy(sortTitle = "alpha")) }
+
+        val sorted = listOf(zeta, alpha)
+            .sortedForAudiobooksScreen(AudiobookPlaybackUiState())
+
+        assertEquals(listOf("The Alpha", "Zeta"), sorted.map { it.book.title })
+    }
+
+    @Test
     fun audiobooksScreenKeepsGeneratingRowsStableAcrossHeartbeatUpdates() {
         val firstStarted = item(
             audio(1).copy(

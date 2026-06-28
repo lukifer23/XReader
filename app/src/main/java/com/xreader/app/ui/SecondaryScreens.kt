@@ -519,7 +519,7 @@ private fun List<GeneratedAudiobookUiItem>.sortedForAudiobooksScreen(
     sortedWith(
         compareBy<GeneratedAudiobookUiItem> { it.audiobookScreenPriority(playback) }
             .thenByDescending { it.audio.audiobookScreenSortMillis() }
-            .thenBy { it.book.sortTitle.lowercase(Locale.US) }
+            .thenBy { it.book.sortTitle }
             .thenBy { it.audio.id }
     )
 
@@ -543,15 +543,21 @@ internal fun List<GeneratedAudiobookUiItem>.filteredForAudiobooksScreen(
 }
 
 private fun GeneratedAudiobookUiItem.audiobookSearchText(): String =
-    listOf(
-        book.title,
-        book.author,
-        audio.scopeLabel,
-        audio.modelDisplayName,
-        audio.audiobookDisplayProfileLabel(includeScope = false),
-        audio.status.name.lowercase(Locale.US),
-        audio.tone.lowercase(Locale.US)
-    ).joinToString(" ").lowercase(Locale.US)
+    buildString {
+        append(book.title)
+        append(' ')
+        append(book.author)
+        append(' ')
+        append(audio.scopeLabel)
+        append(' ')
+        append(audio.modelDisplayName)
+        append(' ')
+        append(audio.audiobookDisplayProfileLabel(includeScope = false))
+        append(' ')
+        append(audio.status.name)
+        append(' ')
+        append(audio.tone)
+    }.lowercase(Locale.US)
 
 private fun GeneratedAudiobookUiItem.audiobookScreenPriority(playback: AudiobookRowsSortKey): Int =
     when {
