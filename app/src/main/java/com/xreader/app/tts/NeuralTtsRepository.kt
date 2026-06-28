@@ -276,10 +276,17 @@ class NeuralTtsRepository(
         val reusableSegments = reusableGeneratedAudiobookSegments(root, audio.segmentCount)
         if (reusableSegments < audio.segmentCount) {
             var current = audio
-            if (reusableSegments > audio.completedSegments) {
+            val recoveredFileSize = root.generatedAudiobookKnownFilesSizeBytes(reusableSegments)
+            if (
+                shouldWriteRecoveredGeneratingProgress(
+                    reusableSegments = reusableSegments,
+                    completedSegments = audio.completedSegments,
+                    reconcileIncomplete = reconcileIncomplete
+                )
+            ) {
                 current = audio.copy(
                     completedSegments = reusableSegments,
-                    fileSizeBytes = root.generatedAudiobookKnownFilesSizeBytes(reusableSegments),
+                    fileSizeBytes = recoveredFileSize,
                     updatedAt = clock.millis()
                 )
                 dao.updateBookAudioProgress(
@@ -293,7 +300,7 @@ class NeuralTtsRepository(
                 val canceled = current.copy(
                     status = BookAudioStatus.CANCELED,
                     completedSegments = reusableSegments.coerceIn(0, audio.segmentCount.coerceAtLeast(0)),
-                    fileSizeBytes = root.generatedAudiobookKnownFilesSizeBytes(reusableSegments),
+                    fileSizeBytes = recoveredFileSize,
                     updatedAt = clock.millis(),
                     error = null
                 )
@@ -2066,6 +2073,13 @@ private fun BookAudioEntity?.canResumeGeneration(
     if (this.wordCount != wordCount) return false
     return target.isDirectory
 }
+
+internal fun shouldWriteRecoveredGeneratingProgress(
+    reusableSegments: Int,
+    completedSegments: Int,
+    reconcileIncomplete: Boolean,
+): Boolean =
+    !reconcileIncomplete && reusableSegments > completedSegments
 
 internal fun BookAudioEntity.withAudiobookGenerationStartState(
     canResumeExistingAudio: Boolean,

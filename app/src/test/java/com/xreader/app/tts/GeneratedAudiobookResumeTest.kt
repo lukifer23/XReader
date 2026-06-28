@@ -306,6 +306,31 @@ class GeneratedAudiobookResumeTest {
     }
 
     @Test
+    fun recoveredGeneratingProgressWritesOnlyWhenRowWillRemainGenerating() {
+        assertTrue(
+            shouldWriteRecoveredGeneratingProgress(
+                reusableSegments = 4,
+                completedSegments = 2,
+                reconcileIncomplete = false
+            )
+        )
+        assertFalse(
+            shouldWriteRecoveredGeneratingProgress(
+                reusableSegments = 4,
+                completedSegments = 2,
+                reconcileIncomplete = true
+            )
+        )
+        assertFalse(
+            shouldWriteRecoveredGeneratingProgress(
+                reusableSegments = 2,
+                completedSegments = 4,
+                reconcileIncomplete = false
+            )
+        )
+    }
+
+    @Test
     fun persistedPlaybackPositionKeepsFinishedStateOutOfResumePath() {
         assertEquals(
             GeneratedAudiobookPersistedPlaybackPosition(segmentIndex = 2, positionMs = 0),
