@@ -1097,22 +1097,26 @@ internal fun BookAudioEntity.audiobookStatusDetail(
     }
     val statusLabel = when (status) {
         BookAudioStatus.GENERATED -> "Ready"
-        BookAudioStatus.GENERATING -> listOfNotNull(
-            "Generating",
-            generationEtaLabel()
-        ).joinToString(" • ")
+        BookAudioStatus.GENERATING -> {
+            val eta = generationEtaLabel()
+            if (eta == null) "Generating" else "Generating • $eta"
+        }
         BookAudioStatus.CANCELED -> "Stopped"
         BookAudioStatus.FAILED -> error ?: "Failed"
     }
     val playbackLabel = if (activePlayback && playback.segmentCount > 0) audiobookPlaybackStateLabel(playback) else null
     val performanceLabel = if (status == BookAudioStatus.GENERATING) null else audiobookPerformanceLabel()
-    return listOfNotNull(statusLabel, progress, performanceLabel, playbackLabel).joinToString(" • ")
+    return joinedAudiobookLabel(statusLabel, progress, performanceLabel, playbackLabel)
 }
 
 internal fun BookAudioEntity.audiobookPerformanceLabel(): String? {
     val provider = generationProvider?.takeIf { it.isNotBlank() }?.generationProviderLabel()
     val factor = generationAudioTimeFactorLabel(generationAudioMillis, generationComputeMillis)
-    return listOfNotNull(provider, factor).takeIf { it.isNotEmpty() }?.joinToString(" • ")
+    return when {
+        provider != null && factor != null -> "$provider • $factor"
+        provider != null -> provider
+        else -> factor
+    }
 }
 
 internal fun generationAudioTimeFactorLabel(audioMillis: Long, computeMillis: Long): String? {
@@ -1258,13 +1262,15 @@ internal fun audiobookPlaybackStateLabel(playback: AudiobookPlaybackUiState): St
     }
 
 internal fun BookAudioEntity.audiobookDisplayProfileLabel(includeScope: Boolean = true): String =
-    listOf(
-        scopeLabel.takeIf { includeScope }?.takeUnless { it.equals("Full book", ignoreCase = true) },
-        modelDisplayName,
-        "Speaker ${speakerId + 1}".takeIf { speakerId > 0 },
-        tone.lowercase(Locale.US).replaceFirstChar { it.titlecase(Locale.US) },
-        "%.2fx".format(Locale.US, speed)
-    ).filterNotNull().joinToString(" ")
+    buildString {
+        appendSpaceSeparated(
+            scopeLabel.takeIf { includeScope }?.takeUnless { it.equals("Full book", ignoreCase = true) }
+        )
+        appendSpaceSeparated(modelDisplayName)
+        if (speakerId > 0) appendSpaceSeparated("Speaker ${speakerId + 1}")
+        appendSpaceSeparated(tone.lowercase(Locale.US).replaceFirstChar { it.titlecase(Locale.US) })
+        appendSpaceSeparated("%.2fx".format(Locale.US, speed))
+    }
 
 internal fun BookAudioEntity.audiobookResumeLabel(
     prefix: String = "Resume",
@@ -1299,8 +1305,32 @@ private fun AudiobookPlaybackUiState.segmentProgress(): Float =
 
 internal fun AudiobookPlaybackUiState.chapterLabel(): String? {
     val title = chapterTitle?.takeIf { it.isNotBlank() } ?: return null
-    val position = chapterIndex?.takeIf { chapterCount > 0 }?.let { "${it + 1} / $chapterCount" }
-    return listOfNotNull(title, position).joinToString(" • ")
+    val position = chapterIndex?.takeIf { chapterCount > 0 } ?: return title
+    return "$title • ${position + 1} / $chapterCount"
+}
+
+private fun joinedAudiobookLabel(
+    first: String,
+    second: String?,
+    third: String?,
+    fourth: String?,
+): String = buildString {
+    append(first)
+    appendAudiobookLabelPart(second)
+    appendAudiobookLabelPart(third)
+    appendAudiobookLabelPart(fourth)
+}
+
+private fun StringBuilder.appendAudiobookLabelPart(part: String?) {
+    if (part == null) return
+    append(" • ")
+    append(part)
+}
+
+private fun StringBuilder.appendSpaceSeparated(part: String?) {
+    if (part == null) return
+    if (isNotEmpty()) append(' ')
+    append(part)
 }
 
 internal fun AudiobookPlaybackUiState.canSkipPreviousChapter(): Boolean =
