@@ -2197,7 +2197,7 @@ private inline fun <T> traced(name: String, block: () -> T): T {
 
 private const val WEBGPU_SEGMENTS_PER_RUNTIME = 128
 internal const val KOKORO_PREVIEW_MAX_NUM_SENTENCES = 1
-internal const val KOKORO_AUDIOBOOK_GENERATION_MAX_NUM_SENTENCES = 2
+internal const val KOKORO_AUDIOBOOK_GENERATION_MAX_NUM_SENTENCES = 3
 private const val GENERATION_MANIFEST_CHECKPOINT_SEGMENTS = 4
 private const val SMALL_GENERATION_PROGRESS_SEGMENTS = 24
 private const val INITIAL_GENERATION_PROGRESS_SEGMENTS = 8
