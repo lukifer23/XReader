@@ -635,7 +635,6 @@ class NeuralTtsRepository(
         scope: AudiobookGenerationScope = AudiobookGenerationScope.FULL_BOOK,
     ): Int = withContext(Dispatchers.IO) {
         val speed = pace.speed
-        val activeAudio = dao.bookAudio(bookId, modelId, speakerId, speed, tone.name, scope.key)
         dao.cancelGeneratingBookAudio(
             bookId = bookId,
             modelId = modelId,
@@ -643,7 +642,6 @@ class NeuralTtsRepository(
             speed = speed,
             tone = tone.name,
             scope = scope.key,
-            fileSizeBytes = activeAudio?.generatedAudiobookKnownFilesSizeBytes(activeAudio.completedSegments) ?: 0L,
             updatedAt = clock.millis()
         )
     }

@@ -398,7 +398,6 @@ interface NeuralTtsDao {
         """
         UPDATE book_audio
         SET status = 'CANCELED',
-            fileSizeBytes = :fileSizeBytes,
             updatedAt = :updatedAt,
             error = NULL
         WHERE bookId = :bookId
@@ -417,7 +416,6 @@ interface NeuralTtsDao {
         speed: Float,
         tone: String,
         scope: String,
-        fileSizeBytes: Long,
         updatedAt: Long,
     ): Int
 
