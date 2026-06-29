@@ -620,7 +620,11 @@ internal fun audiobookGenerationProgressText(
 ): String? {
     val progress = audio?.audiobookGenerationProgressLabel() ?: return null
     val eta = audio.generationEtaLabel(nowMillis = nowMillis)
-    return listOfNotNull(progress, eta).joinToString(" • ")
+    return if (eta.isNullOrEmpty()) {
+        progress
+    } else {
+        "$progress • $eta"
+    }
 }
 
 internal fun BookAudioEntity.audiobookGenerationProgressLabel(): String? {

@@ -172,6 +172,19 @@ class AudiobookGenerationForegroundServiceTest {
             "10/10 segments",
             audiobookGenerationProgressText(audio(BookAudioStatus.GENERATING, segmentCount = 10, completedSegments = 13))
         )
+        assertEquals(
+            "working on 5/10 • under 1m left",
+            audiobookGenerationProgressText(
+                audio(
+                    status = BookAudioStatus.GENERATING,
+                    segmentCount = 10,
+                    completedSegments = 4,
+                    generationStartedAt = 1_000L,
+                    generationSessionStartCompletedSegments = 0
+                ),
+                nowMillis = 21_000L
+            )
+        )
     }
 
     @Test
