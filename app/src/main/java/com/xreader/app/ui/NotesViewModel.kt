@@ -12,6 +12,7 @@ import com.xreader.app.data.AnnotationEntity
 import com.xreader.app.data.AnnotationKind
 import com.xreader.app.data.BookEntity
 import com.xreader.app.settings.ReaderHighlightColor
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -20,6 +21,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class NoteListItem(
     val annotation: AnnotationEntity,
@@ -51,22 +53,26 @@ class NotesViewModel(container: AppContainer) : ViewModel() {
 
     val uiState: StateFlow<NotesUiState> =
         combine(
-            container.annotationRepository.observeAllAnnotations(),
+            container.annotationRepository.observeAllAnnotations()
+                .distinctUntilChanged(),
             container.libraryRepository.observeBooks("")
                 .distinctUntilChanged(::sameNotesVisibleBooks),
             query,
             kind,
             selectedTag
         ) { annotations, books, currentQuery, currentKind, currentTag ->
-            val booksById = books.associateBy { it.id }
-            buildNotesUiState(
-                annotations = annotations,
-                booksById = booksById,
-                currentQuery = currentQuery,
-                currentKind = currentKind,
-                currentTag = currentTag
-            )
+            withContext(Dispatchers.Default) {
+                val booksById = books.associateBy { it.id }
+                buildNotesUiState(
+                    annotations = annotations,
+                    booksById = booksById,
+                    currentQuery = currentQuery,
+                    currentKind = currentKind,
+                    currentTag = currentTag
+                )
+            }
         }
+            .distinctUntilChanged()
             .combine(exportState) { notes, export ->
                 notes.copy(exporting = export.exporting, message = export.message)
             }
