@@ -230,8 +230,14 @@ class ReaderViewModel(
         viewModelScope.launch {
             container.readingRepository.observeState(bookId).collect { state ->
                 if (ignoreStoredStateUntilFirstLocator) return@collect
-                if (lastReadingState == null && state != null) lastReadingState = state
-                _uiState.update { it.copy(state = state, currentUnit = state?.currentUnit ?: it.currentUnit) }
+                _uiState.update { current ->
+                    if (!shouldApplyObservedReaderState(current.state, state)) {
+                        current
+                    } else {
+                        if (state != null) lastReadingState = state
+                        current.copy(state = state, currentUnit = state?.currentUnit ?: current.currentUnit)
+                    }
+                }
             }
         }
     }
@@ -1038,6 +1044,18 @@ internal fun shouldPersistReaderState(
     next: ReadingStateEntity,
 ): Boolean =
     lastPersisted != next
+
+internal fun shouldApplyObservedReaderState(
+    current: ReadingStateEntity?,
+    observed: ReadingStateEntity?,
+): Boolean {
+    if (current == observed) return false
+    if (observed == null) return current != null
+    if (current == null) return true
+    if (observed.lastReadAt < current.lastReadAt) return false
+    if (observed.lastReadAt == current.lastReadAt && observed.activeMillis < current.activeMillis) return false
+    return true
+}
 
 private const val READER_SEARCH_SNIPPET_MAX_LENGTH = 220
 

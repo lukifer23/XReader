@@ -367,6 +367,61 @@ class ReaderLocatorTest {
         )
     }
 
+    @Test
+    fun observedReaderStateSkipsDuplicateAndStalePersistenceBounce() {
+        val current = readingState(
+            locator = "locator-4",
+            currentUnit = 4,
+            activeMillis = 30_000L,
+            lastReadAt = 2_000L
+        )
+
+        assertFalse(shouldApplyObservedReaderState(current = current, observed = current.copy()))
+        assertFalse(
+            shouldApplyObservedReaderState(
+                current = current,
+                observed = current.copy(locator = "old", currentUnit = 3, lastReadAt = 1_999L)
+            )
+        )
+        assertFalse(
+            shouldApplyObservedReaderState(
+                current = current,
+                observed = current.copy(activeMillis = 20_000L)
+            )
+        )
+    }
+
+    @Test
+    fun observedReaderStateAppliesNewerVisibleProgress() {
+        val current = readingState(
+            locator = "locator-4",
+            currentUnit = 4,
+            progress = 0.4,
+            activeMillis = 30_000L,
+            lastReadAt = 2_000L
+        )
+
+        assertTrue(shouldApplyObservedReaderState(current = null, observed = current))
+        assertTrue(shouldApplyObservedReaderState(current = current, observed = null))
+        assertTrue(
+            shouldApplyObservedReaderState(
+                current = current,
+                observed = current.copy(
+                    locator = "locator-5",
+                    currentUnit = 5,
+                    progress = 0.5,
+                    lastReadAt = 2_100L
+                )
+            )
+        )
+        assertTrue(
+            shouldApplyObservedReaderState(
+                current = current,
+                observed = current.copy(activeMillis = 40_000L)
+            )
+        )
+    }
+
     private fun unit(
         index: Int,
         locator: String = "locator-$index",
@@ -382,16 +437,19 @@ class ReaderLocatorTest {
     private fun readingState(
         locator: String,
         currentUnit: Int,
+        progress: Double = currentUnit / 10.0,
+        activeMillis: Long = 0L,
+        lastReadAt: Long = 1_700_000_000_000L,
     ): ReadingStateEntity =
         ReadingStateEntity(
             bookId = 42,
             locator = locator,
-            progress = currentUnit / 10.0,
+            progress = progress,
             currentUnit = currentUnit,
             totalUnits = 10,
-            activeMillis = 0,
+            activeMillis = activeMillis,
             estimatedWpm = 0,
-            lastReadAt = 1_700_000_000_000
+            lastReadAt = lastReadAt
         )
 
     private fun bookmark(
