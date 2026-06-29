@@ -307,7 +307,6 @@ internal fun ReadiumPublicationView(
     LaunchedEffect(navigator, publication.book.id) {
         val active = navigator ?: return@LaunchedEffect
         active.currentLocator.collect { locator ->
-            active.publicationView.disableScrollbarsRecursively()
             publishLocator(locator)
         }
     }
