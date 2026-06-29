@@ -538,10 +538,7 @@ class GeneratedAudiobookPlaybackController(
                     lastPersistedAtMillis = nowMillis
                 }
                 val updated = current.copy(segmentPositionMs = position, segmentDurationMs = duration)
-                if (shouldEmitAudiobookPlaybackState(current = current, next = updated)) {
-                    _state.value = updated
-                    mediaSession.update(updated)
-                }
+                setState(updated)
             }
         }
     }
