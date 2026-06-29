@@ -156,6 +156,21 @@ class TtsAccelerationRuntimeTest {
         assertEquals(setOf("79"), TtsAccelerationRuntime.qnnHtpPackagedArchitectureVersions(qnnHtpLibraries()))
     }
 
+    @Test
+    fun qnnHtpArchitectureDetectionIgnoresMismatchedLibraryTriples() {
+        val mixed = setOf(
+            "libQnnHtpV79Stub.so",
+            "libQnnHtpV79Skel.so",
+            "libQnnHtpV75.so",
+            "libQnnHtpV75Stub.so",
+            "libQnnHtpV75Skel.so",
+            "libQnnHtpV79.so",
+            "libQnnHtpVabc.so"
+        )
+
+        assertEquals(setOf("75", "79"), TtsAccelerationRuntime.qnnHtpPackagedArchitectureVersions(mixed))
+        assertEquals(emptySet<String>(), TtsAccelerationRuntime.qnnHtpPackagedArchitectureVersions(mixed - "libQnnHtpV75.so" - "libQnnHtpV79.so"))
+    }
 
     @Test
     fun nnapiReadinessRequiresApi27AndPackagedRuntime() {

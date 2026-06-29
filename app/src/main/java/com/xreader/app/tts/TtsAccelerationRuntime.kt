@@ -450,11 +450,22 @@ internal object TtsAccelerationRuntime {
     }
 
     internal fun qnnHtpPackagedArchitectureVersions(installedLibraries: Set<String>): Set<String> {
-        val stubs = installedLibraries.mapNotNull { it.qnnHtpArchitectureVersion("Stub.so") }.toSet()
-        val skels = installedLibraries.mapNotNull { it.qnnHtpArchitectureVersion("Skel.so") }.toSet()
-        val dspBackends = installedLibraries.mapNotNull { it.qnnHtpArchitectureVersion(".so") }
-            .filterNot { version -> "Stub" in version || "Skel" in version }
-            .toSet()
+        val stubs = mutableSetOf<String>()
+        val skels = mutableSetOf<String>()
+        val dspBackends = mutableSetOf<String>()
+        installedLibraries.forEach { library ->
+            library.qnnHtpArchitectureVersion("Stub.so")?.let { version ->
+                stubs += version
+                return@forEach
+            }
+            library.qnnHtpArchitectureVersion("Skel.so")?.let { version ->
+                skels += version
+                return@forEach
+            }
+            library.qnnHtpArchitectureVersion(".so")?.let { version ->
+                dspBackends += version
+            }
+        }
         return stubs.intersect(skels).intersect(dspBackends)
     }
 
