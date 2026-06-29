@@ -846,6 +846,28 @@ class AudiobookUiFormattersTest {
     }
 
     @Test
+    fun generatedAudiobookRowDetailCombinesVisibleMetadataWithoutMissingOptionalParts() {
+        val generatedAt = 10_000L
+        val audio = playableAudio(1).copy(
+            wordCount = 9_000,
+            fileSizeBytes = 2_048L,
+            generatedAt = generatedAt,
+            playbackSegmentIndex = 1,
+            playbackPositionMs = 2_000
+        )
+        val row = bookAudioItem(
+            audio = audio,
+            chapters = listOf(GeneratedAudiobookChapter(index = 0, title = "Chapter 1", firstSegmentIndex = 0, segmentCount = 2)),
+            playableSegmentFiles = 2
+        )
+
+        assertEquals(
+            "4 segments • 1 chapter • 2 playable • ~1h audio • resume 2 / 2 • 2 KB • generated 2h ago",
+            generatedAudiobookRowDetail(row, nowMillis = generatedAt + 2 * 60 * 60_000L)
+        )
+    }
+
+    @Test
     fun neuralTtsStatusTextIsSharedBySettingsAndBookDialog() {
         assertEquals(
             "Not installed • 333 MB",

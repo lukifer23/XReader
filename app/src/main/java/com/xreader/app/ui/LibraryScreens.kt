@@ -2111,16 +2111,7 @@ private fun GeneratedAudiobookRow(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        listOf(
-                            "${audioEntity.segmentCount} segments",
-                            audio.chapters.takeIf { it.isNotEmpty() }?.let { generatedAudiobookChapterCountLabel(it.size) },
-                            generatedAudioPlayableDetail(audio),
-                            audioEntity.estimatedDurationLabel(),
-                            audioEntity.audiobookPerformanceLabel(),
-                            audioEntity.audiobookResumeLabel(prefix = "resume", playableSegmentFiles = audio.playableSegmentFiles),
-                            audioEntity.fileSizeBytes.takeIf { it > 0 }?.compactBytes(),
-                            audioEntity.generatedAt?.let { "generated ${relativeAgeLabel(it)}" }
-                        ).filterNotNull().joinToString(" • "),
+                        generatedAudiobookRowDetail(audio),
                         style = MaterialTheme.typography.bodySmall,
                         color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 2,
@@ -2155,6 +2146,36 @@ private fun GeneratedAudiobookRow(
             }
         }
     }
+}
+
+internal fun generatedAudiobookRowDetail(
+    audio: BookAudiobookAudioUiItem,
+    nowMillis: Long = System.currentTimeMillis(),
+): String {
+    val audioEntity = audio.audio
+    return buildString {
+        append(audioEntity.segmentCount)
+        append(" segments")
+        if (audio.chapters.isNotEmpty()) {
+            appendGeneratedAudiobookDetailPart(generatedAudiobookChapterCountLabel(audio.chapters.size))
+        }
+        appendGeneratedAudiobookDetailPart(generatedAudioPlayableDetail(audio))
+        appendGeneratedAudiobookDetailPart(audioEntity.estimatedDurationLabel())
+        appendGeneratedAudiobookDetailPart(audioEntity.audiobookPerformanceLabel())
+        appendGeneratedAudiobookDetailPart(
+            audioEntity.audiobookResumeLabel(prefix = "resume", playableSegmentFiles = audio.playableSegmentFiles)
+        )
+        appendGeneratedAudiobookDetailPart(audioEntity.fileSizeBytes.takeIf { it > 0 }?.compactBytes())
+        audioEntity.generatedAt?.let { generatedAt ->
+            appendGeneratedAudiobookDetailPart("generated ${relativeAgeLabel(generatedAt, nowMillis)}")
+        }
+    }
+}
+
+private fun StringBuilder.appendGeneratedAudiobookDetailPart(part: String?) {
+    if (part.isNullOrBlank()) return
+    append(" • ")
+    append(part)
 }
 
 private fun generatedAudioPlayableDetail(audio: BookAudiobookAudioUiItem): String? =
@@ -2840,8 +2861,11 @@ private fun formatPlaybackTimestamp(millis: Int): String {
     }
 }
 
-private fun relativeAgeLabel(timeMillis: Long): String {
-    val elapsedMillis = (System.currentTimeMillis() - timeMillis).coerceAtLeast(0L)
+private fun relativeAgeLabel(
+    timeMillis: Long,
+    nowMillis: Long = System.currentTimeMillis(),
+): String {
+    val elapsedMillis = (nowMillis - timeMillis).coerceAtLeast(0L)
     val minutes = elapsedMillis / 60_000L
     if (minutes < 1L) return "just now"
     if (minutes < 60L) return "${minutes}m ago"
