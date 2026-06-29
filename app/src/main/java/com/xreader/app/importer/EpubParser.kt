@@ -211,19 +211,28 @@ class EpubParser {
         manifest: Map<String, ManifestItem>,
     ): CoverImage? {
         val explicitCoverId = coverMetaId(opf)
-        listOfNotNull(
-            explicitCoverId?.let(manifest::get),
-            manifest.values.firstOrNull { it.properties.any { property -> property.equals("cover-image", ignoreCase = true) } },
-        ).firstNotNullOfOrNull { coverFromManifestItem(zip, basePath, it) }?.let { return it }
+        explicitCoverId
+            ?.let(manifest::get)
+            ?.let { coverFromManifestItem(zip, basePath, it) }
+            ?.let { return it }
+
+        manifest.values
+            .firstOrNull { item -> item.properties.any { property -> property.equals("cover-image", ignoreCase = true) } }
+            ?.let { coverFromManifestItem(zip, basePath, it) }
+            ?.let { return it }
 
         guideCoverImage(zip, opf, basePath, manifest)?.let { return it }
 
-        return listOfNotNull(
-            manifest.values.firstOrNull {
-                it.isSupportedImage() && (it.id.contains("cover", ignoreCase = true) || it.href.contains("cover", ignoreCase = true))
-            },
-            manifest.values.firstOrNull { it.isSupportedImage() }
-        ).firstNotNullOfOrNull { coverFromManifestItem(zip, basePath, it) }
+        manifest.values
+            .firstOrNull { item ->
+                item.isSupportedImage() && (item.id.contains("cover", ignoreCase = true) || item.href.contains("cover", ignoreCase = true))
+            }
+            ?.let { coverFromManifestItem(zip, basePath, it) }
+            ?.let { return it }
+
+        return manifest.values
+            .firstOrNull { it.isSupportedImage() }
+            ?.let { coverFromManifestItem(zip, basePath, it) }
     }
 
     private fun guideCoverImage(

@@ -10,6 +10,42 @@ import java.util.zip.ZipOutputStream
 
 class EpubParserCoverTest {
     @Test
+    fun extractsExplicitMetadataCoverBeforeCoverImageProperty() {
+        val explicitBytes = byteArrayOf(1, 3, 5)
+        val propertyBytes = byteArrayOf(2, 4, 6)
+        val epub = epubWithPackage(
+            packageXml = """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <package version="3.0" xmlns="http://www.idpf.org/2007/opf" xmlns:dc="http://purl.org/dc/elements/1.1/">
+                    <metadata>
+                        <dc:title>Manifest Cover Test</dc:title>
+                        <dc:creator>XReader</dc:creator>
+                        <meta name="cover" content="legacy-cover"/>
+                    </metadata>
+                    <manifest>
+                        <item id="property-cover" href="Images/property.png" media-type="image/png" properties="cover-image"/>
+                        <item id="legacy-cover" href="Images/legacy.jpg" media-type="image/jpeg"/>
+                        <item id="chapter" href="Text/chapter.xhtml" media-type="application/xhtml+xml"/>
+                    </manifest>
+                    <spine>
+                        <itemref idref="chapter"/>
+                    </spine>
+                </package>
+            """.trimIndent(),
+            entries = mapOf(
+                "OEBPS/Images/property.png" to propertyBytes,
+                "OEBPS/Images/legacy.jpg" to explicitBytes,
+                "OEBPS/Text/chapter.xhtml" to "<html><body><p>Body text.</p></body></html>".toByteArray()
+            )
+        )
+
+        val cover = requireNotNull(EpubParser().parseCover(epub))
+
+        assertEquals("jpg", cover.extension)
+        assertArrayEquals(explicitBytes, cover.bytes)
+    }
+
+    @Test
     fun extractsCoverFromGuideXhtmlPageBeforeArbitraryManifestImages() {
         val interiorBytes = byteArrayOf(1, 2, 3, 4)
         val coverBytes = byteArrayOf(9, 8, 7, 6)
