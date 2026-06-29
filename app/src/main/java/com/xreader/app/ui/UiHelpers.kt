@@ -366,6 +366,17 @@ internal fun BookListItem.isLibraryInProgress(): Boolean =
 internal fun BookListItem.isLibraryUnread(): Boolean =
     !isLibraryFinished() && rawLibraryProgress() <= LIBRARY_UNREAD_PROGRESS_THRESHOLD
 
+internal fun continueReadingProgressSummary(
+    progress: Double,
+    eta: String?,
+    wpm: Int?,
+): String {
+    val percentText = "${(progress.coerceIn(0.0, 1.0) * 100).roundToInt()}% read"
+    val trimmedEta = eta?.trim()
+    val wpmText = wpm?.takeIf { it > 0 }?.let { "$it WPM" }
+    return buildLibraryStatusText(percentText, trimmedEta, wpmText)
+}
+
 internal fun List<BookListItem>.filteredForLibraryQuery(query: String): List<BookListItem> {
     val terms = query.libraryQueryTerms()
     if (terms.isEmpty()) return this
@@ -420,6 +431,27 @@ private fun BookListItem.libraryStatusSearchLabels(): List<String> =
 private const val LIBRARY_UNREAD_PROGRESS_THRESHOLD = 0.01
 private const val LIBRARY_FINISHED_PROGRESS_THRESHOLD = 0.995
 private const val LIBRARY_LENGTH_BYTES_PER_FALLBACK_WORD = 6L
+
+private fun buildLibraryStatusText(
+    required: String,
+    optionalOne: String?,
+    optionalTwo: String?,
+): String {
+    val hasOptionalOne = !optionalOne.isNullOrEmpty()
+    val hasOptionalTwo = !optionalTwo.isNullOrEmpty()
+    if (!hasOptionalOne && !hasOptionalTwo) return required
+    return buildString {
+        append(required)
+        if (hasOptionalOne) {
+            append(" • ")
+            append(optionalOne)
+        }
+        if (hasOptionalTwo) {
+            append(" • ")
+            append(optionalTwo)
+        }
+    }
+}
 
 internal data class SeriesNextRecommendation(
     val series: String,

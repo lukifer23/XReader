@@ -909,7 +909,7 @@ internal fun ContinueReadingCard(
                     modifier = Modifier.fillMaxWidth()
                 )
                 Text(
-                    listOfNotNull("${(progress * 100).roundToInt()}% read", eta, wpm?.let { "$it WPM" }).joinToString(" • "),
+                    continueReadingProgressSummary(progress = progress, eta = eta, wpm = wpm),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

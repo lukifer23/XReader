@@ -95,6 +95,18 @@ class LibraryProgressStateTest {
     }
 
     @Test
+    fun continueReadingProgressSummaryBoundsProgressAndSkipsBlankOptionalParts() {
+        assertEquals("42% read", continueReadingProgressSummary(progress = 0.421, eta = null, wpm = null))
+        assertEquals("42% read", continueReadingProgressSummary(progress = 0.421, eta = "  ", wpm = 0))
+        assertEquals(
+            "42% read • 8m left • 250 WPM",
+            continueReadingProgressSummary(progress = 0.421, eta = " 8m left ", wpm = 250)
+        )
+        assertEquals("0% read", continueReadingProgressSummary(progress = -0.2, eta = null, wpm = null))
+        assertEquals("100% read", continueReadingProgressSummary(progress = 1.8, eta = null, wpm = null))
+    }
+
+    @Test
     fun readabilityLabelsStayCompact() {
         val clear = book(finished = false).copy(readabilityScore = 68.0, readabilityGradeLevel = 7.4)
         val dense = book(finished = false).copy(readabilityScore = 34.0, readabilityGradeLevel = 13.1)
