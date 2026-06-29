@@ -2,6 +2,7 @@ package com.xreader.app.tts
 
 import android.media.AudioManager
 import android.media.session.PlaybackState
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -166,6 +167,13 @@ class ReadAloudEngineTest {
         val inactive = ReadAloudState(currentChunk = 1, totalChunks = 3)
         assertEquals(false, readAloudNotificationCanSkipPrevious(inactive))
         assertEquals(false, readAloudNotificationCanSkipNext(inactive))
+    }
+
+    @Test
+    fun foregroundNotificationCompactIndexesUseLastThreeActions() {
+        assertArrayEquals(intArrayOf(), compactNotificationActionIndexes(0))
+        assertArrayEquals(intArrayOf(0, 1, 2), compactNotificationActionIndexes(3))
+        assertArrayEquals(intArrayOf(1, 2, 3), compactNotificationActionIndexes(4))
     }
 
     @Test

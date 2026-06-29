@@ -125,10 +125,7 @@ class ReadAloudForegroundService : Service() {
 
     private fun buildReadAloudNotification(state: ReadAloudState): Notification {
         val actions = readAloudNotificationActions(state)
-        val compactIndexes = actions.indices
-            .toList()
-            .takeLast(actions.size.coerceAtMost(3))
-            .toIntArray()
+        val compactIndexes = compactNotificationActionIndexes(actions.size)
         return Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_monochrome)
             .setContentTitle(state.bookTitle?.takeIf { it.isNotBlank() } ?: "XReader read aloud")

@@ -223,13 +223,6 @@ internal fun notificationProgressText(state: AudiobookPlaybackUiState): String? 
     return "$current/$total"
 }
 
-internal fun compactNotificationActionIndexes(actionCount: Int): IntArray {
-    val boundedCount = actionCount.coerceAtLeast(0)
-    val compactCount = boundedCount.coerceAtMost(3)
-    val start = boundedCount - compactCount
-    return IntArray(compactCount) { offset -> start + offset }
-}
-
 private data class PlaybackNotificationKey(
     val foregroundActive: Boolean,
     val audioId: Long?,
