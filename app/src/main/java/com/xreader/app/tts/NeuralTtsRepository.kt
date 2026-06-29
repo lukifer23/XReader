@@ -61,6 +61,7 @@ class NeuralTtsRepository(
     private val dao: NeuralTtsDao,
     private val clock: Clock = Clock.systemUTC(),
     private val generationDispatcher: CoroutineDispatcher = neuralTtsGenerationDispatcher(),
+    private val previewDispatcher: CoroutineDispatcher = neuralTtsPreviewDispatcher(),
 ) {
     private val tag = "NeuralTtsRepository"
     private val appContext = context.applicationContext
@@ -1205,7 +1206,7 @@ class NeuralTtsRepository(
             return@withContext output
         }
         val modelDir = requireNotNull(model.localPath)
-        val tts = withContext(generationDispatcher) {
+        val tts = withContext(previewDispatcher) {
             createOfflineTts(
                 spec = spec,
                 modelDir = modelDir,
@@ -1215,7 +1216,7 @@ class NeuralTtsRepository(
             )
         }
         try {
-            val generated = withContext(generationDispatcher) {
+            val generated = withContext(previewDispatcher) {
                 tts.engine.generateWithConfig(
                     text = PREVIEW_TEXT,
                     config = generationConfig(speakerId, pace, tone)
@@ -1226,7 +1227,7 @@ class NeuralTtsRepository(
             require(output.hasUsableNeuralPreviewAudio()) { "Neural voice preview file was incomplete." }
             output
         } finally {
-            tts.releaseOnGenerationDispatcher()
+            tts.releaseOnPreviewDispatcher()
         }
     }
 
@@ -1235,6 +1236,15 @@ class NeuralTtsRepository(
             runCatching { engine.release() }
                 .onFailure { error ->
                     Log.w(tag, "Could not release neural TTS runtime provider=$provider.", error)
+                }
+        }
+    }
+
+    private suspend fun TtsRuntime.releaseOnPreviewDispatcher() {
+        withContext(previewDispatcher + NonCancellable) {
+            runCatching { engine.release() }
+                .onFailure { error ->
+                    Log.w(tag, "Could not release neural TTS preview runtime provider=$provider.", error)
                 }
         }
     }
@@ -1762,7 +1772,15 @@ data class AudiobookGenerationHardwareReadiness(
 
 private val sharedNeuralTtsGenerationDispatcher: CoroutineDispatcher by lazy {
     Executors.newSingleThreadExecutor { runnable ->
-        Thread(runnable, "XReader-NeuralTTS").apply {
+        Thread(runnable, "XReader-NeuralTTS-Generation").apply {
+            isDaemon = true
+        }
+    }.asCoroutineDispatcher()
+}
+
+private val sharedNeuralTtsPreviewDispatcher: CoroutineDispatcher by lazy {
+    Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "XReader-NeuralTTS-Preview").apply {
             isDaemon = true
         }
     }.asCoroutineDispatcher()
@@ -1770,6 +1788,9 @@ private val sharedNeuralTtsGenerationDispatcher: CoroutineDispatcher by lazy {
 
 internal fun neuralTtsGenerationDispatcher(): CoroutineDispatcher =
     sharedNeuralTtsGenerationDispatcher
+
+internal fun neuralTtsPreviewDispatcher(): CoroutineDispatcher =
+    sharedNeuralTtsPreviewDispatcher
 
 internal fun neuralTtsGenerationConfig(
     speakerId: Int,
