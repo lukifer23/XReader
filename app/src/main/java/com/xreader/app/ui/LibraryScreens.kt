@@ -583,7 +583,9 @@ internal fun LibraryScreen(
                 }
             )
         } else {
-            val grouped = groupBooks(state.group, displayBooks, state.sort)
+            val grouped = remember(state.group, displayBooks, state.sort) {
+                groupBooks(state.group, displayBooks, state.sort)
+            }
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 28.dp),
