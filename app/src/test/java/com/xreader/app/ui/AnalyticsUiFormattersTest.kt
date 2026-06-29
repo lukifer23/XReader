@@ -30,5 +30,9 @@ class AnalyticsUiFormattersTest {
             "2 sessions • 5m • 800 words • pace pending",
             analyticsRowDetail(sessions = 2, activeMillis = 300_000L, wordsRead = 800, averageWpm = 0)
         )
+        assertEquals(
+            "0 sessions • 0m • 0 words • pace pending",
+            analyticsRowDetail(sessions = -2, activeMillis = -1L, wordsRead = -800, averageWpm = -10)
+        )
     }
 }

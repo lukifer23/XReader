@@ -21,9 +21,18 @@ internal fun analyticsRowDetail(
     wordsRead: Int,
     averageWpm: Int,
 ): String =
-    listOf(
-        "${analyticsCountLabel(sessions)} ${if (sessions == 1) "session" else "sessions"}",
-        formatDuration(activeMillis),
-        "${analyticsCountLabel(wordsRead)} words",
-        if (averageWpm > 0) "$averageWpm WPM" else "pace pending"
-    ).joinToString(" • ")
+    buildString {
+        append(analyticsCountLabel(sessions))
+        append(if (sessions == 1) " session" else " sessions")
+        append(" • ")
+        append(formatDuration(activeMillis))
+        append(" • ")
+        append(analyticsCountLabel(wordsRead))
+        append(" words • ")
+        if (averageWpm > 0) {
+            append(averageWpm)
+            append(" WPM")
+        } else {
+            append("pace pending")
+        }
+    }
