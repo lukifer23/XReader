@@ -120,6 +120,18 @@ class AudiobookUiFormattersTest {
     }
 
     @Test
+    fun scanSummarySkipsChapterTextWhenNoneWereDetected() {
+        val scan = AudiobookScanUiState(
+            wordCount = 8_000,
+            segmentCount = 18,
+            chapterCount = 0,
+            sourceSectionCount = 24
+        )
+
+        assertEquals("24 source sections prepared", audiobookScanSummary(scan))
+    }
+
+    @Test
     fun scopeActionLabelsShowGenerationSizeAfterScan() {
         val scan = AudiobookScanUiState(
             wordCount = 30_000,

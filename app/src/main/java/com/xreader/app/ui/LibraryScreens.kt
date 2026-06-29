@@ -1710,13 +1710,19 @@ private fun AudiobookScanPill(text: String) {
 internal fun audiobookScanSummary(scan: AudiobookScanUiState?): String =
     when {
         scan?.scanning == true -> "Scanning indexed book text for extractable narration."
-        scan?.hasText == true -> listOfNotNull(
-            "${scan.sourceSectionCount} source sections prepared",
-            scan.chapterCount.takeIf { it > 0 }?.let { "${generatedAudiobookChapterCountLabel(it)} detected" }
-        ).joinToString(" • ")
+        scan?.hasText == true -> audiobookPreparedScanSummary(scan)
         scan?.error != null -> "Scan could not prepare narration for this book."
         else -> "Scan the selected ebook before a long generation job."
     }
+
+private fun audiobookPreparedScanSummary(scan: AudiobookScanUiState): String {
+    val sourceText = "${scan.sourceSectionCount} source sections prepared"
+    return if (scan.chapterCount > 0) {
+        "$sourceText • ${generatedAudiobookChapterCountLabel(scan.chapterCount)} detected"
+    } else {
+        sourceText
+    }
+}
 
 internal fun audiobookScopeActionLabel(
     scope: AudiobookGenerationScope,
