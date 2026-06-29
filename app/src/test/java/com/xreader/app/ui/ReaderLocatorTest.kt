@@ -369,6 +369,40 @@ class ReaderLocatorTest {
     }
 
     @Test
+    fun recordedReaderStatePublishSkipsShortSameLocatorActiveTimeUpdates() {
+        val state = readingState(locator = "locator-3", currentUnit = 3, activeMillis = 20_000L)
+
+        assertTrue(
+            shouldPublishRecordedReaderState(
+                previous = state,
+                next = state.copy(locator = "locator-4", currentUnit = 4, activeMillis = 20_100L),
+                sameLocator = false
+            )
+        )
+        assertFalse(
+            shouldPublishRecordedReaderState(
+                previous = state,
+                next = state.copy(activeMillis = 29_999L),
+                sameLocator = true
+            )
+        )
+        assertTrue(
+            shouldPublishRecordedReaderState(
+                previous = state,
+                next = state.copy(activeMillis = 30_000L),
+                sameLocator = true
+            )
+        )
+        assertTrue(
+            shouldPublishRecordedReaderState(
+                previous = state,
+                next = state.copy(finishedAt = state.lastReadAt),
+                sameLocator = true
+            )
+        )
+    }
+
+    @Test
     fun observedReaderStateSkipsDuplicateAndStalePersistenceBounce() {
         val current = readingState(
             locator = "locator-4",

@@ -703,7 +703,9 @@ class ReaderViewModel(
             progressOverride = progress.coerceIn(0.0, 1.0)
         )
         lastReadingState = state
-        _uiState.update { it.copy(currentUnit = unit, state = state) }
+        if (shouldPublishRecordedReaderState(previous = previous, next = state, sameLocator = sameLocator)) {
+            _uiState.update { it.copy(currentUnit = unit, state = state) }
+        }
         val shouldSave = !sameLocator ||
             state.finishedAt != previousFinishedAt ||
             state.activeMillis - previousActiveMillis >= 10_000L
@@ -1054,6 +1056,17 @@ internal fun shouldPersistReaderState(
 ): Boolean =
     lastPersisted != next
 
+internal fun shouldPublishRecordedReaderState(
+    previous: ReadingStateEntity?,
+    next: ReadingStateEntity,
+    sameLocator: Boolean,
+): Boolean {
+    if (!sameLocator) return true
+    if (previous == null) return true
+    if (next.finishedAt != previous.finishedAt) return true
+    return next.activeMillis - previous.activeMillis >= READER_SAME_LOCATOR_UI_UPDATE_INTERVAL_MS
+}
+
 internal fun shouldApplyObservedReaderState(
     current: ReadingStateEntity?,
     observed: ReadingStateEntity?,
@@ -1065,6 +1078,8 @@ internal fun shouldApplyObservedReaderState(
     if (observed.lastReadAt == current.lastReadAt && observed.activeMillis < current.activeMillis) return false
     return true
 }
+
+private const val READER_SAME_LOCATOR_UI_UPDATE_INTERVAL_MS = 10_000L
 
 internal data class ReaderReadAloudSettingsKey(
     val engineName: String?,
