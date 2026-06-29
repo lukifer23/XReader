@@ -203,6 +203,31 @@ class AudiobookUiFormattersTest {
     }
 
     @Test
+    fun scanPillLabelsShareScanCardMetadataFormatting() {
+        val scan = AudiobookScanUiState(
+            wordCount = 8_000,
+            segmentCount = 18,
+            chapterCount = 2,
+            estimatedAudioMillis = 45 * 60_000L,
+            estimatedStorageBytes = 512L * 1_048_576L
+        )
+
+        assertEquals(
+            listOf("8000 words", "18 segments", "2 chapters", "~45m audio", "~512 MB local audio"),
+            audiobookScanPillLabels(scan)
+        )
+    }
+
+    @Test
+    fun detectedChapterTitleSummaryTrimsAndSkipsBlankTitles() {
+        assertEquals(
+            "Detected: Chapter 1 • Chapter 2",
+            audiobookDetectedChapterTitleSummary(listOf(" Chapter 1 ", "", "Chapter 2"))
+        )
+        assertNull(audiobookDetectedChapterTitleSummary(listOf(" ", "")))
+    }
+
+    @Test
     fun scopeActionLabelsShowGenerationSizeAfterScan() {
         val scan = AudiobookScanUiState(
             wordCount = 30_000,

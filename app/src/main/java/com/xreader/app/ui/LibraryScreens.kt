@@ -1658,18 +1658,18 @@ private fun AudiobookScanCard(
                 )
             }
             if (scan?.hasText == true) {
+                val pillLabels = remember(scan) { audiobookScanPillLabels(scan) }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AudiobookScanPill("${scan.wordCount} words")
-                    AudiobookScanPill("${scan.segmentCount} segments")
-                    if (scan.chapterCount > 0) {
-                        AudiobookScanPill(generatedAudiobookChapterCountLabel(scan.chapterCount))
+                    pillLabels.forEach { label ->
+                        AudiobookScanPill(label)
                     }
-                    AudiobookScanPill(audiobookDurationLabel(scan.estimatedAudioMillis))
-                    AudiobookScanPill(audiobookStorageLabel(scan.estimatedStorageBytes))
                 }
-                scan.chapterTitles.takeIf { it.isNotEmpty() }?.let { titles ->
+                val detectedChapters = remember(scan.chapterTitles) {
+                    audiobookDetectedChapterTitleSummary(scan.chapterTitles)
+                }
+                detectedChapters?.let { detectedText ->
                     Text(
-                        text = "Detected: ${titles.joinToString(" • ")}",
+                        text = detectedText,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 2,
@@ -1711,6 +1711,31 @@ private fun audiobookPreparedScanSummary(scan: AudiobookScanUiState): String {
     } else {
         sourceText
     }
+}
+
+internal fun audiobookScanPillLabels(scan: AudiobookScanUiState): List<String> =
+    buildList(capacity = 5) {
+        add("${scan.wordCount} words")
+        add("${scan.segmentCount} segments")
+        if (scan.chapterCount > 0) {
+            add(generatedAudiobookChapterCountLabel(scan.chapterCount))
+        }
+        add(audiobookDurationLabel(scan.estimatedAudioMillis))
+        add(audiobookStorageLabel(scan.estimatedStorageBytes))
+    }
+
+internal fun audiobookDetectedChapterTitleSummary(titles: List<String>): String? {
+    var hasTitle = false
+    val detail = buildString {
+        titles.forEach { rawTitle ->
+            val title = rawTitle.trim()
+            if (title.isBlank()) return@forEach
+            if (hasTitle) append(" • ")
+            append(title)
+            hasTitle = true
+        }
+    }
+    return detail.takeIf { hasTitle }?.let { "Detected: $it" }
 }
 
 internal fun audiobookScopeActionLabel(
