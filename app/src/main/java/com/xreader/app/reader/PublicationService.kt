@@ -19,6 +19,8 @@ import org.readium.r2.shared.util.format.FormatHints
 import java.io.File
 import kotlin.math.roundToInt
 
+private val SEARCH_SNIPPET_WHITESPACE = Regex("\\s+")
+
 class PublicationService(
     private val context: Context,
     private val readiumRuntime: ReadiumRuntime,
@@ -151,15 +153,13 @@ class PublicationService(
     }
 
     private fun Locator.searchSnippet(query: String): String {
-        val parts = listOfNotNull(
-            text.before?.takeIf { it.isNotBlank() },
-            text.highlight?.takeIf { it.isNotBlank() },
-            text.after?.takeIf { it.isNotBlank() }
+        return readerSearchSnippet(
+            before = text.before,
+            highlight = text.highlight,
+            after = text.after,
+            title = title,
+            query = query
         )
-        return parts.joinToString(" ")
-            .replace(Regex("\\s+"), " ")
-            .trim()
-            .ifBlank { title ?: query }
     }
 
     private fun Locator.searchUnitIndex(positionCount: Int): Int? {
@@ -183,4 +183,26 @@ class PublicationService(
             Trace.endSection()
         }
     }
+}
+
+internal fun readerSearchSnippet(
+    before: String?,
+    highlight: String?,
+    after: String?,
+    title: String?,
+    query: String,
+): String =
+    buildString {
+        appendSearchSnippetPart(before)
+        appendSearchSnippetPart(highlight)
+        appendSearchSnippetPart(after)
+    }
+        .replace(SEARCH_SNIPPET_WHITESPACE, " ")
+        .trim()
+        .ifBlank { title?.takeIf { it.isNotBlank() } ?: query }
+
+private fun StringBuilder.appendSearchSnippetPart(part: String?) {
+    val value = part?.takeIf { it.isNotBlank() } ?: return
+    if (isNotEmpty()) append(' ')
+    append(value)
 }
