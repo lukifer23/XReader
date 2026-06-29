@@ -445,7 +445,7 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
             genreOptions = genres,
             seriesOptions = series
         )
-    }
+    }.distinctUntilChanged()
 
     private data class LibrarySelectionState(
         val group: LibraryGroup,
@@ -465,7 +465,7 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
             currentGroup,
             librarySettings ->
         LibrarySelectionState(currentGroup, librarySettings.sort, librarySettings.density)
-    }
+    }.distinctUntilChanged()
 
     private val chromeState = combine(selectionState, importing, message, searchResults, opdsCatalog) {
             selection,
@@ -474,7 +474,7 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
             currentResults,
             currentCatalog ->
         LibraryChromeState(selection, currentImporting, currentMessage, currentResults, currentCatalog)
-    }
+    }.distinctUntilChanged()
 
     private data class LibraryBooksState(
         val queriedItems: List<BookListItem>,
@@ -556,7 +556,7 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
             repairingBookIds = runtime.repairingBookIds,
             audiobookScans = runtime.audiobookScans
         )
-    }
+    }.distinctUntilChanged()
 
     private val displayBooks = combine(selectionState, bookItems) { selection, libraryBooks ->
         withContext(Dispatchers.Default) {
@@ -606,10 +606,12 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
 
     val readerSettings: StateFlow<ReaderSettings> =
         container.settingsRepository.settings
+            .distinctUntilChanged()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ReaderSettings())
 
     val neuralTtsModels: StateFlow<List<NeuralTtsModelEntity>> =
         container.neuralTtsRepository.observeModels()
+            .distinctUntilChanged()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val audiobookHardwareReadiness: StateFlow<AudiobookGenerationHardwareReadiness> =
