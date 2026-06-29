@@ -1448,6 +1448,13 @@ class GeneratedAudiobookResumeTest {
                 snapshotChanged = false
             )
         )
+        assertFalse(
+            shouldWriteGenerationHeartbeat(
+                lastHeartbeatWrittenAtMillis = 10_000L,
+                nowMillis = 40_000L,
+                snapshotAlreadyPersisted = true
+            )
+        )
     }
 
     @Test

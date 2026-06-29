@@ -827,6 +827,7 @@ class NeuralTtsRepository(
                 fileSizeBytes = generatedSegmentFileSizeBytes
             )
         )
+        val persistedGenerationSnapshot = AtomicReference<GenerationHeartbeatSnapshot?>(null)
         runCatching {
             val modelDir = requireNotNull(model.localPath)
             var runtime: TtsRuntime? = null
@@ -851,7 +852,8 @@ class NeuralTtsRepository(
                         shouldWriteGenerationHeartbeat(
                             lastHeartbeatWrittenAtMillis = lastHeartbeatWrittenAtMillis,
                             nowMillis = heartbeatAt,
-                            snapshotChanged = snapshot != lastHeartbeatWrittenSnapshot
+                            snapshotChanged = snapshot != lastHeartbeatWrittenSnapshot,
+                            snapshotAlreadyPersisted = snapshot == persistedGenerationSnapshot.get()
                         )
                     ) {
                         val updatedRows = dao.updateBookAudioGenerationMetrics(
@@ -872,6 +874,7 @@ class NeuralTtsRepository(
                         }
                         lastHeartbeatWrittenAtMillis = heartbeatAt
                         lastHeartbeatWrittenSnapshot = snapshot
+                        persistedGenerationSnapshot.set(snapshot)
                     }
                 }
             }
@@ -1023,6 +1026,7 @@ class NeuralTtsRepository(
                                 "Audiobook generation was stopped before segment ${completedSegments.coerceAtLeast(1)} could be recorded."
                             )
                         }
+                        persistedGenerationSnapshot.set(heartbeatSnapshot.get())
                         lastProgressWrittenSegments = completedSegments
                         lastProgressWrittenAtMillis = progressWriteAt
                     }
@@ -1956,10 +1960,12 @@ internal fun shouldWriteGenerationHeartbeat(
     lastHeartbeatWrittenAtMillis: Long,
     nowMillis: Long,
     snapshotChanged: Boolean = true,
+    snapshotAlreadyPersisted: Boolean = false,
 ): Boolean =
     lastHeartbeatWrittenAtMillis > 0L &&
         nowMillis > 0L &&
         snapshotChanged &&
+        !snapshotAlreadyPersisted &&
         nowMillis - lastHeartbeatWrittenAtMillis >= GENERATION_HEARTBEAT_WRITE_INTERVAL_MS
 
 internal fun generationProgressWriteSegmentStep(totalSegments: Int): Int {
