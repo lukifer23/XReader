@@ -60,6 +60,35 @@ class AudiobookUiFormattersTest {
     }
 
     @Test
+    fun audiobookStatusDetailFormatsGeneratedGeneratingCanceledAndFailedStates() {
+        val generated = audio(1).copy(
+            status = BookAudioStatus.GENERATED,
+            segmentCount = 4,
+            completedSegments = 4,
+            wordCount = 9_000,
+            fileSizeBytes = 2_048L,
+            playbackSegmentIndex = 1,
+            playbackPositionMs = 2_000
+        )
+        val generating = generated.copy(
+            status = BookAudioStatus.GENERATING,
+            completedSegments = 2,
+            generationStartedAt = 1_000L,
+            generationSessionStartCompletedSegments = 0
+        )
+        val canceled = generated.copy(status = BookAudioStatus.CANCELED, completedSegments = 3)
+
+        assertEquals("2 playable of 4 segments • ~1h audio • resume 2 / 2 • 2 KB", audiobookStatusDetail(generated, playableSegmentFiles = 2))
+        assertEquals(
+            "working on 3/4 • 50% • under 1m left • ~1h audio",
+            audiobookStatusDetail(generating, playableSegmentFiles = 2, nowMillis = 21_000L)
+        )
+        assertEquals("3 of 4 segments completed • ~1h audio", audiobookStatusDetail(canceled, playableSegmentFiles = 2))
+        assertEquals("Generation stopped before audio was ready.", audiobookStatusDetail(generated.copy(status = BookAudioStatus.FAILED), playableSegmentFiles = 0))
+        assertEquals("boom", audiobookStatusDetail(generated.copy(status = BookAudioStatus.FAILED, error = "boom"), playableSegmentFiles = 0))
+    }
+
+    @Test
     fun audiobookPerformanceLabelShowsBackendAndRealtimeFactor() {
         val audio = BookAudioEntity(
             bookId = 7,

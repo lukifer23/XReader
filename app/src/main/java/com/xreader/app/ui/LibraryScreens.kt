@@ -1822,44 +1822,7 @@ private fun AudiobookStatusCard(
         BookAudioStatus.CANCELED -> "${audio.scopeLabel} generation stopped"
         BookAudioStatus.FAILED -> "${audio.scopeLabel} generation failed"
     }
-    val detail = when (audio.status) {
-        BookAudioStatus.GENERATED -> listOf(
-            when {
-                playableSegments >= audio.segmentCount -> "${audio.segmentCount} segments"
-                playableSegments <= 0 -> "Audio files missing"
-                else -> "$playableSegments playable of ${audio.segmentCount} segments"
-            },
-            audio.audiobookPerformanceLabel(),
-            audio.estimatedDurationLabel(),
-            audio.audiobookResumeLabel(prefix = "resume", playableSegmentFiles = playableSegmentFiles),
-            audio.fileSizeBytes.takeIf { it > 0 }?.compactBytes()
-        ).filterNotNull().joinToString(" • ")
-        BookAudioStatus.GENERATING -> {
-            if (audio.segmentCount > 0) {
-                listOf(
-                    audio.audiobookGenerationProgressLabel(),
-                    "${(progress * 100).roundToInt()}%",
-                    audio.generationEtaLabel(),
-                    audio.audiobookPerformanceLabel(),
-                    audio.estimatedDurationLabel()
-                ).filterNotNull().joinToString(" • ")
-            } else {
-                "Preparing segments"
-            }
-        }
-        BookAudioStatus.CANCELED -> {
-            if (audio.segmentCount > 0) {
-                listOf(
-                    "${audio.completedSegments.coerceAtMost(audio.segmentCount)} of ${audio.segmentCount} segments completed",
-                    audio.audiobookPerformanceLabel(),
-                    audio.estimatedDurationLabel()
-                ).filterNotNull().joinToString(" • ")
-            } else {
-                "No segments were generated."
-            }
-        }
-        BookAudioStatus.FAILED -> audio.error ?: "Generation stopped before audio was ready."
-    }
+    val detail = audiobookStatusDetail(audio, playableSegmentFiles = playableSegmentFiles)
     val canPlay = playableSegments > 0
 
     Surface(
@@ -1923,6 +1886,63 @@ private fun AudiobookStatusCard(
                 }
             }
         }
+    }
+}
+
+internal fun audiobookStatusDetail(
+    audio: BookAudioEntity,
+    playableSegmentFiles: Int,
+    nowMillis: Long = System.currentTimeMillis(),
+): String =
+    when (audio.status) {
+        BookAudioStatus.GENERATED -> generatedAudiobookStatusDetail(audio, playableSegmentFiles)
+        BookAudioStatus.GENERATING -> generatingAudiobookStatusDetail(audio, nowMillis = nowMillis)
+        BookAudioStatus.CANCELED -> canceledAudiobookStatusDetail(audio)
+        BookAudioStatus.FAILED -> audio.error ?: "Generation stopped before audio was ready."
+    }
+
+private fun generatedAudiobookStatusDetail(
+    audio: BookAudioEntity,
+    playableSegmentFiles: Int,
+): String =
+    buildString {
+        append(
+            when {
+                playableSegmentFiles >= audio.segmentCount -> "${audio.segmentCount} segments"
+                playableSegmentFiles <= 0 -> "Audio files missing"
+                else -> "$playableSegmentFiles playable of ${audio.segmentCount} segments"
+            }
+        )
+        appendAudiobookDetailPart(audio.audiobookPerformanceLabel())
+        appendAudiobookDetailPart(audio.estimatedDurationLabel())
+        appendAudiobookDetailPart(audio.audiobookResumeLabel(prefix = "resume", playableSegmentFiles = playableSegmentFiles))
+        appendAudiobookDetailPart(audio.fileSizeBytes.takeIf { it > 0 }?.compactBytes())
+    }
+
+private fun generatingAudiobookStatusDetail(
+    audio: BookAudioEntity,
+    nowMillis: Long,
+): String {
+    if (audio.segmentCount <= 0) return "Preparing segments"
+    val progress = (audio.completedSegments.toFloat() / audio.segmentCount.toFloat()).coerceIn(0f, 1f)
+    return buildString {
+        appendAudiobookDetailPart(audio.audiobookGenerationProgressLabel())
+        appendAudiobookDetailPart("${(progress * 100).roundToInt()}%")
+        appendAudiobookDetailPart(audio.generationEtaLabel(nowMillis = nowMillis))
+        appendAudiobookDetailPart(audio.audiobookPerformanceLabel())
+        appendAudiobookDetailPart(audio.estimatedDurationLabel())
+    }
+}
+
+private fun canceledAudiobookStatusDetail(audio: BookAudioEntity): String {
+    if (audio.segmentCount <= 0) return "No segments were generated."
+    return buildString {
+        append(audio.completedSegments.coerceAtMost(audio.segmentCount))
+        append(" of ")
+        append(audio.segmentCount)
+        append(" segments completed")
+        appendAudiobookDetailPart(audio.audiobookPerformanceLabel())
+        appendAudiobookDetailPart(audio.estimatedDurationLabel())
     }
 }
 
@@ -2157,24 +2177,24 @@ internal fun generatedAudiobookRowDetail(
         append(audioEntity.segmentCount)
         append(" segments")
         if (audio.chapters.isNotEmpty()) {
-            appendGeneratedAudiobookDetailPart(generatedAudiobookChapterCountLabel(audio.chapters.size))
+            appendAudiobookDetailPart(generatedAudiobookChapterCountLabel(audio.chapters.size))
         }
-        appendGeneratedAudiobookDetailPart(generatedAudioPlayableDetail(audio))
-        appendGeneratedAudiobookDetailPart(audioEntity.estimatedDurationLabel())
-        appendGeneratedAudiobookDetailPart(audioEntity.audiobookPerformanceLabel())
-        appendGeneratedAudiobookDetailPart(
+        appendAudiobookDetailPart(generatedAudioPlayableDetail(audio))
+        appendAudiobookDetailPart(audioEntity.estimatedDurationLabel())
+        appendAudiobookDetailPart(audioEntity.audiobookPerformanceLabel())
+        appendAudiobookDetailPart(
             audioEntity.audiobookResumeLabel(prefix = "resume", playableSegmentFiles = audio.playableSegmentFiles)
         )
-        appendGeneratedAudiobookDetailPart(audioEntity.fileSizeBytes.takeIf { it > 0 }?.compactBytes())
+        appendAudiobookDetailPart(audioEntity.fileSizeBytes.takeIf { it > 0 }?.compactBytes())
         audioEntity.generatedAt?.let { generatedAt ->
-            appendGeneratedAudiobookDetailPart("generated ${relativeAgeLabel(generatedAt, nowMillis)}")
+            appendAudiobookDetailPart("generated ${relativeAgeLabel(generatedAt, nowMillis)}")
         }
     }
 }
 
-private fun StringBuilder.appendGeneratedAudiobookDetailPart(part: String?) {
+private fun StringBuilder.appendAudiobookDetailPart(part: String?) {
     if (part.isNullOrBlank()) return
-    append(" • ")
+    if (isNotEmpty()) append(" • ")
     append(part)
 }
 
