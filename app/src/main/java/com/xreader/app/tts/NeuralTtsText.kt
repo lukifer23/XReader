@@ -67,12 +67,23 @@ private fun NeuralTtsPreparedBook.firstChapterSegmentLimit(scope: AudiobookGener
 }
 
 internal fun List<ReadAloudChunk>.forAudiobookScope(scope: AudiobookGenerationScope): List<ReadAloudChunk> {
-    val ordered = sortedBy { it.unitIndex }
+    val ordered = sortedByUnitIndexIfNeeded()
     return when (scope) {
         AudiobookGenerationScope.SAMPLE -> ordered.leadingSampleSourceChunks()
         AudiobookGenerationScope.FIRST_CHAPTER,
         AudiobookGenerationScope.FULL_BOOK -> ordered
     }
+}
+
+private fun List<ReadAloudChunk>.sortedByUnitIndexIfNeeded(): List<ReadAloudChunk> {
+    if (size < 2) return this
+    var previous = first().unitIndex
+    for (index in 1 until size) {
+        val current = this[index].unitIndex
+        if (current < previous) return sortedBy { it.unitIndex }
+        previous = current
+    }
+    return this
 }
 
 private fun List<ReadAloudChunk>.leadingSampleSourceChunks(): List<ReadAloudChunk> {

@@ -1,6 +1,7 @@
 package com.xreader.app.tts
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -412,6 +413,31 @@ class NeuralTtsTextTest {
             listOf("Chapter One", "The Hill", "7:14 P.M.", "Chapter Two"),
             chunks.map { it.heading }
         )
+    }
+
+    @Test
+    fun audiobookScopeKeepsAlreadyOrderedSourceChunksWithoutSorting() {
+        val chunks = listOf(
+            chunk(unitIndex = 0, text = "First."),
+            chunk(unitIndex = 1, text = "Second."),
+            chunk(unitIndex = 2, text = "Third.")
+        )
+
+        assertSame(chunks, chunks.forAudiobookScope(AudiobookGenerationScope.FULL_BOOK))
+        assertSame(chunks, chunks.forAudiobookScope(AudiobookGenerationScope.FIRST_CHAPTER))
+    }
+
+    @Test
+    fun audiobookScopeStillOrdersUnsortedSourceChunks() {
+        val chunks = listOf(
+            chunk(unitIndex = 2, text = "Third."),
+            chunk(unitIndex = 0, text = "First."),
+            chunk(unitIndex = 1, text = "Second.")
+        )
+
+        val ordered = chunks.forAudiobookScope(AudiobookGenerationScope.FULL_BOOK)
+
+        assertEquals(listOf(0, 1, 2), ordered.map { it.unitIndex })
     }
 
     @Test
