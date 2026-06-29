@@ -90,6 +90,51 @@ class ReadAloudEngineTest {
     }
 
     @Test
+    fun mediaPlaybackStateKeyBoundsChunkAndTracksTransportState() {
+        assertEquals(
+            readAloudPlaybackStateKey(
+                playing = true,
+                paused = false,
+                currentChunk = 99,
+                totalChunks = 3
+            ),
+            readAloudPlaybackStateKey(
+                playing = true,
+                paused = false,
+                currentChunk = 2,
+                totalChunks = 3
+            )
+        )
+        assertEquals(
+            readAloudPlaybackStateKey(
+                playing = false,
+                paused = true,
+                currentChunk = -4,
+                totalChunks = 0
+            ),
+            ReadAloudPlaybackStateKey(
+                playing = false,
+                paused = true,
+                boundedChunk = 0,
+                totalChunks = 0
+            )
+        )
+        assertTrue(
+            readAloudPlaybackStateKey(
+                playing = true,
+                paused = false,
+                currentChunk = 1,
+                totalChunks = 3
+            ) != readAloudPlaybackStateKey(
+                playing = false,
+                paused = true,
+                currentChunk = 1,
+                totalChunks = 3
+            )
+        )
+    }
+
+    @Test
     fun foregroundNotificationTextReflectsReadAloudState() {
         val preparing = ReadAloudState(initializing = true, totalChunks = 12)
         assertEquals("Preparing read aloud", readAloudNotificationStatusText(preparing))

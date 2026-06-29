@@ -24,6 +24,7 @@ internal class ReadAloudMediaSessionController(
     callbacks: ReadAloudMediaSessionCallbacks,
 ) {
     private var lastMetadataKey: ReadAloudMetadataKey? = null
+    private var lastPlaybackStateKey: ReadAloudPlaybackStateKey? = null
     private val session = MediaSession(context.applicationContext, "XReader read aloud").apply {
         @Suppress("DEPRECATION")
         setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS or MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS)
@@ -63,24 +64,33 @@ internal class ReadAloudMediaSessionController(
             session.setMetadata(readAloudMediaMetadata(bookTitle = bookTitle, heading = heading))
             lastMetadataKey = metadataKey
         }
-        session.setPlaybackState(
-            readAloudPlaybackState(
-                playing = playing,
-                paused = paused,
-                currentChunk = currentChunk,
-                totalChunks = totalChunks
-            )
+        val playbackStateKey = readAloudPlaybackStateKey(
+            playing = playing,
+            paused = paused,
+            currentChunk = currentChunk,
+            totalChunks = totalChunks
         )
+        if (playbackStateKey != lastPlaybackStateKey) {
+            session.setPlaybackState(
+                readAloudPlaybackState(
+                    key = playbackStateKey
+                )
+            )
+            lastPlaybackStateKey = playbackStateKey
+        }
         session.isActive = true
     }
 
     fun stop() {
         lastMetadataKey = null
+        lastPlaybackStateKey = null
         session.setPlaybackState(stoppedPlaybackState())
         session.isActive = false
     }
 
     fun release() {
+        lastMetadataKey = null
+        lastPlaybackStateKey = null
         session.setPlaybackState(stoppedPlaybackState())
         session.isActive = false
         session.release()
@@ -92,11 +102,34 @@ internal data class ReadAloudMetadataKey(
     val heading: String?,
 )
 
+internal data class ReadAloudPlaybackStateKey(
+    val playing: Boolean,
+    val paused: Boolean,
+    val boundedChunk: Int,
+    val totalChunks: Int,
+)
+
 internal fun readAloudMetadataKey(bookTitle: String, heading: String?): ReadAloudMetadataKey =
     ReadAloudMetadataKey(
         bookTitle = bookTitle,
         heading = normalizedTtsMediaSubtitle(heading),
     )
+
+internal fun readAloudPlaybackStateKey(
+    playing: Boolean,
+    paused: Boolean,
+    currentChunk: Int,
+    totalChunks: Int,
+): ReadAloudPlaybackStateKey {
+    val boundedTotal = totalChunks.coerceAtLeast(0)
+    val boundedChunk = if (boundedTotal <= 0) 0 else currentChunk.coerceIn(0, boundedTotal - 1)
+    return ReadAloudPlaybackStateKey(
+        playing = playing,
+        paused = paused,
+        boundedChunk = boundedChunk,
+        totalChunks = boundedTotal
+    )
+}
 
 internal fun readAloudMediaActions(
     playing: Boolean,
@@ -113,28 +146,22 @@ internal fun readAloudMediaActions(
     return actions
 }
 
-private fun readAloudPlaybackState(
-    playing: Boolean,
-    paused: Boolean,
-    currentChunk: Int,
-    totalChunks: Int,
-): PlaybackState {
-    val boundedChunk = if (totalChunks <= 0) 0 else currentChunk.coerceIn(0, totalChunks - 1)
+private fun readAloudPlaybackState(key: ReadAloudPlaybackStateKey): PlaybackState {
     val state = when {
-        playing -> PlaybackState.STATE_PLAYING
-        paused -> PlaybackState.STATE_PAUSED
+        key.playing -> PlaybackState.STATE_PLAYING
+        key.paused -> PlaybackState.STATE_PAUSED
         else -> PlaybackState.STATE_STOPPED
     }
     return PlaybackState.Builder()
         .setActions(
             readAloudMediaActions(
-                playing = playing,
-                paused = paused,
-                canSkipPrevious = boundedChunk > 0,
-                canSkipNext = totalChunks > 0 && boundedChunk < totalChunks - 1
+                playing = key.playing,
+                paused = key.paused,
+                canSkipPrevious = key.boundedChunk > 0,
+                canSkipNext = key.totalChunks > 0 && key.boundedChunk < key.totalChunks - 1
             )
         )
-        .setState(state, boundedChunk.toLong(), if (playing) 1f else 0f)
+        .setState(state, key.boundedChunk.toLong(), if (key.playing) 1f else 0f)
         .build()
 }
 
