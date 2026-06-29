@@ -2005,16 +2005,37 @@ private fun AudiobookPlaybackActions(
     }
 }
 
-private fun playbackProgressLabel(playback: AudiobookPlaybackUiState): String =
+internal fun playbackProgressLabel(playback: AudiobookPlaybackUiState): String =
     if (playback.segmentCount > 0) {
-        listOfNotNull(
-            audiobookPlaybackStateLabel(playback),
-            playback.chapterTitle,
-            playback.segmentTimeLabel()
-        ).joinToString(" • ")
+        joinPlaybackProgressParts(
+            state = audiobookPlaybackStateLabel(playback),
+            chapter = playback.chapterTitle,
+            time = playback.segmentTimeLabel()
+        )
     } else {
         "Ready"
     }
+
+private fun joinPlaybackProgressParts(
+    state: String,
+    chapter: String?,
+    time: String?,
+): String {
+    val trimmedChapter = chapter?.trim()
+    val trimmedTime = time?.trim()
+    if (trimmedChapter.isNullOrEmpty() && trimmedTime.isNullOrEmpty()) return state
+    return buildString {
+        append(state)
+        if (!trimmedChapter.isNullOrEmpty()) {
+            append(" • ")
+            append(trimmedChapter)
+        }
+        if (!trimmedTime.isNullOrEmpty()) {
+            append(" • ")
+            append(trimmedTime)
+        }
+    }
+}
 
 @Composable
 private fun GeneratedAudiobookList(

@@ -317,6 +317,28 @@ class AudiobookUiFormattersTest {
     }
 
     @Test
+    fun playbackProgressLabelSkipsBlankOptionalParts() {
+        assertEquals("Ready", playbackProgressLabel(AudiobookPlaybackUiState()))
+        assertEquals(
+            "playing 2 / 4",
+            playbackProgressLabel(AudiobookPlaybackUiState(segmentIndex = 1, segmentCount = 4, playing = true))
+        )
+        assertEquals(
+            "playing 2 / 4 • Chapter 3 • 0:12 / 1:05",
+            playbackProgressLabel(
+                AudiobookPlaybackUiState(
+                    segmentIndex = 1,
+                    segmentCount = 4,
+                    chapterTitle = " Chapter 3 ",
+                    segmentPositionMs = 12_300,
+                    segmentDurationMs = 65_000,
+                    playing = true
+                )
+            )
+        )
+    }
+
+    @Test
     fun generationProgressLabelShowsActiveSegment() {
         assertEquals(
             "working on 4/10",
