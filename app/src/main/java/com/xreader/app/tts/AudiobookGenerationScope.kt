@@ -172,7 +172,7 @@ internal fun BookAudioEntity.generatedAudiobookChapters(playableSegmentCount: In
     val root = filePath?.takeIf { it.isNotBlank() }?.let(::File)?.takeIf { it.isDirectory }
         ?: return emptyList()
     val file = File(root, "chapters.tsv")
-    val playableCount = playableSegmentCount ?: playableSegmentFiles().size
+    val playableCount = playableSegmentCount ?: playableSegmentCount()
     val fallback by lazy { fallbackGeneratedAudiobookChapters(playableCount) }
     if (!file.isFile) return fallback
     return runCatching {

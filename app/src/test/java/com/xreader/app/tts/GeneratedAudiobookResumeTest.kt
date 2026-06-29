@@ -1211,6 +1211,7 @@ class GeneratedAudiobookResumeTest {
         repeat(3) { index -> writeSegment(dir, index) }
 
         val chapters = audio(filePath = dir.absolutePath).copy(
+            status = BookAudioStatus.CANCELED,
             scope = AudiobookGenerationScope.FIRST_CHAPTER.key,
             scopeLabel = AudiobookGenerationScope.FIRST_CHAPTER.label,
             segmentCount = 5,
@@ -1246,13 +1247,27 @@ class GeneratedAudiobookResumeTest {
     }
 
     @Test
-    fun generatedAudiobookChaptersDoNotFallbackWithoutPlayableAudio() {
+    fun generatedAudiobookChaptersDefaultFallbackTrustsPersistedPlayableCount() {
         val dir = temporaryFolder.newFolder()
 
         val chapters = audio(filePath = dir.absolutePath).copy(
             segmentCount = 3,
             completedSegments = 3
         ).generatedAudiobookChapters()
+
+        assertEquals(listOf("Full book"), chapters.map { it.title })
+        assertEquals(listOf(3), chapters.map { it.segmentCount })
+    }
+
+    @Test
+    fun generatedAudiobookChaptersCanUseVerifiedPlayableCountForRepairPaths() {
+        val dir = temporaryFolder.newFolder()
+        val stale = audio(filePath = dir.absolutePath).copy(
+            segmentCount = 3,
+            completedSegments = 3
+        )
+
+        val chapters = stale.generatedAudiobookChapters(stale.verifiedPlayableSegmentCount())
 
         assertTrue(chapters.isEmpty())
     }
