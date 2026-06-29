@@ -1531,11 +1531,28 @@ class AudiobookUiFormattersTest {
 
     @Test
     fun audiobookUiInvalidationKeyTracksGenerationHeartbeatTimestampChanges() {
-        val base = playableAudio(4).copy(updatedAt = 1_000L)
+        val base = playableAudio(4).copy(generatedAt = null, updatedAt = 1_000L)
 
         assertTrue(
             base.audiobookUiInvalidationKey() !=
                 base.copy(updatedAt = 2_000L).audiobookUiInvalidationKey()
+        )
+        assertTrue(
+            base.audiobookUiInvalidationKey() !=
+                base.copy(generatedAt = 2_000L).audiobookUiInvalidationKey()
+        )
+    }
+
+    @Test
+    fun audiobookUiInvalidationKeyIgnoresCompletedInternalTimestampChurn() {
+        val base = playableAudio(4).copy(
+            generatedAt = 1_000L,
+            updatedAt = 1_500L
+        )
+
+        assertEquals(
+            base.audiobookUiInvalidationKey(),
+            base.copy(updatedAt = 9_000L).audiobookUiInvalidationKey()
         )
         assertTrue(
             base.audiobookUiInvalidationKey() !=
@@ -1580,6 +1597,7 @@ class AudiobookUiFormattersTest {
         val base = playableAudio(4).copy(
             playbackSegmentIndex = 1,
             playbackPositionMs = 2_000,
+            generatedAt = null,
             updatedAt = 1_000L
         )
 
@@ -1596,6 +1614,22 @@ class AudiobookUiFormattersTest {
         assertEquals(
             false,
             sameAudiobookUiInvalidationRows(listOf(base), listOf(base.copy(updatedAt = 2_000L)))
+        )
+    }
+
+    @Test
+    fun audiobookUiInvalidationRowsIgnoreCompletedInternalTimestampChurn() {
+        val base = playableAudio(4).copy(
+            generatedAt = 1_000L,
+            updatedAt = 1_500L
+        )
+
+        assertTrue(
+            sameAudiobookUiInvalidationRows(listOf(base), listOf(base.copy(updatedAt = 9_000L)))
+        )
+        assertEquals(
+            false,
+            sameAudiobookUiInvalidationRows(listOf(base), listOf(base.copy(generatedAt = 2_000L)))
         )
     }
 

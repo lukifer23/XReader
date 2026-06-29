@@ -170,7 +170,7 @@ internal fun BookAudioEntity.audiobookUiInvalidationKey(): AudiobookUiInvalidati
         generationStartedAt = generationStartedAt,
         generationSessionStartCompletedSegments = generationSessionStartCompletedSegments,
         generatedAt = generatedAt,
-        updatedAt = updatedAt.takeUnless { status == BookAudioStatus.GENERATING },
+        updatedAt = audiobookUiVisibleUpdatedAt(),
         error = error
     )
 
@@ -210,11 +210,18 @@ internal fun sameAudiobookUiInvalidationRow(previous: BookAudioEntity, next: Boo
         previous.generationStartedAt == next.generationStartedAt &&
         previous.generationSessionStartCompletedSegments == next.generationSessionStartCompletedSegments &&
         previous.generatedAt == next.generatedAt &&
-        previous.updatedAt.takeUnless { previous.status == BookAudioStatus.GENERATING } ==
-            next.updatedAt.takeUnless { next.status == BookAudioStatus.GENERATING } &&
+        previous.audiobookUiVisibleUpdatedAt() == next.audiobookUiVisibleUpdatedAt() &&
         previous.error == next.error
 
 private fun Long?.orZero(): Long = this ?: 0L
+
+private fun BookAudioEntity.audiobookUiVisibleUpdatedAt(): Long? =
+    when (status) {
+        BookAudioStatus.GENERATING -> null
+        BookAudioStatus.GENERATED -> updatedAt.takeIf { generatedAt == null }
+        BookAudioStatus.CANCELED,
+        BookAudioStatus.FAILED -> updatedAt
+    }
 
 internal class BookAudiobookAudioUiItemCache {
     private val items = linkedMapOf<Long, CachedBookAudiobookAudioMetadata>()
@@ -308,7 +315,7 @@ private fun BookAudioEntity.audiobookMetadataInvalidationKey(): AudiobookMetadat
         segmentCount = segmentCount,
         completedSegments = completedSegments.takeUnless { status == BookAudioStatus.GENERATING },
         generatedAt = generatedAt,
-        updatedAt = updatedAt.takeUnless { status == BookAudioStatus.GENERATING }
+        updatedAt = audiobookUiVisibleUpdatedAt()
     )
 
 internal fun BookAudioEntity.toBookAudiobookAudioUiItem(): BookAudiobookAudioUiItem {
