@@ -77,6 +77,38 @@ data class BookListItem(
     val collections: List<CollectionUiItem> = emptyList(),
 )
 
+internal data class LibraryVisibleReadingStateKey(
+    val bookId: Long,
+    val progress: Double,
+    val currentUnit: Int,
+    val totalUnits: Int,
+    val estimatedWpm: Int,
+    val lastReadAt: Long,
+    val finishedAt: Long?,
+)
+
+internal fun sameLibraryVisibleReadingStates(
+    previous: List<ReadingStateEntity>,
+    next: List<ReadingStateEntity>,
+): Boolean {
+    if (previous.size != next.size) return false
+    val previousByBook = previous.associate { it.bookId to it.libraryVisibleReadingStateKey() }
+    return next.all { state ->
+        previousByBook[state.bookId] == state.libraryVisibleReadingStateKey()
+    }
+}
+
+private fun ReadingStateEntity.libraryVisibleReadingStateKey(): LibraryVisibleReadingStateKey =
+    LibraryVisibleReadingStateKey(
+        bookId = bookId,
+        progress = progress,
+        currentUnit = currentUnit,
+        totalUnits = totalUnits,
+        estimatedWpm = estimatedWpm,
+        lastReadAt = lastReadAt,
+        finishedAt = finishedAt
+    )
+
 data class CollectionUiItem(
     val id: Long,
     val name: String,
@@ -400,6 +432,7 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
 
     private val allBooks = container.libraryRepository.observeBooks("")
     private val states = container.readingRepository.observeStates()
+        .distinctUntilChanged(::sameLibraryVisibleReadingStates)
     private val collections = container.libraryRepository.observeCollections()
     private val bookCollectionNames = container.libraryRepository.observeBookCollectionNames()
     private val metadataOptions = combine(

@@ -134,6 +134,46 @@ class LibraryProgressStateTest {
         assertEquals("Very dense • grade 18.0", readabilityDetailLabel(clear.copy(readabilityScore = null, readabilityGradeLevel = 28.2)))
     }
 
+    @Test
+    fun libraryVisibleReadingStatesIgnorePersistenceOnlyChangesAndOrder() {
+        val first = readingState(bookId = 1L, progress = 0.2)
+        val second = readingState(bookId = 2L, progress = 0.7)
+
+        assertTrue(
+            sameLibraryVisibleReadingStates(
+                previous = listOf(first, second),
+                next = listOf(
+                    second.copy(locator = "other-locator", activeMillis = 25_000L),
+                    first.copy(locator = "new-locator", activeMillis = 10_000L)
+                )
+            )
+        )
+    }
+
+    @Test
+    fun libraryVisibleReadingStatesTrackVisibleProgressAndEtaChanges() {
+        val state = readingState(bookId = 1L, progress = 0.2, estimatedWpm = 220)
+
+        assertFalse(
+            sameLibraryVisibleReadingStates(
+                previous = listOf(state),
+                next = listOf(state.copy(progress = 0.3))
+            )
+        )
+        assertFalse(
+            sameLibraryVisibleReadingStates(
+                previous = listOf(state),
+                next = listOf(state.copy(estimatedWpm = 260))
+            )
+        )
+        assertFalse(
+            sameLibraryVisibleReadingStates(
+                previous = listOf(state),
+                next = listOf(state.copy(finishedAt = 1_700_000_050_000L))
+            )
+        )
+    }
+
     private fun item(
         progress: Double,
         finished: Boolean,
@@ -153,6 +193,23 @@ class LibraryProgressStateTest {
                 lastReadAt = 1_700_000_000_000L,
                 finishedAt = finishedAt
             )
+        )
+
+    private fun readingState(
+        bookId: Long,
+        progress: Double,
+        estimatedWpm: Int = 0,
+    ): ReadingStateEntity =
+        ReadingStateEntity(
+            bookId = bookId,
+            locator = "locator-$bookId",
+            progress = progress,
+            currentUnit = 4,
+            totalUnits = 10,
+            activeMillis = 0L,
+            estimatedWpm = estimatedWpm,
+            lastReadAt = 1_700_000_000_000L,
+            finishedAt = null
         )
 
     private fun book(finished: Boolean): BookEntity =
