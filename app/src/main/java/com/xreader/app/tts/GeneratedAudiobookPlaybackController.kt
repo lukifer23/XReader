@@ -309,6 +309,7 @@ class GeneratedAudiobookPlaybackController(
         }
         setOnErrorListener { failedPlayer, _, _ ->
             if (player !== failedPlayer) return@setOnErrorListener true
+            preparingSegment = false
             player = null
             failedPlayer.releaseQuietlyAsync(scope)
             setState(AudiobookPlaybackUiState(
