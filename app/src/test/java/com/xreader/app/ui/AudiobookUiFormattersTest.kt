@@ -1565,6 +1565,10 @@ class AudiobookUiFormattersTest {
                 generationComputeMillis = 14_000L
             ).audiobookUiInvalidationKey()
         )
+        assertEquals(
+            base.audiobookUiInvalidationKey(),
+            base.copy(fileSizeBytes = 50_000L).audiobookUiInvalidationKey()
+        )
         assertTrue(
             base.audiobookUiInvalidationKey() !=
                 base.copy(completedSegments = 4).audiobookUiInvalidationKey()
@@ -1613,6 +1617,7 @@ class AudiobookUiFormattersTest {
                     base.copy(
                         generationAudioMillis = 36_000L,
                         generationComputeMillis = 14_000L,
+                        fileSizeBytes = 50_000L,
                         updatedAt = 2_000L
                     )
                 )
@@ -1645,6 +1650,7 @@ class AudiobookUiFormattersTest {
                 generating.copy(
                     generationAudioMillis = 36_000L,
                     generationComputeMillis = 14_000L,
+                    fileSizeBytes = 50_000L,
                     updatedAt = 9_000L
                 ),
                 title = "Generating"

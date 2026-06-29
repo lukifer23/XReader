@@ -163,7 +163,7 @@ internal fun BookAudioEntity.audiobookUiInvalidationKey(): AudiobookUiInvalidati
         completedSegments = completedSegments,
         wordCount = wordCount,
         sampleRate = sampleRate,
-        fileSizeBytes = fileSizeBytes,
+        fileSizeBytes = fileSizeBytes.takeUnless { status == BookAudioStatus.GENERATING } ?: 0L,
         generationProvider = generationProvider,
         generationAudioMillis = generationAudioMillis.takeUnless { status == BookAudioStatus.GENERATING } ?: 0L,
         generationComputeMillis = generationComputeMillis.takeUnless { status == BookAudioStatus.GENERATING } ?: 0L,
@@ -200,7 +200,8 @@ internal fun sameAudiobookUiInvalidationRow(previous: BookAudioEntity, next: Boo
         previous.completedSegments == next.completedSegments &&
         previous.wordCount == next.wordCount &&
         previous.sampleRate == next.sampleRate &&
-        previous.fileSizeBytes == next.fileSizeBytes &&
+        previous.fileSizeBytes.takeUnless { previous.status == BookAudioStatus.GENERATING }.orZero() ==
+            next.fileSizeBytes.takeUnless { next.status == BookAudioStatus.GENERATING }.orZero() &&
         previous.generationProvider == next.generationProvider &&
         previous.generationAudioMillis.takeUnless { previous.status == BookAudioStatus.GENERATING }.orZero() ==
             next.generationAudioMillis.takeUnless { next.status == BookAudioStatus.GENERATING }.orZero() &&
