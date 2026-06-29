@@ -5,7 +5,9 @@ import com.xreader.app.data.AnnotationKind
 import com.xreader.app.data.BookEntity
 import com.xreader.app.data.BookFormat
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class NotesViewModelTest {
@@ -55,6 +57,31 @@ class NotesViewModelTest {
 
         assertNull(invalid.selectedTag)
         assertEquals(listOf(2L), invalid.notes.map { it.annotation.id })
+    }
+
+    @Test
+    fun notesVisibleBooksIgnoreUnrenderedMetadataAndOrder() {
+        val first = book().copy(id = 1L, title = "Red Mars", author = "Kim Stanley Robinson")
+        val second = book().copy(id = 2L, title = "Dune", author = "Frank Herbert")
+
+        assertTrue(
+            sameNotesVisibleBooks(
+                previous = listOf(first, second),
+                next = listOf(
+                    second.copy(genre = "Science Fiction", favorite = true, updatedAt = 9_000L),
+                    first.copy(description = "Changed", finished = true, fileSizeBytes = 99_000L)
+                )
+            )
+        )
+    }
+
+    @Test
+    fun notesVisibleBooksTrackSearchAndRenderedBookFields() {
+        val book = book()
+
+        assertFalse(sameNotesVisibleBooks(listOf(book), listOf(book.copy(title = "Blue Mars"))))
+        assertFalse(sameNotesVisibleBooks(listOf(book), listOf(book.copy(author = "Different Author"))))
+        assertFalse(sameNotesVisibleBooks(listOf(book), listOf(book.copy(id = 2L))))
     }
 
     private fun annotation(

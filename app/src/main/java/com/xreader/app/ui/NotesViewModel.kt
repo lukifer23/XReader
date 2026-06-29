@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -51,7 +52,8 @@ class NotesViewModel(container: AppContainer) : ViewModel() {
     val uiState: StateFlow<NotesUiState> =
         combine(
             container.annotationRepository.observeAllAnnotations(),
-            container.libraryRepository.observeBooks(""),
+            container.libraryRepository.observeBooks("")
+                .distinctUntilChanged(::sameNotesVisibleBooks),
             query,
             kind,
             selectedTag
@@ -175,3 +177,25 @@ internal fun buildNotesUiState(
         notes = filtered
     )
 }
+
+internal data class NotesVisibleBookKey(
+    val id: Long,
+    val title: String,
+    val author: String,
+)
+
+internal fun sameNotesVisibleBooks(
+    previous: List<BookEntity>,
+    next: List<BookEntity>,
+): Boolean {
+    if (previous.size != next.size) return false
+    val previousById = previous.associate { it.id to it.notesVisibleBookKey() }
+    return next.all { book -> previousById[book.id] == book.notesVisibleBookKey() }
+}
+
+private fun BookEntity.notesVisibleBookKey(): NotesVisibleBookKey =
+    NotesVisibleBookKey(
+        id = id,
+        title = title,
+        author = author
+    )
