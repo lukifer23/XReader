@@ -743,6 +743,21 @@ class GeneratedAudiobookResumeTest {
     }
 
     @Test
+    fun contiguousSegmentCountAndFilesShareTheSameBoundary() {
+        val dir = temporaryFolder.newFolder()
+        writeSegment(dir, index = 0)
+        writeSegment(dir, index = 1)
+        File(dir, generatedAudiobookSegmentFileName(2)).writeBytes(ByteArray(WAV_HEADER_BYTES.toInt()))
+        writeSegment(dir, index = 3)
+
+        assertEquals(2, dir.countContiguousGeneratedAudiobookSegments(expectedSegments = 5))
+        assertEquals(
+            listOf(generatedAudiobookSegmentFileName(0), generatedAudiobookSegmentFileName(1)),
+            dir.contiguousGeneratedAudiobookSegmentFiles(expectedSegments = 5).map { it.name }
+        )
+    }
+
+    @Test
     fun verifiedGeneratedSegmentsRecoverWhenDatabaseCompletedCountIsStale() {
         val dir = temporaryFolder.newFolder()
         writeSegment(dir, index = 0)

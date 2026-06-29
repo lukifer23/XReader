@@ -555,23 +555,34 @@ private fun BookAudioEntity.audiobookScopeRank(): Int =
     }
 
 internal fun File.contiguousGeneratedAudiobookSegmentFiles(expectedSegments: Int): List<File> {
-    if (expectedSegments <= 0 || !isDirectory) return emptyList()
-    val contiguous = ArrayList<File>(expectedSegments)
-    repeat(expectedSegments) { index ->
-        val file = File(this, generatedAudiobookSegmentFileName(index))
-        if (!file.isFile || file.length() <= WAV_HEADER_BYTES) return contiguous
-        contiguous += file
-    }
-    return contiguous
+    val result = scanContiguousGeneratedAudiobookSegments(expectedSegments, collectFiles = true)
+    return result.files ?: emptyList()
 }
 
-internal fun File.countContiguousGeneratedAudiobookSegments(expectedSegments: Int): Int {
-    if (expectedSegments <= 0 || !isDirectory) return 0
+internal fun File.countContiguousGeneratedAudiobookSegments(expectedSegments: Int): Int =
+    scanContiguousGeneratedAudiobookSegments(expectedSegments, collectFiles = false).count
+
+private data class ContiguousGeneratedAudiobookSegmentScan(
+    val count: Int,
+    val files: List<File>?,
+)
+
+private fun File.scanContiguousGeneratedAudiobookSegments(
+    expectedSegments: Int,
+    collectFiles: Boolean,
+): ContiguousGeneratedAudiobookSegmentScan {
+    if (expectedSegments <= 0 || !isDirectory) {
+        return ContiguousGeneratedAudiobookSegmentScan(count = 0, files = if (collectFiles) emptyList() else null)
+    }
+    val files = if (collectFiles) ArrayList<File>(expectedSegments) else null
     repeat(expectedSegments) { index ->
         val file = File(this, generatedAudiobookSegmentFileName(index))
-        if (!file.isFile || file.length() <= WAV_HEADER_BYTES) return index
+        if (!file.isFile || file.length() <= WAV_HEADER_BYTES) {
+            return ContiguousGeneratedAudiobookSegmentScan(count = index, files = files)
+        }
+        files?.add(file)
     }
-    return expectedSegments
+    return ContiguousGeneratedAudiobookSegmentScan(count = expectedSegments, files = files)
 }
 
 internal const val WAV_HEADER_BYTES = 44L
