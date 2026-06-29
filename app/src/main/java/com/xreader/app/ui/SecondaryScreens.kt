@@ -2169,7 +2169,7 @@ private fun NeuralTtsModelSettings(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = listOf(statusText, spec.voiceDescription).joinToString(" - "),
+                    text = neuralTtsModelDetailText(statusText, spec.voiceDescription),
                     style = MaterialTheme.typography.bodySmall,
                     color = if (status == NeuralTtsModelStatus.FAILED) {
                         MaterialTheme.colorScheme.error
@@ -2324,6 +2324,16 @@ internal fun neuralTtsStatusText(
         NeuralTtsModelStatus.FAILED -> error ?: "Download failed"
         NeuralTtsModelStatus.NOT_DOWNLOADED -> "Not installed • ${archiveBytes.compactBytes()}"
     }
+
+internal fun neuralTtsModelDetailText(statusText: String, voiceDescription: String): String {
+    val cleanStatus = statusText.trim()
+    val cleanDescription = voiceDescription.trim()
+    return when {
+        cleanStatus.isBlank() -> cleanDescription
+        cleanDescription.isBlank() -> cleanStatus
+        else -> "$cleanStatus - $cleanDescription"
+    }
+}
 
 @Composable
 private fun ReadAloudVoiceSettings(

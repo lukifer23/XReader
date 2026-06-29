@@ -1018,6 +1018,17 @@ class AudiobookUiFormattersTest {
     }
 
     @Test
+    fun neuralTtsModelDetailTextSkipsBlankParts() {
+        assertEquals(
+            "Installed - Quality-focused Kokoro release",
+            neuralTtsModelDetailText(" Installed ", " Quality-focused Kokoro release ")
+        )
+        assertEquals("Installed", neuralTtsModelDetailText("Installed", " "))
+        assertEquals("Quality-focused Kokoro release", neuralTtsModelDetailText("", "Quality-focused Kokoro release"))
+        assertEquals("", neuralTtsModelDetailText(" ", ""))
+    }
+
+    @Test
     fun continueReadingPrimaryActionsExposeBookMaintenanceAndAudio() {
         val actions = continueReadingPrimaryActions()
 
