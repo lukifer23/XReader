@@ -2771,11 +2771,11 @@ private fun LibrarySearchResultItem(
 ) {
     val row = result.row
     val snippet = searchResultSnippet(row.body, query)
-    val subtitle = listOf(row.heading, result.bookAuthor)
-        .map { it.trim() }
-        .filter { it.isNotBlank() && !it.equals(result.bookTitle, ignoreCase = true) }
-        .distinct()
-        .joinToString(" • ")
+    val subtitle = librarySearchResultSubtitle(
+        heading = row.heading,
+        author = result.bookAuthor,
+        title = result.bookTitle
+    )
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -2805,6 +2805,26 @@ private fun LibrarySearchResultItem(
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
+    }
+}
+
+internal fun librarySearchResultSubtitle(
+    heading: String,
+    author: String,
+    title: String,
+): String {
+    val cleanHeading = heading.trim()
+    val cleanAuthor = author.trim()
+    val cleanTitle = title.trim()
+    val hasHeading = cleanHeading.isNotBlank() && !cleanHeading.equals(cleanTitle, ignoreCase = true)
+    val hasAuthor = cleanAuthor.isNotBlank() &&
+        !cleanAuthor.equals(cleanTitle, ignoreCase = true) &&
+        !(hasHeading && cleanAuthor.equals(cleanHeading, ignoreCase = true))
+    return when {
+        hasHeading && hasAuthor -> "$cleanHeading • $cleanAuthor"
+        hasHeading -> cleanHeading
+        hasAuthor -> cleanAuthor
+        else -> ""
     }
 }
 

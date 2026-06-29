@@ -101,6 +101,42 @@ class LibrarySearchSnippetTest {
     }
 
     @Test
+    fun searchResultSubtitleCombinesHeadingAndAuthorWithoutDuplicateMetadata() {
+        assertEquals(
+            "Chapter 4 • Pierce Brown",
+            librarySearchResultSubtitle(
+                heading = " Chapter 4 ",
+                author = "Pierce Brown",
+                title = "Red Rising"
+            )
+        )
+        assertEquals(
+            "Pierce Brown",
+            librarySearchResultSubtitle(
+                heading = "Red Rising",
+                author = " Pierce Brown ",
+                title = "red rising"
+            )
+        )
+        assertEquals(
+            "Chapter 4",
+            librarySearchResultSubtitle(
+                heading = "Chapter 4",
+                author = " chapter 4 ",
+                title = "Red Rising"
+            )
+        )
+        assertEquals(
+            "",
+            librarySearchResultSubtitle(
+                heading = "Red Rising",
+                author = " red rising ",
+                title = "Red Rising"
+            )
+        )
+    }
+
+    @Test
     fun snippetCentersOnMatchedTerm() {
         val body = "Opening material that is not relevant. ".repeat(8) +
             "The courier crossed the landing field with a sealed dispatch. " +
