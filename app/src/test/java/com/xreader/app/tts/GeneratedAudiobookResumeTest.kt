@@ -758,41 +758,6 @@ class GeneratedAudiobookResumeTest {
     }
 
     @Test
-    fun verifiedGeneratedSegmentsRecoverWhenDatabaseCompletedCountIsStale() {
-        val dir = temporaryFolder.newFolder()
-        writeSegment(dir, index = 0)
-        writeSegment(dir, index = 1)
-        writeSegment(dir, index = 2)
-
-        val staleAudio = audio(filePath = dir.absolutePath).copy(
-            status = BookAudioStatus.GENERATING,
-            segmentCount = 5,
-            completedSegments = 0
-        )
-
-        assertTrue(staleAudio.playableSegmentFiles().isEmpty())
-        assertEquals(3, staleAudio.verifiedGeneratedSegmentFiles().size)
-        assertEquals(3, staleAudio.verifiedGeneratedSegmentCount())
-        assertEquals(3, staleAudio.withVerifiedGeneratedProgress().completedSegments)
-        assertEquals(3, staleAudio.withVerifiedGeneratedProgress().playableSegmentFiles().size)
-    }
-
-    @Test
-    fun verifiedGeneratedSegmentsLowerStaleDatabaseCompletedCount() {
-        val dir = temporaryFolder.newFolder()
-        writeSegment(dir, index = 0)
-
-        val staleAudio = audio(filePath = dir.absolutePath).copy(
-            status = BookAudioStatus.CANCELED,
-            segmentCount = 5,
-            completedSegments = 4
-        )
-
-        assertEquals(1, staleAudio.verifiedGeneratedSegmentFiles().size)
-        assertEquals(1, staleAudio.withVerifiedGeneratedProgress().completedSegments)
-    }
-
-    @Test
     fun generatedAudiobookFileSnapshotKeepsActiveGenerationBoundedToCompletedProgress() {
         val dir = temporaryFolder.newFolder()
         writeSegment(dir, index = 0)
