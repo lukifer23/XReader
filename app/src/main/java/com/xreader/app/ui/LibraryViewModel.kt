@@ -448,7 +448,6 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     private data class LibrarySelectionState(
-        val query: String,
         val group: LibraryGroup,
         val sort: LibrarySort,
         val density: LibraryDensity,
@@ -462,11 +461,10 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         val opdsCatalog: OpdsCatalogUiState,
     )
 
-    private val selectionState = combine(query, group, container.settingsRepository.librarySettings) {
-            currentQuery,
+    private val selectionState = combine(group, container.settingsRepository.librarySettings) {
             currentGroup,
             librarySettings ->
-        LibrarySelectionState(currentQuery, currentGroup, librarySettings.sort, librarySettings.density)
+        LibrarySelectionState(currentGroup, librarySettings.sort, librarySettings.density)
     }
 
     private val chromeState = combine(selectionState, importing, message, searchResults, opdsCatalog) {
@@ -574,14 +572,15 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     val uiState: StateFlow<LibraryUiState> =
-        combine(chromeState, displayBooks, supportState, libraryAudiobookPlayback) {
+        combine(query, chromeState, displayBooks, supportState, libraryAudiobookPlayback) {
+                currentQuery,
                 chrome,
                 libraryBooks,
                 support,
                 playback ->
             val selection = libraryBooks.selection
             LibraryUiState(
-                query = selection.query,
+                query = currentQuery,
                 group = selection.group,
                 sort = selection.sort,
                 density = selection.density,
