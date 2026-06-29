@@ -254,6 +254,18 @@ class NeuralTtsTextTest {
     }
 
     @Test
+    fun prepareKeepsSegmentTextCleanWithoutSecondCleanupPass() {
+        val prepared = NeuralTtsText.prepare(
+            listOf(chunk(text = "The   room\twent quiet  .\n\nNobody   moved  ?"))
+        )
+
+        assertEquals(
+            listOf("The room went quiet. Nobody moved?"),
+            prepared.segments
+        )
+    }
+
+    @Test
     fun prepareSkipsPublisherFrontMatterBeforePrologue() {
         val prepared = NeuralTtsText.prepare(
             listOf(

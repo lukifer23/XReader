@@ -144,8 +144,6 @@ internal object NeuralTtsText {
             val passageIsChapterBoundary = unit.kind == NarrationUnitKind.CHAPTER_HEADING ||
                 unit.kind == NarrationUnitKind.PART_HEADING
             splitForAudiobook(unit.text, preferShortSegments = passageIsChapterBoundary)
-                .map { it.copy(text = ReadAloudPlanner.cleanSpeechText(it.text)) }
-                .filter { it.text.isNotBlank() }
                 .forEach { segment ->
                     segments += segment.text
                     segmentChapterIndexes += chapterIndex
