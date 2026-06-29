@@ -95,6 +95,7 @@ class ReaderViewModel(
     private var ignoreStoredStateUntilFirstLocator = initialLocatorOverride != null
     private var deferredObserversStarted = false
     private var lastReadAloudLocator: String? = null
+    private var lastSyncedReadAloudSettings: ReaderReadAloudSettingsKey? = null
 
     init {
         viewModelScope.launch {
@@ -103,20 +104,28 @@ class ReaderViewModel(
                 container.settingsRepository.bookAppearance(bookId)
             ) { global, bookAppearance ->
                 global.withBookAppearance(bookAppearance) to (bookAppearance != null)
-            }.collect { (settings, bookAppearanceEnabled) ->
-                _uiState.update {
-                    it.copy(
-                        settings = settings,
-                        bookAppearanceEnabled = bookAppearanceEnabled
-                    )
-                }
-                val readAloud = container.readAloudEngine.state.value
-                if (readAloud.activeBookId == bookId && (readAloud.playing || readAloud.paused || readAloud.initializing)) {
-                    container.readAloudEngine.setEngine(settings.readAloudEngineName)
-                    container.readAloudEngine.setSpeechRate(settings.readAloudRate)
-                    container.readAloudEngine.setVoice(settings.readAloudVoiceName)
-                }
             }
+                .distinctUntilChanged()
+                .collect { (settings, bookAppearanceEnabled) ->
+                    _uiState.update {
+                        it.copy(
+                            settings = settings,
+                            bookAppearanceEnabled = bookAppearanceEnabled
+                        )
+                    }
+                    val readAloud = container.readAloudEngine.state.value
+                    if (readAloud.activeBookId == bookId && (readAloud.playing || readAloud.paused || readAloud.initializing)) {
+                        val readAloudSettings = settings.readerReadAloudSettingsKey()
+                        if (shouldSyncReaderReadAloudSettings(lastSyncedReadAloudSettings, readAloudSettings)) {
+                            lastSyncedReadAloudSettings = readAloudSettings
+                            container.readAloudEngine.setEngine(settings.readAloudEngineName)
+                            container.readAloudEngine.setSpeechRate(settings.readAloudRate)
+                            container.readAloudEngine.setVoice(settings.readAloudVoiceName)
+                        }
+                    } else {
+                        lastSyncedReadAloudSettings = null
+                    }
+                }
         }
         viewModelScope.launch {
             container.readAloudEngine.state.collect { readAloud ->
@@ -1056,6 +1065,25 @@ internal fun shouldApplyObservedReaderState(
     if (observed.lastReadAt == current.lastReadAt && observed.activeMillis < current.activeMillis) return false
     return true
 }
+
+internal data class ReaderReadAloudSettingsKey(
+    val engineName: String?,
+    val rate: Float,
+    val voiceName: String?,
+)
+
+internal fun ReaderSettings.readerReadAloudSettingsKey(): ReaderReadAloudSettingsKey =
+    ReaderReadAloudSettingsKey(
+        engineName = readAloudEngineName,
+        rate = readAloudRate,
+        voiceName = readAloudVoiceName
+    )
+
+internal fun shouldSyncReaderReadAloudSettings(
+    lastSynced: ReaderReadAloudSettingsKey?,
+    next: ReaderReadAloudSettingsKey,
+): Boolean =
+    lastSynced != next
 
 private const val READER_SEARCH_SNIPPET_MAX_LENGTH = 220
 

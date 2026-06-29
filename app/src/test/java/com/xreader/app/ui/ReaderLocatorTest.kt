@@ -3,6 +3,7 @@ package com.xreader.app.ui
 import com.xreader.app.data.BookmarkEntity
 import com.xreader.app.data.ReadingStateEntity
 import com.xreader.app.reader.ReadingUnit
+import com.xreader.app.settings.ReaderSettings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -418,6 +419,55 @@ class ReaderLocatorTest {
             shouldApplyObservedReaderState(
                 current = current,
                 observed = current.copy(activeMillis = 40_000L)
+            )
+        )
+    }
+
+    @Test
+    fun readerReadAloudSettingsKeyIgnoresUnrelatedReaderSettings() {
+        val base = ReaderSettings(
+            readAloudEngineName = "engine-a",
+            readAloudVoiceName = "voice-a",
+            readAloudRate = 1.1f
+        )
+
+        assertEquals(
+            base.readerReadAloudSettingsKey(),
+            base.copy(fontScale = 1.35f, marginScale = 0.7f).readerReadAloudSettingsKey()
+        )
+        assertTrue(shouldSyncReaderReadAloudSettings(lastSynced = null, next = base.readerReadAloudSettingsKey()))
+        assertFalse(
+            shouldSyncReaderReadAloudSettings(
+                lastSynced = base.readerReadAloudSettingsKey(),
+                next = base.copy(fontScale = 1.35f).readerReadAloudSettingsKey()
+            )
+        )
+    }
+
+    @Test
+    fun readerReadAloudSettingsKeyTracksVoiceEngineAndRateChanges() {
+        val base = ReaderSettings(
+            readAloudEngineName = "engine-a",
+            readAloudVoiceName = "voice-a",
+            readAloudRate = 1.1f
+        )
+
+        assertTrue(
+            shouldSyncReaderReadAloudSettings(
+                lastSynced = base.readerReadAloudSettingsKey(),
+                next = base.copy(readAloudEngineName = "engine-b").readerReadAloudSettingsKey()
+            )
+        )
+        assertTrue(
+            shouldSyncReaderReadAloudSettings(
+                lastSynced = base.readerReadAloudSettingsKey(),
+                next = base.copy(readAloudVoiceName = "voice-b").readerReadAloudSettingsKey()
+            )
+        )
+        assertTrue(
+            shouldSyncReaderReadAloudSettings(
+                lastSynced = base.readerReadAloudSettingsKey(),
+                next = base.copy(readAloudRate = 1.2f).readerReadAloudSettingsKey()
             )
         )
     }
