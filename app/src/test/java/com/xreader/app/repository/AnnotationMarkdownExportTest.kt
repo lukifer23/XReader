@@ -66,6 +66,25 @@ class AnnotationMarkdownExportTest {
         assertTrue(markdown.contains("- 50% - Part \\[One\\]"))
     }
 
+    @Test
+    fun exportAnnotationHeadingSkipsMissingProgressWithoutDanglingSeparator() {
+        val markdown = AnnotationMarkdownExport.build(
+            exportedAt = 1_700_000_000_000L,
+            booksById = mapOf(7L to book(title = "Mars Notes")),
+            annotations = listOf(
+                annotation(
+                    kind = AnnotationKind.NOTE,
+                    locator = """{"href":"chapter.xhtml","locations":{}}""",
+                    note = "Progress is unavailable."
+                )
+            ),
+            bookmarks = emptyList()
+        )
+
+        assertTrue(markdown.contains("#### Note - 2023-11-14T22:13:20Z"))
+        assertTrue(!markdown.contains("#### Note - - 2023-11-14T22:13:20Z"))
+    }
+
     private fun book(
         title: String,
         author: String = "Author",

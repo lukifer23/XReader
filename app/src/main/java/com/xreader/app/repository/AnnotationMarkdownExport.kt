@@ -50,11 +50,7 @@ internal object AnnotationMarkdownExport {
                     bookAnnotations.forEach { annotation ->
                         appendLine()
                         appendLine(
-                            listOfNotNull(
-                                annotation.kind.label(),
-                                annotation.locator.locatorProgressLabel(),
-                                Instant.ofEpochMilli(annotation.updatedAt).toString()
-                            ).joinToString(" - ", prefix = "#### ")
+                            annotation.markdownHeading()
                         )
                         appendLine()
                         appendBlockQuote(annotation.quote)
@@ -96,6 +92,18 @@ internal object AnnotationMarkdownExport {
         when (this) {
             AnnotationKind.NOTE -> "Note"
             AnnotationKind.HIGHLIGHT -> "Highlight"
+        }
+
+    private fun AnnotationEntity.markdownHeading(): String =
+        buildString {
+            append("#### ")
+            append(kind.label())
+            locator.locatorProgressLabel()?.let { progress ->
+                append(" - ")
+                append(progress)
+            }
+            append(" - ")
+            append(Instant.ofEpochMilli(updatedAt))
         }
 
     private fun Double.progressLabel(): String =
