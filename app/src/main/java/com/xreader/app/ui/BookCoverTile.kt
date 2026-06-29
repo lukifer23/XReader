@@ -22,11 +22,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.xreader.app.data.BookEntity
 import java.io.File
+import kotlin.math.ceil
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -38,17 +40,24 @@ internal fun BookCoverTile(
     height: Dp = 82.dp,
 ) {
     val context = LocalContext.current
+    val density = LocalDensity.current.density
+    val targetMaxPixels = coverTargetMaxPixels(
+        widthDp = width.value,
+        heightDp = height.value,
+        density = density
+    )
     val coverBitmap by produceState<Bitmap?>(
         initialValue = null,
         key1 = book.coverImagePath,
-        key2 = context.filesDir.absolutePath,
+        key2 = targetMaxPixels,
+        key3 = context.filesDir.absolutePath,
     ) {
         val path = book.coverImagePath
         value = if (path == null) {
             null
         } else {
             withContext(Dispatchers.IO) {
-                CoverBitmapCache.load(File(context.filesDir, path), targetMaxPixels = 420)
+                CoverBitmapCache.load(File(context.filesDir, path), targetMaxPixels = targetMaxPixels)
             }
         }
     }
@@ -83,6 +92,11 @@ internal fun BookCoverTile(
         }
     }
 }
+
+internal fun coverTargetMaxPixels(widthDp: Float, heightDp: Float, density: Float): Int =
+    ceil((maxOf(widthDp, heightDp) * density * COVER_DECODE_OVERSAMPLE).toDouble())
+        .toInt()
+        .coerceIn(MIN_COVER_DECODE_PIXELS, MAX_COVER_DECODE_PIXELS)
 
 private object CoverBitmapCache {
     private val maxSizeKb = ((Runtime.getRuntime().maxMemory() / 1024L) / 16L)
@@ -126,3 +140,7 @@ private object CoverBitmapCache {
         return sample.coerceAtLeast(1)
     }
 }
+
+private const val COVER_DECODE_OVERSAMPLE = 1.25f
+private const val MIN_COVER_DECODE_PIXELS = 160
+private const val MAX_COVER_DECODE_PIXELS = 420
