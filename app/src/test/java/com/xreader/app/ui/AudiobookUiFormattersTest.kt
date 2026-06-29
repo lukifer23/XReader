@@ -897,6 +897,26 @@ class AudiobookUiFormattersTest {
     }
 
     @Test
+    fun generatedAudiobookDeleteDetailCombinesProfileDurationAndSize() {
+        val audio = audio(1).copy(
+            modelDisplayName = "Kokoro v1.0",
+            tone = "WARM",
+            scopeLabel = "Sample",
+            wordCount = 9_000,
+            fileSizeBytes = 2_048L
+        )
+
+        assertEquals(
+            "Sample Kokoro v1.0 Warm 1.00x • ~1h audio • 2 KB",
+            generatedAudiobookDeleteDetail(audio)
+        )
+        assertEquals(
+            "Sample Kokoro v1.0 Warm 1.00x",
+            generatedAudiobookDeleteDetail(audio.copy(wordCount = 0, fileSizeBytes = 0L))
+        )
+    }
+
+    @Test
     fun neuralTtsStatusTextIsSharedBySettingsAndBookDialog() {
         assertEquals(
             "Not installed • 333 MB",

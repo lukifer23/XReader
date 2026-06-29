@@ -1563,13 +1563,7 @@ internal fun BookAudiobookDialog(
             onDismissRequest = { deleteCandidate = null },
             title = { Text("Delete generated audio?") },
             text = {
-                Text(
-                    listOf(
-                        audio.displayProfileLabel(),
-                        audio.estimatedDurationLabel(),
-                        audio.fileSizeBytes.takeIf { it > 0 }?.compactBytes()
-                    ).filterNotNull().joinToString(" • ")
-                )
+                Text(generatedAudiobookDeleteDetail(audio))
             },
             confirmButton = {
                 TextButton(
@@ -2191,6 +2185,13 @@ internal fun generatedAudiobookRowDetail(
         }
     }
 }
+
+internal fun generatedAudiobookDeleteDetail(audio: BookAudioEntity): String =
+    buildString {
+        append(audio.displayProfileLabel())
+        appendAudiobookDetailPart(audio.estimatedDurationLabel())
+        appendAudiobookDetailPart(audio.fileSizeBytes.takeIf { it > 0 }?.compactBytes())
+    }
 
 private fun StringBuilder.appendAudiobookDetailPart(part: String?) {
     if (part.isNullOrBlank()) return
