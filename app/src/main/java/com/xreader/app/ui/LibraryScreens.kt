@@ -719,17 +719,12 @@ internal fun LibraryActionRow(
     val bookCount = state.books.size
     val inProgress = state.books.count { it.isLibraryInProgress() }
     val finished = state.books.count { it.isLibraryFinished() }
-    val countText = when (bookCount) {
-        0 -> "No books"
-        1 -> "1 book"
-        else -> "$bookCount books"
-    }
-    val statusText = listOfNotNull(
-        countText,
-        if (inProgress > 0) "$inProgress reading" else null,
-        if (finished > 0) "$finished finished" else null,
-        state.sort.label()
-    ).joinToString(" • ")
+    val statusText = libraryActionStatusText(
+        bookCount = bookCount,
+        inProgress = inProgress,
+        finished = finished,
+        sort = state.sort
+    )
     val densityLabel =
         if (state.density == LibraryDensity.COMPACT) "Use comfortable layout" else "Use compact layout"
 

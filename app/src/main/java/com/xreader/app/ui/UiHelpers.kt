@@ -366,6 +366,34 @@ internal fun BookListItem.isLibraryInProgress(): Boolean =
 internal fun BookListItem.isLibraryUnread(): Boolean =
     !isLibraryFinished() && rawLibraryProgress() <= LIBRARY_UNREAD_PROGRESS_THRESHOLD
 
+internal fun libraryActionStatusText(
+    bookCount: Int,
+    inProgress: Int,
+    finished: Int,
+    sort: LibrarySort,
+): String {
+    val countText = when (bookCount) {
+        0 -> "No books"
+        1 -> "1 book"
+        else -> "$bookCount books"
+    }
+    return buildString {
+        append(countText)
+        if (inProgress > 0) {
+            append(" • ")
+            append(inProgress)
+            append(" reading")
+        }
+        if (finished > 0) {
+            append(" • ")
+            append(finished)
+            append(" finished")
+        }
+        append(" • ")
+        append(sort.label())
+    }
+}
+
 internal fun continueReadingProgressSummary(
     progress: Double,
     eta: String?,

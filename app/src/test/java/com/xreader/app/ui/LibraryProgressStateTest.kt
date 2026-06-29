@@ -3,6 +3,7 @@ package com.xreader.app.ui
 import com.xreader.app.data.BookEntity
 import com.xreader.app.data.BookFormat
 import com.xreader.app.data.ReadingStateEntity
+import com.xreader.app.settings.LibrarySort
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -104,6 +105,22 @@ class LibraryProgressStateTest {
         )
         assertEquals("0% read", continueReadingProgressSummary(progress = -0.2, eta = null, wpm = null))
         assertEquals("100% read", continueReadingProgressSummary(progress = 1.8, eta = null, wpm = null))
+    }
+
+    @Test
+    fun libraryActionStatusTextSkipsZeroStatusCounts() {
+        assertEquals(
+            "No books • Recent first",
+            libraryActionStatusText(bookCount = 0, inProgress = 0, finished = 0, sort = LibrarySort.RECENT)
+        )
+        assertEquals(
+            "1 book • 1 reading • Progress",
+            libraryActionStatusText(bookCount = 1, inProgress = 1, finished = 0, sort = LibrarySort.PROGRESS)
+        )
+        assertEquals(
+            "5 books • 2 reading • 1 finished • Title",
+            libraryActionStatusText(bookCount = 5, inProgress = 2, finished = 1, sort = LibrarySort.TITLE)
+        )
     }
 
     @Test
