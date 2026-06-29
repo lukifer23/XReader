@@ -5,8 +5,11 @@ import com.xreader.app.data.BookEntity
 import com.xreader.app.data.ReadingSessionEntity
 import com.xreader.app.data.ReadingStateEntity
 import com.xreader.app.repository.ReadingRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.Clock
@@ -99,8 +102,10 @@ class AnalyticsRepository(
             readingRepository.observeSessions(),
             readingRepository.observeStates()
         ) { books, sessions, states ->
-            AnalyticsCalculator.summarize(books, sessions, clock, range, states)
-        }
+            withContext(Dispatchers.Default) {
+                AnalyticsCalculator.summarize(books, sessions, clock, range, states)
+            }
+        }.distinctUntilChanged()
 
     suspend fun exportSummariesJson(): AnalyticsExportResult {
         val books = bookDao.booksForBackup()
