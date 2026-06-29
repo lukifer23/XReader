@@ -109,10 +109,11 @@ class TxtToEpubConverter {
                 flush()
                 val subtitle = blocks.getOrNull(index + 1)
                     ?.takeIf { (index + 1) !in headingIndexes && it.isSubtitleCandidate() }
-                title = listOf(block.titleText(), subtitle?.titleText())
-                    .filterNotNull()
-                    .joinToString(" - ")
-                    .ifBlank { "Chapter ${chapters.size + 1}" }
+                title = chapterTitle(
+                    heading = block.titleText(),
+                    subtitle = subtitle?.titleText(),
+                    fallback = "Chapter ${chapters.size + 1}"
+                )
                 index += if (subtitle != null) 2 else 1
             } else {
                 content += block.text
@@ -158,15 +159,21 @@ class TxtToEpubConverter {
 
     private fun TxtBlock.headingText(): String =
         lines.joinToString(" ") { it.trim() }
-            .replace(Regex("\\s+"), " ")
+            .replace(TXT_WHITESPACE, " ")
             .trim()
 
     private fun TxtBlock.titleText(): String =
         lines
-            .map { it.trim().replace(Regex("\\s+"), " ") }
+            .map { it.trim().replace(TXT_WHITESPACE, " ") }
             .filter { it.isNotBlank() }
             .joinToString(" - ")
             .trim()
+
+    internal fun chapterTitle(heading: String?, subtitle: String?, fallback: String): String =
+        buildString {
+            appendTitlePart(heading)
+            appendTitlePart(subtitle)
+        }.ifBlank { fallback }
 
     private fun packageDocument(title: String, identifier: String, chapters: List<TxtChapter>): String {
         val chapterItems = chapters.mapIndexed { index, _ ->
@@ -274,6 +281,13 @@ class TxtToEpubConverter {
             .replace("\"", "&quot;")
             .replace("'", "&apos;")
 
+    private fun StringBuilder.appendTitlePart(value: String?) {
+        val clean = value?.trim().orEmpty()
+        if (clean.isBlank()) return
+        if (isNotEmpty()) append(" - ")
+        append(clean)
+    }
+
     private fun String.lineCount(): Int = count { it == '\n' } + 1
 
     private fun ByteArray.startsWith(prefix: ByteArray): Boolean =
@@ -307,6 +321,7 @@ class TxtToEpubConverter {
         const val MAX_TXT_BYTES = 32L * 1024L * 1024L
         const val MAX_HEADING_CHARS = 100
         val WINDOWS_1252: Charset = Charset.forName("windows-1252")
+        val TXT_WHITESPACE = Regex("\\s+")
         val UTF_8_BOM = byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte())
         val UTF_16_LE_BOM = byteArrayOf(0xFF.toByte(), 0xFE.toByte())
         val UTF_16_BE_BOM = byteArrayOf(0xFE.toByte(), 0xFF.toByte())

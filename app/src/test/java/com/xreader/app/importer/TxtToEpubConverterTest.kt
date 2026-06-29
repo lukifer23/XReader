@@ -9,6 +9,16 @@ import java.util.zip.ZipFile
 
 class TxtToEpubConverterTest {
     @Test
+    fun chapterTitleCombinesHeadingSubtitleAndFallbackWithoutBlankParts() {
+        val converter = TxtToEpubConverter()
+
+        assertEquals("CHAPTER I - The First Door", converter.chapterTitle(" CHAPTER I ", " The First Door ", "Chapter 1"))
+        assertEquals("CHAPTER I", converter.chapterTitle("CHAPTER I", " ", "Chapter 1"))
+        assertEquals("The First Door", converter.chapterTitle(null, "The First Door", "Chapter 1"))
+        assertEquals("Chapter 1", converter.chapterTitle(" ", null, "Chapter 1"))
+    }
+
+    @Test
     fun convertsTxtIntoParseableEpub() {
         val dir = Files.createTempDirectory("xreader-epub-test").toFile()
         val source = File(dir, "essay.txt")
