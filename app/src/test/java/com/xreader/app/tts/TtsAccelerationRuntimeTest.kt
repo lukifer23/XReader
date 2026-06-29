@@ -586,6 +586,26 @@ class TtsAccelerationRuntimeTest {
     }
 
     @Test
+    fun orderedProviderFailureSummaryTrimsAndSuppressesDuplicates() {
+        assertEquals(
+            "GPU failed HTP failed",
+            TtsAccelerationRuntime.orderedProviderFailureSummary(" GPU failed ", "HTP failed")
+        )
+        assertEquals(
+            "QNN failed",
+            TtsAccelerationRuntime.orderedProviderFailureSummary("QNN failed", " QNN failed ")
+        )
+        assertEquals(
+            "HTP failed",
+            TtsAccelerationRuntime.orderedProviderFailureSummary(null, " HTP failed ")
+        )
+        assertEquals(
+            null,
+            TtsAccelerationRuntime.orderedProviderFailureSummary(" ", null)
+        )
+    }
+
+    @Test
     fun packagedNativeLibraryDiscoveryIsCachedPerInstallKey() {
         TtsAccelerationRuntime.clearPackagedNativeLibrariesCacheForTests()
         var discoveries = 0

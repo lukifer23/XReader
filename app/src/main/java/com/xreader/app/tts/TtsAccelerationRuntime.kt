@@ -235,10 +235,24 @@ internal object TtsAccelerationRuntime {
     }
 
     fun audiobookHardwareProviderBlockReason(): String? =
-        listOfNotNull(
-            failedProviderReasons["qnn-gpu"],
-            failedProviderReasons["qnn-htp"],
-        ).distinct().joinToString(separator = " ").ifBlank { null }
+        orderedProviderFailureSummary(
+            first = failedProviderReasons["qnn-gpu"],
+            second = failedProviderReasons["qnn-htp"],
+        )
+
+    internal fun orderedProviderFailureSummary(first: String?, second: String?): String? {
+        val summary = StringBuilder()
+        val firstCleaned = first?.trim().orEmpty()
+        val secondCleaned = second?.trim().orEmpty()
+        if (firstCleaned.isNotBlank()) {
+            summary.append(firstCleaned)
+        }
+        if (secondCleaned.isNotBlank() && secondCleaned != firstCleaned) {
+            if (summary.isNotEmpty()) summary.append(' ')
+            summary.append(secondCleaned)
+        }
+        return summary.toString().ifBlank { null }
+    }
 
     internal fun isQnnGpuOpenClFailure(provider: String, error: Throwable): Boolean {
         if (providerDisplayKey(provider) != "qnn-gpu") return false
