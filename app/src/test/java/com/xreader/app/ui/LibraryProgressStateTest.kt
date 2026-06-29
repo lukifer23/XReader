@@ -131,6 +131,7 @@ class LibraryProgressStateTest {
         assertEquals("Clear • G7", readabilityCompactLabel(clear))
         assertEquals("Clear • grade 7.4 • ease 68", readabilityDetailLabel(clear))
         assertEquals("Very dense • G13", readabilityCompactLabel(dense))
+        assertEquals("Very dense • grade 18.0", readabilityDetailLabel(clear.copy(readabilityScore = null, readabilityGradeLevel = 28.2)))
     }
 
     private fun item(

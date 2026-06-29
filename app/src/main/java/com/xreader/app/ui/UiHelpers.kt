@@ -613,8 +613,15 @@ internal fun readabilityDetailLabel(book: BookEntity): String? {
     val grade = book.readabilityGradeLevel ?: return null
     val score = book.readabilityScore
     val level = readabilityLevelLabel(score, grade)
-    val scoreText = score?.roundToInt()?.coerceIn(0, 100)?.let { "ease $it" }
-    return listOfNotNull(level, "grade ${"%.1f".format(Locale.US, grade.coerceIn(0.0, 18.0))}", scoreText).joinToString(" • ")
+    return buildString {
+        append(level)
+        append(" • grade ")
+        append("%.1f".format(Locale.US, grade.coerceIn(0.0, 18.0)))
+        score?.roundToInt()?.coerceIn(0, 100)?.let { ease ->
+            append(" • ease ")
+            append(ease)
+        }
+    }
 }
 
 private fun readabilityLevelLabel(score: Double?, grade: Double): String =
