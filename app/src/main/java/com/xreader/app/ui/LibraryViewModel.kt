@@ -520,7 +520,7 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
             val visibleAllBooks = currentAllBooks.withoutPendingRemovalIds(removingIds)
             visibleAllBooks.map { BookListItem(it, statesByBook[it.id], collectionsByBook[it.id].orEmpty()) }
         }
-    }
+    }.distinctUntilChanged()
 
     private val bookItems = combine(
         allBookItems,
@@ -533,7 +533,7 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
                 allItems = projection.allItems
             )
         }
-    }
+    }.distinctUntilChanged()
 
     private val runtimeSupportState = combine(
         collections,
@@ -569,7 +569,7 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
                 allItems = libraryBooks.allItems
             )
         }
-    }
+    }.distinctUntilChanged()
 
     val uiState: StateFlow<LibraryUiState> =
         combine(query, chromeState, displayBooks, supportState, libraryAudiobookPlayback) {
@@ -598,7 +598,9 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
                 audiobookPlayback = playback,
                 opdsCatalog = chrome.opdsCatalog
             )
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState())
+        }
+            .distinctUntilChanged()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState())
 
     val metadataOptionsState: StateFlow<LibraryMetadataOptionsUiState> =
         metadataOptions

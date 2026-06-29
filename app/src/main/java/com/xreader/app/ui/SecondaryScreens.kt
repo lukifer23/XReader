@@ -662,7 +662,9 @@ class AudiobooksViewModel(private val container: AppContainer) : ViewModel() {
             withContext(Dispatchers.Default) {
                 rows.sortedForAudiobooksScreen(sortKey)
             }
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+        }
+            .distinctUntilChanged()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val uiState: StateFlow<AudiobooksUiState> =
         combine(
