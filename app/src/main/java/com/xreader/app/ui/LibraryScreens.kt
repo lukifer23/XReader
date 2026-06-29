@@ -118,6 +118,7 @@ import com.xreader.app.tts.AudiobookGenerationScope
 import com.xreader.app.tts.GeneratedAudiobookChapter
 import com.xreader.app.tts.NeuralTtsModelCatalog
 import com.xreader.app.tts.NeuralTtsModelSpec
+import com.xreader.app.tts.NeuralTtsSpeakerSpec
 import com.xreader.app.tts.audiobookGenerationProgressLabel
 import com.xreader.app.tts.canDeleteGeneratedAudiobook
 import com.xreader.app.tts.generationEtaLabel
@@ -1386,15 +1387,14 @@ internal fun BookAudiobookDialog(
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(book.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         Text(
-                            text = listOf(
-                                "Full book",
-                                bookLengthLabel(book),
-                                scan?.takeIf { it.hasText }?.let { audiobookDurationLabel(it.estimatedAudioMillis) },
-                                selectedSpec.displayName,
-                                selectedSpeaker.label,
-                                settings.neuralTtsTone.label,
-                                settings.neuralTtsPace.label
-                            ).joinToString(" • "),
+                            text = audiobookGenerationHeaderDetail(
+                                book = book,
+                                scan = scan,
+                                selectedSpec = selectedSpec,
+                                selectedSpeaker = selectedSpeaker,
+                                tone = settings.neuralTtsTone,
+                                pace = settings.neuralTtsPace
+                            ),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -2191,6 +2191,24 @@ internal fun generatedAudiobookDeleteDetail(audio: BookAudioEntity): String =
         append(audio.displayProfileLabel())
         appendAudiobookDetailPart(audio.estimatedDurationLabel())
         appendAudiobookDetailPart(audio.fileSizeBytes.takeIf { it > 0 }?.compactBytes())
+    }
+
+internal fun audiobookGenerationHeaderDetail(
+    book: BookEntity,
+    scan: AudiobookScanUiState?,
+    selectedSpec: NeuralTtsModelSpec,
+    selectedSpeaker: NeuralTtsSpeakerSpec,
+    tone: NeuralTtsTone,
+    pace: NeuralTtsPace,
+): String =
+    buildString {
+        append("Full book")
+        appendAudiobookDetailPart(bookLengthLabel(book))
+        appendAudiobookDetailPart(scan?.takeIf { it.hasText }?.let { audiobookDurationLabel(it.estimatedAudioMillis) })
+        appendAudiobookDetailPart(selectedSpec.displayName)
+        appendAudiobookDetailPart(selectedSpeaker.label)
+        appendAudiobookDetailPart(tone.label)
+        appendAudiobookDetailPart(pace.label)
     }
 
 private fun StringBuilder.appendAudiobookDetailPart(part: String?) {

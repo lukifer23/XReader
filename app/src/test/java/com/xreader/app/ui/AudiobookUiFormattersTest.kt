@@ -6,11 +6,14 @@ import com.xreader.app.data.BookAudioWithBook
 import com.xreader.app.data.BookEntity
 import com.xreader.app.data.BookFormat
 import com.xreader.app.data.NeuralTtsModelStatus
+import com.xreader.app.settings.NeuralTtsPace
+import com.xreader.app.settings.NeuralTtsTone
 import com.xreader.app.tts.AudiobookGenerationScope
 import com.xreader.app.tts.AudiobookGenerationHardwareReadiness
 import com.xreader.app.tts.AudiobookPlaybackUiState
 import com.xreader.app.tts.EMPTY_AUDIOBOOK_PLAYBACK_UI_STATE
 import com.xreader.app.tts.GeneratedAudiobookChapter
+import com.xreader.app.tts.NeuralTtsModelCatalog
 import com.xreader.app.tts.audiobookGenerationProgressLabel
 import com.xreader.app.tts.playableSegmentCount
 import java.io.File
@@ -41,6 +44,45 @@ class AudiobookUiFormattersTest {
 
         assertEquals(100 * 60_000L, standard)
         assertTrue(brisk < standard)
+    }
+
+    @Test
+    fun audiobookGenerationHeaderDetailIncludesPreparedScanDuration() {
+        val spec = NeuralTtsModelCatalog.models.first()
+        val scan = AudiobookScanUiState(
+            wordCount = 9_000,
+            segmentCount = 12,
+            estimatedAudioMillis = 60 * 60_000L
+        )
+
+        assertEquals(
+            "Full book • 9k words • ~1h audio • Kokoro v1.0 • af heart • Warm • Brisk",
+            audiobookGenerationHeaderDetail(
+                book = book(id = 1, title = "Book").copy(wordCount = 9_000),
+                scan = scan,
+                selectedSpec = spec,
+                selectedSpeaker = spec.speaker(0),
+                tone = NeuralTtsTone.WARM,
+                pace = NeuralTtsPace.BRISK
+            )
+        )
+    }
+
+    @Test
+    fun audiobookGenerationHeaderDetailOmitsUnpreparedScanDuration() {
+        val spec = NeuralTtsModelCatalog.models.first()
+
+        assertEquals(
+            "Full book • 9k words • Kokoro v1.0 • af heart • Natural • Standard",
+            audiobookGenerationHeaderDetail(
+                book = book(id = 1, title = "Book").copy(wordCount = 9_000),
+                scan = AudiobookScanUiState(scanning = true),
+                selectedSpec = spec,
+                selectedSpeaker = spec.speaker(0),
+                tone = NeuralTtsTone.NATURAL,
+                pace = NeuralTtsPace.STANDARD
+            )
+        )
     }
 
     @Test
