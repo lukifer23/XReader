@@ -572,10 +572,7 @@ internal fun ReaderTopChrome(
     onSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val progressText = listOfNotNull(
-        "${(progress * 100).roundToInt()}% read",
-        eta
-    ).joinToString(" • ")
+    val progressText = readerChromeProgressLabel(progress, eta)
     Surface(
         modifier = modifier
             .fillMaxWidth()

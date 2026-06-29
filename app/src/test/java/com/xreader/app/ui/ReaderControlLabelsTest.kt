@@ -58,4 +58,13 @@ class ReaderControlLabelsTest {
         assertEquals("4/4", readerPageStatusLabel(page = 99, pageCount = 4))
         assertEquals("3/4", readerPageStatusLabel(page = 2, pageCount = 4))
     }
+
+    @Test
+    fun readerChromeProgressLabelAvoidsBlankEtaAndBoundsPercent() {
+        assertEquals("42% read", readerChromeProgressLabel(progress = 0.421, eta = null))
+        assertEquals("42% read", readerChromeProgressLabel(progress = 0.421, eta = "  "))
+        assertEquals("42% read • 8 min left", readerChromeProgressLabel(progress = 0.421, eta = " 8 min left "))
+        assertEquals("0% read", readerChromeProgressLabel(progress = -0.5, eta = null))
+        assertEquals("100% read", readerChromeProgressLabel(progress = 2.0, eta = null))
+    }
 }

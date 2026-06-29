@@ -1,6 +1,7 @@
 package com.xreader.app.ui
 
 import com.xreader.app.tts.ReadAloudState
+import kotlin.math.roundToInt
 
 internal fun readerBookmarkActionLabel(bookmarked: Boolean): String =
     if (bookmarked) "Remove bookmark" else "Add bookmark"
@@ -28,6 +29,16 @@ internal fun readerPageStatusLabel(page: Int, pageCount: Int): String =
         val boundedPage = page.coerceIn(0, pageCount - 1)
         "${boundedPage + 1}/$pageCount"
     }
+
+internal fun readerChromeProgressLabel(progress: Double, eta: String?): String {
+    val percentText = "${(progress.coerceIn(0.0, 1.0) * 100).roundToInt()}% read"
+    val trimmedEta = eta?.trim()
+    return if (trimmedEta.isNullOrEmpty()) {
+        percentText
+    } else {
+        "$percentText • $trimmedEta"
+    }
+}
 
 internal fun readAloudToggleLabel(readAloud: ReadAloudState): String =
     when {
