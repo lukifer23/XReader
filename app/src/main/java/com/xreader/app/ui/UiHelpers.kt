@@ -419,46 +419,56 @@ private fun BookListItem.hasPersistedFinishedState(): Boolean =
 
 private fun String.libraryQueryTerms(): List<String> =
     normalizedLibrarySearchText()
-        .split(Regex("\\s+"))
+        .split(LIBRARY_SEARCH_WHITESPACE_REGEX)
         .filter { it.isNotBlank() }
         .distinct()
 
 private fun BookListItem.librarySearchText(): String =
-    buildList {
-        add(book.title)
-        add(book.author)
-        book.series?.let(::add)
-        book.genre?.let(::add)
-        book.year?.toString()?.let(::add)
-        add(book.format.name)
-        add(book.sourceExtension)
-        add(book.fileName)
-        add(bookFormatLabel(book))
-        collections.forEach { add(it.name) }
-        addAll(libraryStatusSearchLabels())
+    buildString {
+        appendLibrarySearchPart(book.title)
+        appendLibrarySearchPart(book.author)
+        appendLibrarySearchPart(book.series)
+        appendLibrarySearchPart(book.genre)
+        appendLibrarySearchPart(book.year?.toString())
+        appendLibrarySearchPart(book.format.name)
+        appendLibrarySearchPart(book.sourceExtension)
+        appendLibrarySearchPart(book.fileName)
+        appendLibrarySearchPart(bookFormatLabel(book))
+        collections.forEach { appendLibrarySearchPart(it.name) }
+        appendLibrarySearchPart(libraryStatusSearchLabels())
     }
-        .joinToString(" ")
         .normalizedLibrarySearchText()
+
+private fun StringBuilder.appendLibrarySearchPart(value: String?) {
+    if (value.isNullOrBlank()) return
+    if (isNotEmpty()) append(' ')
+    append(value)
+}
 
 private fun String.normalizedLibrarySearchText(): String =
     TextTools.normalizeForSearch(this)
-        .replace(Regex("[^\\p{L}\\p{N}]+"), " ")
-        .replace(Regex("\\s+"), " ")
+        .replace(LIBRARY_SEARCH_SEPARATOR_REGEX, " ")
+        .replace(LIBRARY_SEARCH_WHITESPACE_REGEX, " ")
         .trim()
 
-private fun BookListItem.libraryStatusSearchLabels(): List<String> =
-    buildList {
+private fun BookListItem.libraryStatusSearchLabels(): String =
+    buildString {
         when {
-            isLibraryFinished() -> add("finished complete completed done read")
-            isLibraryInProgress() -> add("in progress currently reading started reading")
-            isLibraryUnread() -> add("unread not started")
+            isLibraryFinished() -> append("finished complete completed done read")
+            isLibraryInProgress() -> append("in progress currently reading started reading")
+            isLibraryUnread() -> append("unread not started")
         }
-        if (book.favorite) add("favorite starred")
+        if (book.favorite) {
+            if (isNotEmpty()) append(' ')
+            append("favorite starred")
+        }
     }
 
 private const val LIBRARY_UNREAD_PROGRESS_THRESHOLD = 0.01
 private const val LIBRARY_FINISHED_PROGRESS_THRESHOLD = 0.995
 private const val LIBRARY_LENGTH_BYTES_PER_FALLBACK_WORD = 6L
+private val LIBRARY_SEARCH_SEPARATOR_REGEX = Regex("[^\\p{L}\\p{N}]+")
+private val LIBRARY_SEARCH_WHITESPACE_REGEX = Regex("\\s+")
 
 private fun buildLibraryStatusText(
     required: String,

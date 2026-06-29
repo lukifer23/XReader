@@ -58,6 +58,23 @@ class LibrarySearchSnippetTest {
     }
 
     @Test
+    fun libraryQueryMatchesCombinedStatusAndFavoriteLabels() {
+        val books = listOf(
+            item(
+                title = "Golden Son",
+                progress = 0.4,
+                collections = listOf(CollectionUiItem(1L, "Favorites"))
+            ),
+            item(title = "Leviathan Wakes", progress = 0.4)
+        )
+
+        assertEquals(
+            listOf("Golden Son"),
+            books.filteredForLibraryQuery("currently reading starred").map { it.book.title }
+        )
+    }
+
+    @Test
     fun libraryQueryMatchesAcrossPunctuationAndAccents() {
         val books = listOf(
             item(title = "Red Rising", author = "Pierce Brown", series = "Sci Fi Saga"),
