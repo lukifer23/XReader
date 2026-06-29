@@ -8,6 +8,7 @@ import com.xreader.app.core.releaseQuietlyAsync
 import com.xreader.app.core.speechMediaPlayerForFile
 import com.xreader.app.data.BookAudioEntity
 import java.io.File
+import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -748,12 +749,17 @@ internal fun shouldPersistGeneratedAudiobookPlaybackPosition(
     nowMillis - lastPersistedAtMillis >= POSITION_SAVE_INTERVAL_MS
 
 internal fun BookAudioEntity.profileLabel(): String =
-    listOf(
-        modelDisplayName,
-        scopeLabel.takeUnless { it.equals("Full book", ignoreCase = true) },
-        tone.lowercase().replaceFirstChar { it.titlecase() },
-        "%.2fx".format(java.util.Locale.US, speed)
-    ).filterNotNull().joinToString(" ")
+    buildString {
+        append(modelDisplayName)
+        if (!scopeLabel.equals("Full book", ignoreCase = true)) {
+            append(' ')
+            append(scopeLabel)
+        }
+        append(' ')
+        append(tone.lowercase(Locale.US).replaceFirstChar { it.titlecase(Locale.US) })
+        append(' ')
+        append("%.2fx".format(Locale.US, speed))
+    }
 
 private const val POSITION_SAVE_INTERVAL_MS = 5_000L
 private const val PLAYBACK_POSITION_UI_UPDATE_INTERVAL_MS = 1_000L

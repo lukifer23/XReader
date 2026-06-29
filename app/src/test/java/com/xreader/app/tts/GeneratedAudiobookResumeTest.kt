@@ -605,6 +605,20 @@ class GeneratedAudiobookResumeTest {
     }
 
     @Test
+    fun playbackProfileLabelSkipsFullBookScopeWithoutDroppingPartialScope() {
+        val fullBook = audio(filePath = null).copy(
+            modelDisplayName = "Kokoro v1.0",
+            scopeLabel = "Full book",
+            tone = "WARM",
+            speed = 1.15f
+        )
+        val sample = fullBook.copy(scopeLabel = "Sample")
+
+        assertEquals("Kokoro v1.0 Warm 1.15x", fullBook.profileLabel())
+        assertEquals("Kokoro v1.0 Sample Warm 1.15x", sample.profileLabel())
+    }
+
+    @Test
     fun playbackPositionPersistenceRemainsCoalescedBehindUiTicks() {
         assertFalse(
             shouldPersistGeneratedAudiobookPlaybackPosition(
