@@ -31,6 +31,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -50,22 +51,23 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     val settings: StateFlow<ReaderSettings> =
         container.settingsRepository.settings
+            .distinctUntilChanged()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ReaderSettings())
 
     val librarySettings: StateFlow<LibrarySettings> =
         container.settingsRepository.librarySettings
+            .distinctUntilChanged()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibrarySettings())
 
     val readAloudVoices: StateFlow<List<ReadAloudVoiceOption>> =
         container.readAloudEngine.voices
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val readAloudEngines: StateFlow<List<ReadAloudEngineOption>> =
         container.readAloudEngine.engines
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val neuralTtsModels: StateFlow<List<NeuralTtsModelEntity>> =
         container.neuralTtsRepository.observeModels()
+            .distinctUntilChanged()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val _maintenance = MutableStateFlow(SettingsMaintenanceUiState())
