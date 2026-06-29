@@ -309,6 +309,34 @@ class AudiobookGenerationForegroundServiceTest {
         )
     }
 
+    @Test
+    fun cancelPolicyIgnoresStaleAndMalformedTargetedRequestsOnly() {
+        assertFalse(
+            shouldIgnoreAudiobookGenerationCancel(
+                hasCancelProfileExtras = false,
+                requestMatchesActive = null
+            )
+        )
+        assertFalse(
+            shouldIgnoreAudiobookGenerationCancel(
+                hasCancelProfileExtras = true,
+                requestMatchesActive = true
+            )
+        )
+        assertTrue(
+            shouldIgnoreAudiobookGenerationCancel(
+                hasCancelProfileExtras = true,
+                requestMatchesActive = false
+            )
+        )
+        assertTrue(
+            shouldIgnoreAudiobookGenerationCancel(
+                hasCancelProfileExtras = true,
+                requestMatchesActive = null
+            )
+        )
+    }
+
     private fun audio(
         status: BookAudioStatus,
         segmentCount: Int = 10,

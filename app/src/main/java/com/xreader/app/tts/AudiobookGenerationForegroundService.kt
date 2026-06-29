@@ -201,8 +201,15 @@ class AudiobookGenerationForegroundService : Service() {
             updateNotification(buildNotification(title = activeTitle, audio = null, preparing = true, canceling = true))
             return
         }
+        val hasCancelProfileExtras = intent?.hasGenerationCancelProfileExtras() == true
         val request = intent?.toAudiobookGenerationCancelRequest()
-        if (job != null && request != null && !request.matchesActiveGeneration()) {
+        if (
+            job != null &&
+            shouldIgnoreAudiobookGenerationCancel(
+                hasCancelProfileExtras = hasCancelProfileExtras,
+                requestMatchesActive = request?.matchesActiveGeneration()
+            )
+        ) {
             Log.w("XReader", "Ignoring stale audiobook generation cancel request: $request")
             updateNotification(buildNotification(title = activeTitle, audio = null, preparing = true, alreadyRunning = true))
             return
@@ -498,6 +505,14 @@ internal fun Intent.toAudiobookGenerationCancelRequest(): AudiobookGenerationCan
     )
 }
 
+internal fun Intent.hasGenerationCancelProfileExtras(): Boolean =
+    hasExtra(AudiobookGenerationIntentExtras.BOOK_ID) ||
+        hasExtra(AudiobookGenerationIntentExtras.MODEL_ID) ||
+        hasExtra(AudiobookGenerationIntentExtras.SPEAKER_ID) ||
+        hasExtra(AudiobookGenerationIntentExtras.SPEED) ||
+        hasExtra(AudiobookGenerationIntentExtras.TONE) ||
+        hasExtra(AudiobookGenerationIntentExtras.SCOPE)
+
 internal fun audiobookGenerationCancelRequest(
     bookId: Long?,
     modelId: String?,
@@ -579,6 +594,13 @@ internal fun shouldReplaceAudiobookGenerationNotificationForRejectedStart(
     gate: AudiobookGenerationStartGate,
 ): Boolean =
     gate == AudiobookGenerationStartGate.CANCELING
+
+internal fun shouldIgnoreAudiobookGenerationCancel(
+    hasCancelProfileExtras: Boolean,
+    requestMatchesActive: Boolean?,
+): Boolean =
+    requestMatchesActive == false ||
+        (hasCancelProfileExtras && requestMatchesActive == null)
 
 internal fun audiobookGenerationForegroundServiceType(sdkInt: Int): Int =
     if (sdkInt >= 35) {
