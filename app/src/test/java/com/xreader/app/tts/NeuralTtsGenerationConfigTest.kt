@@ -231,6 +231,23 @@ class NeuralTtsGenerationConfigTest {
     }
 
     @Test
+    fun deleteStaleNeuralPreviewTempAudioRemovesOnlyPreviewTemps() {
+        val dir = temporaryFolder.newFolder()
+        val usablePreview = File(dir, "preview.wav").apply { writeBytes(ByteArray(WAV_HEADER_BYTES.toInt() + 5)) }
+        val stalePreviewTemp = File(dir, neuralPreviewTempAudioFileName(usablePreview.name)).apply {
+            writeBytes(ByteArray(WAV_HEADER_BYTES.toInt() + 1))
+        }
+        val unrelatedTemp = File(dir, "manifest.txt.tmp").apply { writeText("keep") }
+        val wrongExtension = File(dir, "preview.tmp").apply { writeText("keep") }
+
+        assertEquals(1, dir.deleteStaleNeuralPreviewTempAudio())
+        assertTrue(usablePreview.isFile)
+        assertFalse(stalePreviewTemp.exists())
+        assertTrue(unrelatedTemp.isFile)
+        assertTrue(wrongExtension.isFile)
+    }
+
+    @Test
     fun generationConfigCarriesRealKokoroControls() {
         val config = neuralTtsGenerationConfig(
             speakerId = 3,

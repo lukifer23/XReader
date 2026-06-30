@@ -1201,6 +1201,7 @@ class NeuralTtsRepository(
             "Download this neural voice before previewing it."
         }
         previewRoot.mkdirs()
+        previewRoot.deleteStaleNeuralPreviewTempAudio()
         val output = File(previewRoot, neuralPreviewAudioFileName(modelId, speakerId, pace, tone))
         if (output.hasUsableNeuralPreviewAudio()) {
             return@withContext output
@@ -1945,6 +1946,17 @@ internal fun File.hasUsableNeuralPreviewAudio(): Boolean =
 
 internal fun neuralPreviewTempAudioFileName(fileName: String): String =
     "$fileName.tmp"
+
+internal fun File.deleteStaleNeuralPreviewTempAudio(): Int {
+    if (!isDirectory) return 0
+    var deleted = 0
+    listFiles()?.forEach { file ->
+        if (file.isFile && file.name.endsWith(".wav.tmp") && file.delete()) {
+            deleted += 1
+        }
+    }
+    return deleted
+}
 
 internal fun ttsRuntimeRotationSegmentLimit(provider: String): Int? =
     when (provider) {
