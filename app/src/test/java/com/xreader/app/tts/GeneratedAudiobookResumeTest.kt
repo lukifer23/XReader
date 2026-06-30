@@ -681,6 +681,16 @@ class GeneratedAudiobookResumeTest {
             audio.generatedAudiobookPlaybackPreparationKey() ==
                 audio.copy(fileSizeBytes = 120_000L).generatedAudiobookPlaybackPreparationKey()
         )
+
+        val generating = audio.copy(
+            status = BookAudioStatus.GENERATING,
+            completedSegments = 4,
+            generatedAt = null
+        )
+        assertFalse(
+            generating.generatedAudiobookPlaybackPreparationKey() ==
+                generating.copy(updatedAt = 35_000L).generatedAudiobookPlaybackPreparationKey()
+        )
     }
 
     @Test

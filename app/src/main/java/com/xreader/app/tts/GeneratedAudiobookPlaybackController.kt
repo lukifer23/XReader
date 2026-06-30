@@ -7,6 +7,7 @@ import android.util.Log
 import com.xreader.app.core.releaseQuietlyAsync
 import com.xreader.app.core.speechMediaPlayerForFile
 import com.xreader.app.data.BookAudioEntity
+import com.xreader.app.data.BookAudioStatus
 import java.io.File
 import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
@@ -604,6 +605,7 @@ internal data class GeneratedAudiobookPlaybackPreparationKey(
     val playableSegmentCount: Int,
     val scope: String,
     val fileSizeBytes: Long,
+    val activeGenerationUpdatedAt: Long?,
     val generatedAt: Long?,
 )
 
@@ -616,6 +618,7 @@ internal fun BookAudioEntity.generatedAudiobookPlaybackPreparationKey(): Generat
         playableSegmentCount = playableSegmentCount(),
         scope = scope,
         fileSizeBytes = fileSizeBytes,
+        activeGenerationUpdatedAt = updatedAt.takeIf { status == BookAudioStatus.GENERATING },
         generatedAt = generatedAt
     )
 
