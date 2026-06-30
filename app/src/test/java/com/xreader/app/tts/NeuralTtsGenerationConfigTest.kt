@@ -282,7 +282,7 @@ class NeuralTtsGenerationConfigTest {
     }
 
     @Test
-    fun hardwareModelSelectionIsProviderSpecific() {
+    fun hardwareModelSelectionUsesPreparedArtifactsForStrictQnnProviders() {
         val spec = NeuralTtsModelCatalog.requireModel(NeuralTtsModelCatalog.DEFAULT_MODEL_ID)
         val modelDir = temporaryFolder.newFolder("kokoro")
         File(modelDir, spec.modelFile).writeBytes(byteArrayOf(1))
@@ -292,7 +292,7 @@ class NeuralTtsGenerationConfigTest {
         )
 
         assertEquals(
-            spec.modelFile,
+            spec.hardwareModelFile,
             neuralTtsModelFileForProvider(spec, modelDir, "qnn:/tmp/xreader-qnn-gpu-strict-provider.config")
         )
         assertEquals(
@@ -306,12 +306,12 @@ class NeuralTtsGenerationConfigTest {
     }
 
     @Test
-    fun htpProviderRequiresPreparedArtifactBeforeAudiobookGenerationCanUseIt() {
+    fun qnnProvidersRequirePreparedArtifactBeforeAudiobookGenerationCanUseThem() {
         val spec = NeuralTtsModelCatalog.requireModel(NeuralTtsModelCatalog.DEFAULT_MODEL_ID)
         val modelDir = temporaryFolder.newFolder("kokoro-stock")
         File(modelDir, spec.modelFile).writeBytes(byteArrayOf(1))
 
-        assertTrue(
+        assertFalse(
             neuralTtsProviderHasRequiredModelArtifact(
                 spec,
                 modelDir,
@@ -330,11 +330,25 @@ class NeuralTtsGenerationConfigTest {
             neuralTtsProviderHasRequiredModelArtifact(
                 spec,
                 modelDir,
+                "qnn:/tmp/xreader-qnn-gpu-strict-provider.config"
+            )
+        )
+        assertFalse(
+            neuralTtsProviderHasRequiredModelArtifact(
+                spec,
+                modelDir,
                 "qnn:/tmp/xreader-qnn-htp-strict-provider.config"
             )
         )
         File(modelDir, spec.hardwareModelManifestFile).writeText(
             """{"output_model":"${spec.hardwareModelFile}","strict_qnn_compatible":true}"""
+        )
+        assertTrue(
+            neuralTtsProviderHasRequiredModelArtifact(
+                spec,
+                modelDir,
+                "qnn:/tmp/xreader-qnn-gpu-strict-provider.config"
+            )
         )
         assertTrue(
             neuralTtsProviderHasRequiredModelArtifact(
@@ -355,9 +369,13 @@ class NeuralTtsGenerationConfigTest {
 
         val reason = neuralTtsMissingHardwareArtifactReason(
             spec = spec,
-            providers = listOf("qnn:/tmp/xreader-qnn-htp-strict-provider.config")
+            providers = listOf(
+                "qnn:/tmp/xreader-qnn-gpu-strict-provider.config",
+                "qnn:/tmp/xreader-qnn-htp-strict-provider.config"
+            )
         )
 
+        assertTrue(reason.contains("qnn-gpu"))
         assertTrue(reason.contains("qnn-htp"))
         assertTrue(reason.contains("Kokoro v1.0"))
         assertTrue(reason.contains("model.qnn.onnx"))

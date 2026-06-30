@@ -670,6 +670,8 @@ class AudiobookUiFormattersTest {
         assertEquals("Play partial", inactive.playLabel)
         assertEquals("Play partial generated audio", inactive.playIconLabel)
         assertEquals("Save partial", inactive.exportLabel)
+        assertTrue(inactive.showPlay)
+        assertTrue(inactive.showExport)
         assertTrue(inactive.canPlay)
         assertTrue(inactive.canExport)
 
@@ -680,8 +682,23 @@ class AudiobookUiFormattersTest {
             playableSegmentFiles = 2
         )
         assertEquals("Preparing", activePreparing.playLabel)
+        assertTrue(activePreparing.showPlay)
+        assertTrue(activePreparing.showExport)
         assertEquals(false, activePreparing.canPlay)
         assertTrue(activePreparing.canExport)
+
+        val failedWithoutAudio = generatedAudiobookActionState(
+            active = false,
+            playback = AudiobookPlaybackUiState(),
+            audio = partial.copy(status = BookAudioStatus.FAILED, completedSegments = 0),
+            playableSegmentFiles = 0
+        )
+        assertEquals("Play", failedWithoutAudio.playLabel)
+        assertEquals("Save", failedWithoutAudio.exportLabel)
+        assertEquals(false, failedWithoutAudio.showPlay)
+        assertEquals(false, failedWithoutAudio.showExport)
+        assertEquals(false, failedWithoutAudio.canPlay)
+        assertEquals(false, failedWithoutAudio.canExport)
     }
 
     @Test
@@ -851,9 +868,9 @@ class AudiobookUiFormattersTest {
     }
 
     @Test
-    fun audiobooksScreenMaterializesRowsInRoomOrderWithoutIdRemap() {
+    fun audiobooksScreenMaterializesVisibleRowsInRoomOrderWithoutIdRemap() {
         val firstAudio = playableAudio(1).copy(bookId = 101, updatedAt = 30L)
-        val hiddenAudio = audio(2).copy(bookId = 102, status = BookAudioStatus.CANCELED, completedSegments = 0)
+        val hiddenAudio = audio(2).copy(bookId = 102, status = BookAudioStatus.GENERATED, filePath = null, completedSegments = 0)
         val thirdAudio = playableAudio(3).copy(bookId = 103, updatedAt = 10L)
         val rows = listOf(
             BookAudioWithBook(firstAudio, book(id = 101, title = "First")),
@@ -868,8 +885,8 @@ class AudiobookUiFormattersTest {
 
         val uiItems = rows.toGeneratedAudiobookUiItems(audioItems)
 
-        assertEquals(listOf("First", "Third"), uiItems.map { it.book.title })
-        assertEquals(listOf(1L, 3L), uiItems.map { it.audio.id })
+        assertEquals(listOf("First", "Hidden", "Third"), uiItems.map { it.book.title })
+        assertEquals(listOf(1L, 2L, 3L), uiItems.map { it.audio.id })
     }
 
     @Test
@@ -1365,14 +1382,12 @@ class AudiobookUiFormattersTest {
     }
 
     @Test
-    fun globalAudiobookVisibilityHidesStoppedRowsWithoutPlayableSegments() {
-        assertEquals(
-            false,
+    fun globalAudiobookVisibilityKeepsStoppedRowsWithoutPlayableSegments() {
+        assertTrue(
             bookAudioItem(audio(4).copy(status = BookAudioStatus.CANCELED), playableSegmentFiles = 0)
                 .shouldShowInGlobalAudiobooksScreen()
         )
-        assertEquals(
-            false,
+        assertTrue(
             bookAudioItem(audio(5).copy(status = BookAudioStatus.FAILED), playableSegmentFiles = 0)
                 .shouldShowInGlobalAudiobooksScreen()
         )

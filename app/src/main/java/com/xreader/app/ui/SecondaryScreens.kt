@@ -1004,11 +1004,13 @@ private fun GeneratedAudiobookScreenRow(
                 }
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                TextButton(
-                    onClick = if (active && playback.playing) onPause else onPlay,
-                    enabled = actions.canPlay
-                ) {
-                    Text(actions.playLabel)
+                if (actions.showPlay) {
+                    TextButton(
+                        onClick = if (active && playback.playing) onPause else onPlay,
+                        enabled = actions.canPlay
+                    ) {
+                        Text(actions.playLabel)
+                    }
                 }
                 if (active) {
                     TextButton(onClick = onSkipPrevious, enabled = playback.segmentIndex > 0) { Text("Previous") }
@@ -1025,8 +1027,10 @@ private fun GeneratedAudiobookScreenRow(
                 if (audio.canCancelGenerationFromAudiobooksScreen()) {
                     TextButton(onClick = onCancelGeneration) { Text("Stop generation") }
                 }
-                TextButton(onClick = onExport, enabled = actions.canExport) {
-                    Text(actions.exportLabel)
+                if (actions.showExport) {
+                    TextButton(onClick = onExport, enabled = actions.canExport) {
+                        Text(actions.exportLabel)
+                    }
                 }
                 if (audio.canDeleteFromAudiobooksScreen()) {
                     TextButton(onClick = onDelete) { Text("Delete") }
@@ -1119,6 +1123,8 @@ internal data class GeneratedAudiobookActionState(
     val playLabel: String,
     val playIconLabel: String,
     val exportLabel: String,
+    val showPlay: Boolean,
+    val showExport: Boolean,
     val canPlay: Boolean,
     val canExport: Boolean,
 )
@@ -1146,12 +1152,16 @@ internal fun generatedAudiobookActionState(
         else -> "Play generated audio"
     }
     val exportLabel = if (audio.hasPartialGeneratedAudio(playableFiles)) "Save partial" else "Save"
+    val showPlay = playableFiles > 0 || active
+    val showExport = playableFiles > 0
     return GeneratedAudiobookActionState(
         playLabel = playLabel,
         playIconLabel = playIconLabel,
         exportLabel = exportLabel,
-        canPlay = playableFiles > 0 && !(active && playback.preparing),
-        canExport = playableFiles > 0
+        showPlay = showPlay,
+        showExport = showExport,
+        canPlay = showPlay && playableFiles > 0 && !(active && playback.preparing),
+        canExport = showExport
     )
 }
 

@@ -1370,7 +1370,7 @@ internal fun BookAudiobookDialog(
     )
     val generatedAudioItems = remember(bookAudioItems) {
         bookAudioItems
-            .filter { item -> item.audio.status == BookAudioStatus.GENERATED || item.playableSegmentFiles > 0 }
+            .filter { item -> item.shouldShowInGlobalAudiobooksScreen() }
             .sortedByDescending { it.audio.generatedAt ?: it.audio.updatedAt }
     }
     var deleteCandidate by remember(book.id) { mutableStateOf<BookAudioEntity?>(null) }
@@ -2003,15 +2003,17 @@ private fun AudiobookPlaybackActions(
                 overflow = TextOverflow.Ellipsis
             )
         }
-        TooltipIconButton(
-            label = actions.playIconLabel,
-            onClick = {
-                if (active && playback.playing) onPauseAudio(audio) else onPlayAudio(audio)
-            },
-            modifier = Modifier.size(40.dp),
-            enabled = actions.canPlay
-        ) {
-            Icon(if (active && playback.playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, contentDescription = null)
+        if (actions.showPlay) {
+            TooltipIconButton(
+                label = actions.playIconLabel,
+                onClick = {
+                    if (active && playback.playing) onPauseAudio(audio) else onPlayAudio(audio)
+                },
+                modifier = Modifier.size(40.dp),
+                enabled = actions.canPlay
+            ) {
+                Icon(if (active && playback.playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, contentDescription = null)
+            }
         }
         if (active) {
             TooltipIconButton(
@@ -2022,13 +2024,15 @@ private fun AudiobookPlaybackActions(
                 Icon(Icons.Filled.Stop, contentDescription = null)
             }
         }
-        TooltipIconButton(
-            label = "${actions.exportLabel} generated audio",
-            onClick = { onExportAudio(audio) },
-            modifier = Modifier.size(40.dp),
-            enabled = actions.canExport
-        ) {
-            Icon(Icons.Filled.FileDownload, contentDescription = null)
+        if (actions.showExport) {
+            TooltipIconButton(
+                label = "${actions.exportLabel} generated audio",
+                onClick = { onExportAudio(audio) },
+                modifier = Modifier.size(40.dp),
+                enabled = actions.canExport
+            ) {
+                Icon(Icons.Filled.FileDownload, contentDescription = null)
+            }
         }
         TooltipIconButton(
             label = "Delete generated audio",

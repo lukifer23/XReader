@@ -9,7 +9,7 @@ This is the working product roadmap for the personal APK line. Items should appe
 - Track startup and reader-open baseline history after each major UI, import, Readium, or audiobook-generation change.
 - Add connected-device screenshot QA for the refreshed reading-stats screen across empty, light-use, and long-history libraries.
 - Verify readability repair labels on real imported EPUB/PDF/TXT samples during the next connected-device pass.
-- Make embedded Kokoro v1.0 full-book generation hardware-accelerated, stable, and faster than realtime before expanding adjacent audiobook features. Current focus is strict QNN GPU or prepared strict QNN HTP/NPU on the Samsung SM-F966U, with no CPU fallback labeled as acceleration.
+- Make embedded Kokoro v1.0 full-book generation hardware-accelerated, stable, and faster than realtime before expanding adjacent audiobook features. Current focus is strict QNN GPU or strict QNN HTP/NPU on the Samsung SM-F966U, with no CPU fallback labeled as acceleration and no full-book provider enabled without a strict-compatible prepared Kokoro artifact.
 - Execute the audiobook acceleration timeline in [Audiobook Generation](AUDIOBOOK_GENERATION.md): minimal strict QNN provider config, strict-compatible prepared Kokoro artifact, connected-device smoke proof, then Simpleperf/Perfetto evidence for speed, thermal behavior, and UI responsiveness.
 
 ## Reader Polish

@@ -1836,7 +1836,7 @@ internal fun neuralTtsModelFileForProvider(
 }
 
 internal fun neuralTtsProviderRequiresPreparedHardwareModel(provider: String): Boolean =
-    TtsAccelerationRuntime.qnnBackend(provider) == QnnBackend.HTP
+    TtsAccelerationRuntime.qnnBackend(provider) != null
 
 internal fun neuralTtsProviderHasRequiredModelArtifact(
     spec: NeuralTtsModelSpec,

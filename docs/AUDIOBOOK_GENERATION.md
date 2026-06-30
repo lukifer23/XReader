@@ -6,7 +6,7 @@ XReader's embedded audiobook path is local-first and model-specific. V1 supports
 
 - Model: `kokoro-multi-lang-v1_0`
 - Engine: Sherpa-ONNX OfflineTTS through the app-bundled JNI bridge.
-- Full-book providers: strict `qnn-gpu`, prepared strict `qnn-htp`, then strict `nnapi`; CPU-backed `xnnpack`/`cpu` are deliberately excluded from full-book generation.
+- Full-book providers: strict `qnn-gpu`, strict `qnn-htp`, then strict `nnapi`; CPU-backed `xnnpack`/`cpu` are deliberately excluded from full-book generation.
 - Preview providers: hardware-capable providers when available, then `xnnpack`, then `cpu`, so short voice previews still work on unsupported devices.
 - Disabled for full-book generation: `webgpu`, because prior WebGPU full-book runs were crash-prone and allowed partial CPU fallback.
 
@@ -16,7 +16,7 @@ Generation speed is measured as end-to-end segment cost: native model synthesis 
 
 User-facing performance labels report this as `x audio time`, where lower is better: `0.5x audio time` means generation took half the audio duration, while `2.0x audio time` means generation was slower than realtime.
 
-QNN GPU uses the stock floating-point Kokoro `model.onnx` through `libQnnGpu.so`. QNN HTP/NPU requires a prepared `model.qnn.onnx` beside the installed model and a matching `xreader-qnn-model-manifest.json` whose `strict_qnn_compatible` field is `true`. A bare `model.qnn.onnx` is not enough, because prior attempts could produce a quantized file that still left unsupported graph work on CPU. Strict QNN provider configs set `disable_cpu_ep_fallback=1`; if ONNX Runtime assigns nodes to CPU, generation fails instead of pretending to accelerate. NNAPI is built through the strict Sherpa-ONNX patch with Android NNAPI CPU disabled.
+Strict QNN GPU and HTP/NPU both require a prepared `model.qnn.onnx` beside the installed model and a matching `xreader-qnn-model-manifest.json` whose `strict_qnn_compatible` field is `true`. A bare `model.qnn.onnx` is not enough, because current device evidence showed an artifact can still contain control-flow, sequence, random, and dynamic-input graph surfaces that leave unsupported work on CPU. Strict QNN provider configs set `disable_cpu_ep_fallback=1`; if ONNX Runtime assigns nodes to CPU, generation fails instead of pretending to accelerate. NNAPI is built through the strict Sherpa-ONNX patch with Android NNAPI CPU disabled.
 
 Readiness checks used by Settings and generation dialogs are deliberately non-mutating: they report strict QNN GPU/HTP availability using provider labels and do not create provider config files. Actual strict QNN provider configs are written only when a real synthesis runtime starts.
 
@@ -144,7 +144,7 @@ tools/stage_device_opencl_runtime.sh RFCY90NPZBN
 That script pulls the OpenCL ICD/Adreno user-mode libraries from the device and recursively stages non-system shared-library dependencies discoverable via `llvm-readelf`. Treat this as a local hardware experiment tied to that device family, not a redistributable Play Store artifact.
 - Samsung SM-F966U / SM8750 validation on 2026-06-22 confirmed the rebuilt debug APK packaged `libOpenCL.so`, `libOpenCL_adreno.so`, QNN GPU, QNN HTP, ONNX Runtime, and Sherpa JNI. Launch logcat reported QNN provider availability, but installed-model strict smoke still failed because ONNX Runtime assigned stock Kokoro graph nodes to CPU with strict fallback disabled.
 - Samsung SM-F966U / SM8750 validation on 2026-06-23 exposed QNN HTP transport sensitivity. Over-specified HTP options such as signed process-domain, forced `soc_model`, and forced `htp_arch` can trigger `QNN_DEVICE_ERROR_INVALID_CONFIG`, so the app now writes a minimal HTP provider config by default and keeps those values only as explicit instrumentation overrides.
-- App-side HTP model selection now requires both `model.qnn.onnx` and a strict-compatible `xreader-qnn-model-manifest.json`. The model-prep tool writes `strict_qnn_compatible` plus a blocker report for control-flow, sequence, random, and dynamic-input surfaces so incompatible artifacts do not become selectable.
+- App-side QNN model selection now requires both `model.qnn.onnx` and a strict-compatible `xreader-qnn-model-manifest.json` for GPU and HTP/NPU. The model-prep tool writes `strict_qnn_compatible` plus a blocker report for control-flow, sequence, random, and dynamic-input surfaces so incompatible artifacts do not become selectable.
 - QNN libraries may be staged in development builds, but `qnn` must pass strict no-fallback smoke and a real generation speed/stability gate before it counts as usable generation acceleration.
 
 ### Phase 2b: WebGPU/Vulkan Android GPU Path
@@ -214,7 +214,7 @@ Tasks:
 
 - Benchmark strict QNN against the preview CPU baseline on identical preview text and identical book segments.
 - Measure initialization overhead, per-segment latency, total generation time, battery, and thermal throttling.
-- Prepare a QNN-ready Kokoro artifact instead of assuming the stock `model.onnx` can fully offload. ONNX Runtime's QNN HTP backend requires a quantized model and fixed compatible graph, and QNN GPU is the floating-point path. XReader now looks for `model.qnn.onnx` plus a strict-compatible manifest beside the installed Kokoro model.
+- Prepare a QNN-ready Kokoro artifact instead of assuming the stock `model.onnx` can fully offload. ONNX Runtime's strict QNN backends require a fixed compatible graph, and XReader now looks for `model.qnn.onnx` plus a strict-compatible manifest beside the installed Kokoro model before enabling GPU or HTP/NPU full-book generation.
 - Generate that artifact with representative calibration tensors:
 
 ```bash
@@ -226,7 +226,7 @@ tools/prepare_kokoro_qnn_model.py \
   --require-strict-qnn-compatible
 ```
 
-The output directory contains the normal Kokoro support files plus `model.qnn.onnx` and `xreader-qnn-model-manifest.json`. Push or package that directory so both files sit next to the installed `model.onnx`. The app chooses the prepared model for QNN HTP only when the manifest declares `strict_qnn_compatible: true`; otherwise it fails closed and reports the missing strict-compatible artifact.
+The output directory contains the normal Kokoro support files plus `model.qnn.onnx` and `xreader-qnn-model-manifest.json`. Push or package that directory so both files sit next to the installed `model.onnx`. The app chooses the prepared model for strict QNN providers only when the manifest declares `strict_qnn_compatible: true`; otherwise it fails closed and reports the missing strict-compatible artifact.
 - Verify that QNN/NNAPI fail closed when unavailable, unsupported, or slower than the full-book audio-time threshold.
 - Capture Simpleperf/Perfetto evidence for a short generation run on the Samsung test device and confirm the selected provider in logcat plus the generated manifest.
 - Confirm long-segment heartbeat updates, stop handling, and UI responsiveness while a strict provider is actively generating, not only after segment completion.

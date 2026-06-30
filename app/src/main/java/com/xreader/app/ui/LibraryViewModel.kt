@@ -362,6 +362,8 @@ internal fun BookAudioEntity.toBookAudiobookAudioUiItem(): BookAudiobookAudioUiI
 internal fun BookAudiobookAudioUiItem.shouldShowInGlobalAudiobooksScreen(): Boolean =
     audio.status == BookAudioStatus.GENERATED ||
         audio.status == BookAudioStatus.GENERATING ||
+        audio.status == BookAudioStatus.FAILED ||
+        audio.status == BookAudioStatus.CANCELED ||
         playableSegmentFiles > 0
 
 internal fun AudiobookPlaybackUiState.forLibraryChrome(): AudiobookPlaybackUiState =

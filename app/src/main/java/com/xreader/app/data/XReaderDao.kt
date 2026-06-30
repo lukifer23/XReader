@@ -301,7 +301,7 @@ interface NeuralTtsDao {
     @Query(
         """
         SELECT * FROM book_audio
-        WHERE status IN ('GENERATED', 'GENERATING') OR completedSegments > 0
+        WHERE status IN ('GENERATED', 'GENERATING', 'FAILED', 'CANCELED') OR completedSegments > 0
         ORDER BY id ASC
         """
     )
