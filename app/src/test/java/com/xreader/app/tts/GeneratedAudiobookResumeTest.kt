@@ -3,6 +3,7 @@ package com.xreader.app.tts
 import com.xreader.app.data.BookAudioEntity
 import com.xreader.app.data.BookAudioStatus
 import java.io.File
+import java.io.IOException
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -1556,6 +1557,44 @@ class GeneratedAudiobookResumeTest {
             file.readText()
         )
         assertFalse(File(dir, "segments.tsv.tmp").exists())
+    }
+
+    @Test
+    fun streamingAtomicWriteDeletesTempFileWhenWriterFails() {
+        val dir = temporaryFolder.newFolder()
+        val file = File(dir, "segments.tsv").apply { writeText("old") }
+
+        var failed = false
+        try {
+            file.writeAtomically { writer ->
+                writer.appendLine("partial")
+                error("stop")
+            }
+        } catch (error: IllegalStateException) {
+            failed = true
+        }
+
+        assertTrue(failed)
+        assertEquals("old", file.readText())
+        assertFalse(File(dir, "segments.tsv.tmp").exists())
+    }
+
+    @Test
+    fun atomicTextWriteDeletesTempFileWhenFinalReplaceFails() {
+        val dir = temporaryFolder.newFolder()
+        val file = File(dir, "manifest.txt").apply { writeText("old") }
+        val blockingDirectory = File(dir, "manifest.txt.tmp").apply { mkdirs() }
+
+        var failed = false
+        try {
+            file.writeTextAtomically("new")
+        } catch (error: IOException) {
+            failed = true
+        }
+
+        assertTrue(failed)
+        assertEquals("old", file.readText())
+        assertFalse(blockingDirectory.exists())
     }
 
     @Test

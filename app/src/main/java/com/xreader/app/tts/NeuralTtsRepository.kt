@@ -2224,15 +2224,25 @@ internal fun File.deleteStaleGeneratedAudiobookTempSegments(): Int {
 internal fun File.writeTextAtomically(text: String) {
     parentFile?.mkdirs()
     val temp = File(parentFile ?: return writeText(text), "$name.tmp")
-    temp.writeText(text)
-    replaceWithTempFile(temp)
+    runCatching {
+        temp.writeText(text)
+        replaceWithTempFile(temp)
+    }.getOrElse { error ->
+        temp.delete()
+        throw error
+    }
 }
 
 internal fun File.writeAtomically(block: (java.io.BufferedWriter) -> Unit) {
     parentFile?.mkdirs()
     val temp = File(parentFile ?: return bufferedWriter().use(block), "$name.tmp")
-    temp.bufferedWriter().use(block)
-    replaceWithTempFile(temp)
+    runCatching {
+        temp.bufferedWriter().use(block)
+        replaceWithTempFile(temp)
+    }.getOrElse { error ->
+        temp.delete()
+        throw error
+    }
 }
 
 private fun BufferedWriter.appendDecimal(value: Int): BufferedWriter =
