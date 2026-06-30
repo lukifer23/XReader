@@ -964,10 +964,6 @@ class NeuralTtsRepository(
                     }
                     val segmentSaveMillis = (clock.millis() - saveStartedAt).coerceAtLeast(0L)
                     require(savedBytes > 0L) { "Could not save generated segment ${index + 1}." }
-                    ensureAudiobookGenerationStillActive(
-                        audioId = activeAudio.id,
-                        segmentNumber = index + 1
-                    )
                     val segmentAudioMillis = generated.audioDurationMillis()
                     generationAudioMillis = generationAudioMillis.plusNonNegativeDuration(segmentAudioMillis)
                     generationComputeMillis = generationComputeMillis.plusNonNegativeDuration(segmentComputeMillis)
