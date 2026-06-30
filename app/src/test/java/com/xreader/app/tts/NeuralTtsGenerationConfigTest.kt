@@ -191,6 +191,7 @@ class NeuralTtsGenerationConfigTest {
                 tone = NeuralTtsTone.NATURAL
             )
         )
+        assertEquals("kokoro-v1-s0-standard-natural.wav.tmp", neuralPreviewTempAudioFileName("kokoro-v1-s0-standard-natural.wav"))
 
         val missing = File(temporaryFolder.root, "missing.wav")
         val headerOnly = temporaryFolder.newFile("header.wav").apply { writeBytes(ByteArray(WAV_HEADER_BYTES.toInt())) }
@@ -199,6 +200,34 @@ class NeuralTtsGenerationConfigTest {
         assertFalse(missing.hasUsableNeuralPreviewAudio())
         assertFalse(headerOnly.hasUsableNeuralPreviewAudio())
         assertTrue(usable.hasUsableNeuralPreviewAudio())
+    }
+
+    @Test
+    fun usableWavTempReplaceRejectsHeaderOnlyPreviewWithoutClobberingExistingFile() {
+        val dir = temporaryFolder.newFolder()
+        val output = File(dir, "preview.wav").apply { writeBytes(ByteArray(WAV_HEADER_BYTES.toInt() + 10) { 7 }) }
+        val originalBytes = output.readBytes()
+        val headerOnlyTemp = File(dir, neuralPreviewTempAudioFileName(output.name)).apply {
+            writeBytes(ByteArray(WAV_HEADER_BYTES.toInt()))
+        }
+
+        assertEquals(0L, output.replaceWithUsableWavTemp(headerOnlyTemp))
+        assertFalse(headerOnlyTemp.exists())
+        assertEquals(originalBytes.toList(), output.readBytes().toList())
+    }
+
+    @Test
+    fun usableWavTempReplaceAtomicallyPublishesCompletePreview() {
+        val dir = temporaryFolder.newFolder()
+        val output = File(dir, "preview.wav").apply { writeBytes(ByteArray(WAV_HEADER_BYTES.toInt() + 2) { 1 }) }
+        val completeTemp = File(dir, neuralPreviewTempAudioFileName(output.name)).apply {
+            writeBytes(ByteArray(WAV_HEADER_BYTES.toInt() + 5) { 9 })
+        }
+
+        assertEquals(WAV_HEADER_BYTES + 5L, output.replaceWithUsableWavTemp(completeTemp))
+        assertFalse(completeTemp.exists())
+        assertEquals(WAV_HEADER_BYTES + 5L, output.length())
+        assertTrue(output.readBytes().all { it == 9.toByte() })
     }
 
     @Test

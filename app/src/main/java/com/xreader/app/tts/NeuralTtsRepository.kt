@@ -1225,7 +1225,7 @@ class NeuralTtsRepository(
             }
             require(generated.samples.isNotEmpty()) { "Neural TTS produced no preview audio." }
             val saved = withContext(audioSaveDispatcher) {
-                generated.save(output.absolutePath)
+                generated.saveNeuralPreviewAudio(output)
             }
             require(saved) { "Could not save neural voice preview." }
             require(output.hasUsableNeuralPreviewAudio()) { "Neural voice preview file was incomplete." }
@@ -1943,6 +1943,9 @@ internal fun neuralPreviewAudioFileName(
 internal fun File.hasUsableNeuralPreviewAudio(): Boolean =
     isFile && length() > WAV_HEADER_BYTES
 
+internal fun neuralPreviewTempAudioFileName(fileName: String): String =
+    "$fileName.tmp"
+
 internal fun ttsRuntimeRotationSegmentLimit(provider: String): Int? =
     when (provider) {
         "webgpu" -> WEBGPU_SEGMENTS_PER_RUNTIME
@@ -2281,13 +2284,28 @@ internal fun GeneratedAudio.saveGeneratedAudiobookSegment(file: File): Long {
         temp.delete()
         return 0L
     }
+    return file.replaceWithUsableWavTemp(temp)
+}
+
+internal fun GeneratedAudio.saveNeuralPreviewAudio(file: File): Boolean {
+    file.parentFile?.mkdirs()
+    val temp = File(file.parentFile ?: return save(file.absolutePath), neuralPreviewTempAudioFileName(file.name))
+    temp.delete()
+    if (!save(temp.absolutePath)) {
+        temp.delete()
+        return false
+    }
+    return file.replaceWithUsableWavTemp(temp) > 0L
+}
+
+internal fun File.replaceWithUsableWavTemp(temp: File): Long {
     val savedBytes = temp.length()
     if (savedBytes <= WAV_HEADER_BYTES) {
         temp.delete()
         return 0L
     }
     return runCatching {
-        file.replaceWithTempFile(temp)
+        replaceWithTempFile(temp)
         savedBytes
     }.getOrElse {
         temp.delete()
