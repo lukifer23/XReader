@@ -1224,7 +1224,10 @@ class NeuralTtsRepository(
                 )
             }
             require(generated.samples.isNotEmpty()) { "Neural TTS produced no preview audio." }
-            require(generated.save(output.absolutePath)) { "Could not save neural voice preview." }
+            val saved = withContext(audioSaveDispatcher) {
+                generated.save(output.absolutePath)
+            }
+            require(saved) { "Could not save neural voice preview." }
             require(output.hasUsableNeuralPreviewAudio()) { "Neural voice preview file was incomplete." }
             output
         } finally {
