@@ -62,6 +62,7 @@ class NeuralTtsRepository(
     private val clock: Clock = Clock.systemUTC(),
     private val generationDispatcher: CoroutineDispatcher = neuralTtsGenerationDispatcher(),
     private val previewDispatcher: CoroutineDispatcher = neuralTtsPreviewDispatcher(),
+    private val audioSaveDispatcher: CoroutineDispatcher = neuralTtsAudioSaveDispatcher(),
 ) {
     private val tag = "NeuralTtsRepository"
     private val appContext = context.applicationContext
@@ -959,8 +960,10 @@ class NeuralTtsRepository(
                     activeSampleRate = sampleRate
                     val file = File(target, generatedAudiobookSegmentFileName(index))
                     val saveStartedAt = clock.millis()
-                    val savedBytes = traced("XReader TTS save segment") {
-                        generated.saveGeneratedAudiobookSegment(file)
+                    val savedBytes = withContext(audioSaveDispatcher) {
+                        traced("XReader TTS save segment") {
+                            generated.saveGeneratedAudiobookSegment(file)
+                        }
                     }
                     val segmentSaveMillis = (clock.millis() - saveStartedAt).coerceAtLeast(0L)
                     require(savedBytes > 0L) { "Could not save generated segment ${index + 1}." }
@@ -1782,11 +1785,22 @@ private val sharedNeuralTtsPreviewDispatcher: CoroutineDispatcher by lazy {
     }.asCoroutineDispatcher()
 }
 
+private val sharedNeuralTtsAudioSaveDispatcher: CoroutineDispatcher by lazy {
+    Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "XReader-NeuralTTS-AudioSave").apply {
+            isDaemon = true
+        }
+    }.asCoroutineDispatcher()
+}
+
 internal fun neuralTtsGenerationDispatcher(): CoroutineDispatcher =
     sharedNeuralTtsGenerationDispatcher
 
 internal fun neuralTtsPreviewDispatcher(): CoroutineDispatcher =
     sharedNeuralTtsPreviewDispatcher
+
+internal fun neuralTtsAudioSaveDispatcher(): CoroutineDispatcher =
+    sharedNeuralTtsAudioSaveDispatcher
 
 internal fun neuralTtsGenerationConfig(
     speakerId: Int,

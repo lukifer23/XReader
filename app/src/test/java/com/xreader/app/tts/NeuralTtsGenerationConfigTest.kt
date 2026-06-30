@@ -91,7 +91,10 @@ class NeuralTtsGenerationConfigTest {
     fun neuralTtsGenerationUsesSharedDedicatedDispatcher() {
         assertSame(neuralTtsGenerationDispatcher(), neuralTtsGenerationDispatcher())
         assertSame(neuralTtsPreviewDispatcher(), neuralTtsPreviewDispatcher())
+        assertSame(neuralTtsAudioSaveDispatcher(), neuralTtsAudioSaveDispatcher())
         assertTrue(neuralTtsGenerationDispatcher() !== neuralTtsPreviewDispatcher())
+        assertTrue(neuralTtsGenerationDispatcher() !== neuralTtsAudioSaveDispatcher())
+        assertTrue(neuralTtsPreviewDispatcher() !== neuralTtsAudioSaveDispatcher())
     }
 
     @Test
