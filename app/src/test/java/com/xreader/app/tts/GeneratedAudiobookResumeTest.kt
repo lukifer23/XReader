@@ -658,6 +658,7 @@ class GeneratedAudiobookResumeTest {
             status = BookAudioStatus.GENERATED,
             segmentCount = 10,
             completedSegments = 10,
+            fileSizeBytes = 100_000L,
             playbackSegmentIndex = 1,
             playbackPositionMs = 5_000,
             generatedAt = 20_000L,
@@ -675,6 +676,10 @@ class GeneratedAudiobookResumeTest {
         assertFalse(
             audio.generatedAudiobookPlaybackPreparationKey() ==
                 audio.copy(status = BookAudioStatus.CANCELED, completedSegments = 4).generatedAudiobookPlaybackPreparationKey()
+        )
+        assertFalse(
+            audio.generatedAudiobookPlaybackPreparationKey() ==
+                audio.copy(fileSizeBytes = 120_000L).generatedAudiobookPlaybackPreparationKey()
         )
     }
 

@@ -603,6 +603,7 @@ internal data class GeneratedAudiobookPlaybackPreparationKey(
     val segmentCount: Int,
     val playableSegmentCount: Int,
     val scope: String,
+    val fileSizeBytes: Long,
     val generatedAt: Long?,
 )
 
@@ -614,6 +615,7 @@ internal fun BookAudioEntity.generatedAudiobookPlaybackPreparationKey(): Generat
         segmentCount = segmentCount,
         playableSegmentCount = playableSegmentCount(),
         scope = scope,
+        fileSizeBytes = fileSizeBytes,
         generatedAt = generatedAt
     )
 
