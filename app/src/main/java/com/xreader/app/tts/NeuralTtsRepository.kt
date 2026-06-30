@@ -718,6 +718,7 @@ class NeuralTtsRepository(
         require(prepared.segments.isNotEmpty()) { "This book has no extractable text for audiobook generation." }
 
         val speed = pace.speed
+        val ttsGenerationConfig = generationConfig(speakerId, pace, tone)
         val target = audioDirectory(bookId, modelId, speakerId, pace, tone, scope)
         val existing = dao.bookAudio(bookId, modelId, speakerId, speed, tone.name, scope.key)
         if (existing?.hasCompletePlayableAudiobook() == true) {
@@ -942,7 +943,7 @@ class NeuralTtsRepository(
                             GeneratedTtsSegment(
                                 audio = tts.engine.generateWithConfig(
                                     text = segment,
-                                    config = generationConfig(speakerId, pace, tone)
+                                    config = ttsGenerationConfig
                                 ),
                                 computeMillis = (clock.millis() - segmentStartedAt).coerceAtLeast(0L)
                             )
@@ -1205,6 +1206,7 @@ class NeuralTtsRepository(
             return@withContext output
         }
         val modelDir = requireNotNull(model.localPath)
+        val ttsGenerationConfig = generationConfig(speakerId, pace, tone)
         val tts = withContext(previewDispatcher) {
             createOfflineTts(
                 spec = spec,
@@ -1218,7 +1220,7 @@ class NeuralTtsRepository(
             val generated = withContext(previewDispatcher) {
                 tts.engine.generateWithConfig(
                     text = PREVIEW_TEXT,
-                    config = generationConfig(speakerId, pace, tone)
+                    config = ttsGenerationConfig
                 )
             }
             require(generated.samples.isNotEmpty()) { "Neural TTS produced no preview audio." }
