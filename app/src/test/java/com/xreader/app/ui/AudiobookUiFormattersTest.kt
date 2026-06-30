@@ -470,7 +470,7 @@ class AudiobookUiFormattersTest {
         )
 
         assertEquals(
-            "Generating • working on 4/10",
+            "working on 4/10 • 30%",
             audio.audiobookStatusDetail(
                 activePlayback = false,
                 playback = EMPTY_AUDIOBOOK_PLAYBACK_UI_STATE,
@@ -493,7 +493,7 @@ class AudiobookUiFormattersTest {
         )
 
         assertEquals(
-            "Ready • 4 segments • playing 2 / 4",
+            "4 segments • playing 2 / 4",
             audio.audiobookStatusDetail(
                 activePlayback = true,
                 playback = playback,

@@ -118,9 +118,7 @@ import com.xreader.app.tts.NeuralTtsModelCatalog
 import com.xreader.app.tts.AudiobookPlaybackUiState
 import com.xreader.app.tts.EMPTY_AUDIOBOOK_PLAYBACK_UI_STATE
 import com.xreader.app.tts.TtsAccelerationRuntime
-import com.xreader.app.tts.audiobookGenerationProgressLabel
 import com.xreader.app.tts.canDeleteGeneratedAudiobook
-import com.xreader.app.tts.generationEtaLabel
 import com.xreader.app.tts.GeneratedAudiobookChapter
 import com.xreader.app.tts.playableSegmentCount
 import com.xreader.app.tts.playableSegmentFiles
@@ -1062,27 +1060,14 @@ internal fun BookAudioEntity.audiobookStatusDetail(
     playback: AudiobookPlaybackUiState,
     playableSegmentFiles: Int = playableSegmentCount(),
 ): String {
-    val progress = when {
-        segmentCount <= 0 -> null
-        status == BookAudioStatus.GENERATING -> audiobookGenerationProgressLabel()
-        status == BookAudioStatus.GENERATED && playableSegmentFiles >= segmentCount -> "$segmentCount segments"
-        status == BookAudioStatus.GENERATED && playableSegmentFiles <= 0 -> "Audio files missing"
-        status == BookAudioStatus.GENERATED -> "$playableSegmentFiles playable of $segmentCount segments"
-        playableSegmentFiles > 0 -> "$playableSegmentFiles playable of $segmentCount segments"
-        else -> null
-    }
-    val statusLabel = when (status) {
-        BookAudioStatus.GENERATED -> "Ready"
-        BookAudioStatus.GENERATING -> {
-            val eta = generationEtaLabel()
-            if (eta == null) "Generating" else "Generating • $eta"
-        }
-        BookAudioStatus.CANCELED -> "Stopped"
-        BookAudioStatus.FAILED -> error ?: "Failed"
-    }
     val playbackLabel = if (activePlayback && playback.segmentCount > 0) audiobookPlaybackStateLabel(playback) else null
-    val performanceLabel = if (status == BookAudioStatus.GENERATING) null else audiobookPerformanceLabel()
-    return joinedAudiobookLabel(statusLabel, progress, performanceLabel, playbackLabel)
+    return joinedAudiobookLabel(
+        audiobookStatusDetail(
+            audio = this,
+            playableSegmentFiles = playableSegmentFiles
+        ),
+        playbackLabel
+    )
 }
 
 internal fun BookAudioEntity.audiobookPerformanceLabel(): String? {
@@ -1289,6 +1274,14 @@ internal fun AudiobookPlaybackUiState.chapterLabel(): String? {
     val title = chapterTitle?.takeIf { it.isNotBlank() } ?: return null
     val position = chapterIndex?.takeIf { chapterCount > 0 } ?: return title
     return "$title • ${position + 1} / $chapterCount"
+}
+
+private fun joinedAudiobookLabel(
+    first: String,
+    second: String?,
+): String = buildString {
+    append(first)
+    appendAudiobookLabelPart(second)
 }
 
 private fun joinedAudiobookLabel(
