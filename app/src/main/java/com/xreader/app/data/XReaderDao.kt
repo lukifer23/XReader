@@ -29,6 +29,14 @@ data class BookAudioWithBook(
     val book: BookEntity,
 )
 
+data class ImportedAudiobookWithTracks(
+    @Embedded val audiobook: ImportedAudiobookEntity,
+    @Relation(parentColumn = "id", entityColumn = "audiobookId")
+    val tracks: List<AudiobookTrackEntity>,
+    @Relation(parentColumn = "id", entityColumn = "audiobookId")
+    val chapters: List<AudiobookChapterEntity>,
+)
+
 @Dao
 interface BookDao {
     @Query(
@@ -465,6 +473,118 @@ interface NeuralTtsDao {
 
     @Query("DELETE FROM book_audio WHERE modelId = :modelId")
     suspend fun deleteBookAudioForModel(modelId: String)
+}
+
+@Dao
+interface AudiobookDao {
+    @Transaction
+    @Query(
+        """
+        SELECT * FROM imported_audiobooks
+        WHERE :query = '' OR title LIKE '%' || :query || '%' OR author LIKE '%' || :query || '%'
+            OR IFNULL(narrator, '') LIKE '%' || :query || '%' OR IFNULL(series, '') LIKE '%' || :query || '%'
+        ORDER BY lastPlayedAt DESC, sortTitle COLLATE NOCASE ASC
+        """
+    )
+    fun observeAudiobooks(query: String): Flow<List<ImportedAudiobookWithTracks>>
+
+    @Transaction
+    @Query("SELECT * FROM imported_audiobooks WHERE id = :id LIMIT 1")
+    suspend fun audiobook(id: Long): ImportedAudiobookWithTracks?
+
+    @Query("SELECT * FROM imported_audiobooks WHERE checksum = :checksum LIMIT 1")
+    suspend fun audiobookByChecksum(checksum: String): ImportedAudiobookEntity?
+
+    @Query("SELECT * FROM imported_audiobooks ORDER BY id")
+    suspend fun allAudiobooks(): List<ImportedAudiobookEntity>
+
+    @Query("SELECT * FROM audiobook_tracks ORDER BY audiobookId, trackIndex")
+    suspend fun allTracks(): List<AudiobookTrackEntity>
+
+    @Query("SELECT * FROM audiobook_chapters ORDER BY audiobookId, chapterIndex")
+    suspend fun allChapters(): List<AudiobookChapterEntity>
+
+    @Query("SELECT * FROM audiobook_bookmarks ORDER BY audiobookId, createdAt")
+    suspend fun allBookmarks(): List<AudiobookBookmarkEntity>
+
+    @Query("SELECT * FROM audiobook_collections ORDER BY audiobookId, collectionId")
+    suspend fun allCollectionMemberships(): List<AudiobookCollectionEntity>
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertAudiobook(audiobook: ImportedAudiobookEntity): Long
+
+    @Update
+    suspend fun updateAudiobook(audiobook: ImportedAudiobookEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertTracks(tracks: List<AudiobookTrackEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertChapters(chapters: List<AudiobookChapterEntity>)
+
+    @Query("DELETE FROM audiobook_tracks WHERE audiobookId = :audiobookId")
+    suspend fun deleteTracks(audiobookId: Long)
+
+    @Query("DELETE FROM audiobook_chapters WHERE audiobookId = :audiobookId")
+    suspend fun deleteChapters(audiobookId: Long)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertBookmark(bookmark: AudiobookBookmarkEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertCollectionMembership(membership: AudiobookCollectionEntity): Long
+
+    @Query(
+        """
+        UPDATE imported_audiobooks
+        SET playbackTrackIndex = :trackIndex, playbackPositionMs = :positionMs,
+            lastPlayedAt = :playedAt, updatedAt = :playedAt
+        WHERE id = :id
+        """
+    )
+    suspend fun updatePlayback(id: Long, trackIndex: Int, positionMs: Int, playedAt: Long): Int
+
+    @Query("UPDATE imported_audiobooks SET linkedBookId = :bookId, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun linkBook(id: Long, bookId: Long?, updatedAt: Long): Int
+
+    @Query("DELETE FROM imported_audiobooks WHERE id = :id")
+    suspend fun deleteAudiobook(id: Long)
+}
+
+@Dao
+interface NarrationDao {
+    @Query("SELECT * FROM pronunciation_rules ORDER BY LENGTH(phrase) DESC, id ASC")
+    suspend fun allPronunciationRules(): List<PronunciationRuleEntity>
+
+    @Query("SELECT * FROM pronunciation_rules WHERE enabled = 1 AND (bookId IS NULL OR bookId = :bookId) ORDER BY LENGTH(phrase) DESC, id ASC")
+    suspend fun enabledPronunciationRules(bookId: Long): List<PronunciationRuleEntity>
+
+    @Query("SELECT * FROM narration_overrides WHERE bookId = :bookId ORDER BY id")
+    suspend fun narrationOverrides(bookId: Long): List<NarrationOverrideEntity>
+
+    @Query("SELECT * FROM narration_overrides ORDER BY bookId, id")
+    suspend fun allNarrationOverrides(): List<NarrationOverrideEntity>
+
+    @Query("SELECT * FROM pronunciation_rules WHERE bookId IS :bookId AND languageTag = :languageTag AND phrase = :phrase LIMIT 1")
+    suspend fun pronunciationRule(bookId: Long?, languageTag: String, phrase: String): PronunciationRuleEntity?
+
+    @Query("SELECT * FROM narration_overrides WHERE bookId = :bookId AND sourceKey = :sourceKey LIMIT 1")
+    suspend fun narrationOverride(bookId: Long, sourceKey: String): NarrationOverrideEntity?
+
+    @Upsert
+    suspend fun upsertPronunciationRule(rule: PronunciationRuleEntity): Long
+
+    @Upsert
+    suspend fun upsertNarrationOverride(override: NarrationOverrideEntity): Long
+}
+
+@Dao
+interface RestoreOperationDao {
+    @Query("SELECT * FROM restore_operations WHERE operationId = :operationId LIMIT 1")
+    suspend fun operation(operationId: String): RestoreOperationEntity?
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insert(operation: RestoreOperationEntity): Long
 }
 
 @Dao

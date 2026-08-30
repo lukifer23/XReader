@@ -359,10 +359,18 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
                             result.library.globalSettingsSkipped + result.library.readerAppearancesSkipped +
                             result.library.readingStatesSkipped + result.library.readingSessionsSkipped +
                             result.annotations.annotationsSkipped + result.annotations.bookmarksSkipped
-                        val missing = result.library.missingBooks + result.annotations.missingBooks
-                        val invalid = result.library.invalidItems + result.annotations.invalidItems
+                        val missing = result.library.missingBooks +
+                            result.annotations.missingBooks +
+                            result.extended.missingBooks +
+                            result.extended.missingAudioFiles
+                        val invalid = result.library.invalidItems +
+                            result.annotations.invalidItems +
+                            result.extended.invalidItems
+                        val audioChanged = result.extended.audiobooksImported + result.extended.audiobooksUpdated +
+                            result.extended.audioBookmarksImported + result.extended.pronunciationRulesImported +
+                            result.extended.narrationOverridesImported
                         buildString {
-                            append("Restored ${libraryChanged + noteChanged} items")
+                            append("Restored ${libraryChanged + noteChanged + audioChanged} items")
                             if (skipped > 0) append("; $skipped already current or skipped")
                             if (missing > 0) append("; $missing references need imported books")
                             if (invalid > 0) append("; $invalid invalid")

@@ -54,7 +54,7 @@ class NeuralTtsTextTest {
     }
 
     @Test
-    fun prepareDropsRepeatedLongPassagesThatWouldInflateAudiobookLength() {
+    fun preparePreservesNonAdjacentRepeatedLiteraryPassages() {
         val repeated = "This paragraph is a full body passage that should only be spoken once even if an extractor indexes it repeatedly across sections."
         val prepared = NeuralTtsText.prepare(
             listOf(
@@ -67,8 +67,8 @@ class NeuralTtsTextTest {
         val spokenText = prepared.joinedSegments()
         assertTrue(spokenText.contains(repeated))
         assertTrue(spokenText.contains("A unique chapter paragraph remains."))
-        assertEquals(1, prepared.segments.sumOf { Regex(Regex.escape(repeated)).findAll(it).count() })
-        assertEquals(27, prepared.wordCount)
+        assertEquals(2, prepared.segments.sumOf { Regex(Regex.escape(repeated)).findAll(it).count() })
+        assertEquals(49, prepared.wordCount)
     }
 
     @Test
@@ -269,7 +269,7 @@ class NeuralTtsTextTest {
     fun prepareSkipsPublisherFrontMatterBeforePrologue() {
         val prepared = NeuralTtsText.prepare(
             listOf(
-                chunk(unitIndex = 0, text = "THE LIONS OF LUCERNE"),
+                chunk(unitIndex = 0, text = "Title page"),
                 chunk(unitIndex = 1, text = "This book is a work of fiction. Any resemblance to actual events is coincidental."),
                 chunk(unitIndex = 2, text = "All rights reserved, including the right to reproduce this book."),
                 chunk(unitIndex = 3, text = "Visit us on the World Wide Web:"),

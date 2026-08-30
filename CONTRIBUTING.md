@@ -36,7 +36,10 @@ adb shell am start -n com.xreader.app/.MainActivity
 - Put file/database work in services or repositories, not directly in Compose UI.
 - Add focused tests for import, parsing, persistence, search, analytics, and dictionary changes.
 - Keep the full backup versioned and backward-compatible. Never place imported books, covers, generated audio, model files, private paths, or checksum inventories intended for users in backup output.
+- Treat backup files as hostile input: keep ZIP/JSON parsing bounded, validate the complete archive before mutation, and preserve the Room/DataStore restore journal contract.
 - Add every Room schema change to the explicit migration chain, export the new schema, and extend migration instrumentation coverage without destructive fallback.
+- Keep imported audio separate from `BookEntity` and generated `BookAudioEntity`; validate real media before committing metadata and preserve the strict distinction between read-aloud, generated-audio, and imported-audio lifecycles.
+- Do not add Libby loan playback, scraping, card credentials, DRM removal, or a branded export importer without a real documented user export and explicit matching/confirmation tests.
 
 ## Checks
 

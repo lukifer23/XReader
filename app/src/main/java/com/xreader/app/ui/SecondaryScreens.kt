@@ -50,6 +50,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -491,6 +492,7 @@ private fun BookAnalyticsRow(row: BookAnalytics) {
 @Immutable
 data class AudiobooksUiState(
     val rows: List<GeneratedAudiobookUiItem> = emptyList(),
+    val importedRows: List<com.xreader.app.audiobook.ImportedAudiobookPackage> = emptyList(),
     val message: String? = null,
 )
 
@@ -638,6 +640,15 @@ class AudiobooksViewModel(private val container: AppContainer) : ViewModel() {
             .map { it.forAudiobooksScreen() }
             .distinctUntilChanged()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), EMPTY_AUDIOBOOK_PLAYBACK_UI_STATE)
+    val importedPlaybackState: StateFlow<com.xreader.app.audiobook.ImportedAudiobookPlaybackState> =
+        container.importedAudiobookPlayback.state
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                com.xreader.app.audiobook.ImportedAudiobookPlaybackState(),
+            )
+    private val importedRows = container.audiobookRepository.observeImported()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     private val audiobookUiItemCache = BookAudiobookAudioUiItemCache()
     private val playbackSortKey =
         playback
@@ -668,10 +679,12 @@ class AudiobooksViewModel(private val container: AppContainer) : ViewModel() {
     val uiState: StateFlow<AudiobooksUiState> =
         combine(
             sortedAudiobookRows,
+            importedRows,
             message
-        ) { sortedRows, currentMessage ->
+        ) { sortedRows, imported, currentMessage ->
             AudiobooksUiState(
                 rows = sortedRows,
+                importedRows = imported,
                 message = currentMessage
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AudiobooksUiState())
@@ -685,6 +698,7 @@ class AudiobooksViewModel(private val container: AppContainer) : ViewModel() {
             message.value = "Generate at least one segment before playing."
             return
         }
+        container.importedAudiobookPlayback.stop()
         container.generatedAudiobookPlayback.play(item.book.title, item.audio)
     }
 
@@ -742,6 +756,43 @@ class AudiobooksViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    fun importAudiobook(uris: List<android.net.Uri>) {
+        if (uris.isEmpty()) return
+        viewModelScope.launch {
+            runCatching { container.audiobookRepository.importUris(uris) }
+                .onSuccess { result ->
+                    message.value = when {
+                        result.restoredMissingFiles -> "Repaired ${result.title} from ${result.trackCount} tracks."
+                        result.imported -> "Imported ${result.title} with ${result.trackCount} tracks."
+                        else -> "${result.title} is already in Audiobooks."
+                    }
+                }
+                .onFailure { error -> message.value = error.message ?: "Audiobook import failed." }
+        }
+    }
+
+    fun playImported(item: com.xreader.app.audiobook.ImportedAudiobookPackage) {
+        container.generatedAudiobookPlayback.stop()
+        runCatching { container.importedAudiobookPlayback.play(item) }
+            .onFailure { message.value = it.message ?: "Audiobook playback failed." }
+    }
+
+    fun pauseImported() = container.importedAudiobookPlayback.pause()
+    fun stopImported() = container.importedAudiobookPlayback.stop()
+    fun previousImported() = container.importedAudiobookPlayback.skipPrevious()
+    fun nextImported() = container.importedAudiobookPlayback.skipNext()
+
+    fun deleteImported(item: com.xreader.app.audiobook.ImportedAudiobookPackage) {
+        viewModelScope.launch {
+            if (container.importedAudiobookPlayback.state.value.audiobookId == item.audiobook.id) {
+                container.importedAudiobookPlayback.stop()
+            }
+            runCatching { container.audiobookRepository.delete(item.audiobook.id) }
+                .onSuccess { message.value = "Deleted ${item.audiobook.title}." }
+                .onFailure { message.value = it.message ?: "Could not delete audiobook." }
+        }
+    }
+
     companion object {
         fun factory(container: AppContainer): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
@@ -761,6 +812,7 @@ internal fun AudiobooksRoute(
     val viewModel: AudiobooksViewModel = viewModel(factory = AudiobooksViewModel.factory(container))
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val playback by viewModel.playbackState.collectAsStateWithLifecycle()
+    val importedPlayback by viewModel.importedPlaybackState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     var exportTarget by remember { mutableStateOf<BookAudioEntity?>(null) }
     var deleteCandidate by remember { mutableStateOf<GeneratedAudiobookUiItem?>(null) }
@@ -768,6 +820,17 @@ internal fun AudiobooksRoute(
     var searchQuery by remember { mutableStateOf("") }
     val visibleRows = remember(state.rows, searchQuery) {
         state.rows.filteredForAudiobooksScreen(searchQuery)
+    }
+    val visibleImportedRows = remember(state.importedRows, searchQuery) {
+        val terms = searchQuery.trim().lowercase(Locale.US).split(Regex("\\s+")).filter(String::isNotBlank)
+        if (terms.isEmpty()) state.importedRows else state.importedRows.filter { item ->
+            val searchable = listOf(item.audiobook.title, item.audiobook.author, item.audiobook.narrator, item.audiobook.series)
+                .filterNotNull().joinToString(" ").lowercase(Locale.US)
+            terms.all(searchable::contains)
+        }
+    }
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        viewModel.importAudiobook(uris)
     }
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
         val target = exportTarget
@@ -789,7 +852,7 @@ internal fun AudiobooksRoute(
             TopAppBar(title = { Text("Audiobooks") })
         }
     ) { padding ->
-        if (state.rows.isEmpty()) {
+        if (state.rows.isEmpty() && state.importedRows.isEmpty()) {
             Column(
                 modifier = Modifier
                     .padding(padding)
@@ -798,12 +861,16 @@ internal fun AudiobooksRoute(
                     .padding(18.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text("No generated audiobooks", style = MaterialTheme.typography.titleMedium)
+                Text("No audiobooks", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "Generate a sample, chapter, or full book from any book's Audiobook action. Completed and partial audio will appear here.",
+                    "Import DRM-free audio, or generate a sample, chapter, or full book from an ebook.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                Button(
+                    onClick = { importLauncher.launch(com.xreader.app.audiobook.SupportedAudiobookTypes.pickerMimeTypes) },
+                    modifier = Modifier.heightIn(min = 48.dp),
+                ) { Text("Import audiobook") }
             }
         } else {
             LazyColumn(
@@ -818,14 +885,32 @@ internal fun AudiobooksRoute(
                     AudiobookSearchField(
                         query = searchQuery,
                         onQueryChange = { searchQuery = it },
-                        resultCount = visibleRows.size,
-                        totalCount = state.rows.size
+                        resultCount = visibleRows.size + visibleImportedRows.size,
+                        totalCount = state.rows.size + state.importedRows.size
                     )
                 }
-                if (visibleRows.isEmpty()) {
+                item {
+                    OutlinedButton(
+                        onClick = { importLauncher.launch(com.xreader.app.audiobook.SupportedAudiobookTypes.pickerMimeTypes) },
+                        modifier = Modifier.heightIn(min = 48.dp),
+                    ) { Text("Import audiobook") }
+                }
+                items(visibleImportedRows, key = { "imported:${it.audiobook.id}" }) { item ->
+                    ImportedAudiobookScreenRow(
+                        item = item,
+                        playback = importedPlayback.takeIf { it.audiobookId == item.audiobook.id },
+                        onPlay = { viewModel.playImported(item) },
+                        onPause = viewModel::pauseImported,
+                        onStop = viewModel::stopImported,
+                        onPrevious = viewModel::previousImported,
+                        onNext = viewModel::nextImported,
+                        onDelete = { viewModel.deleteImported(item) },
+                    )
+                }
+                if (visibleRows.isEmpty() && visibleImportedRows.isEmpty()) {
                     item {
                         Text(
-                            "No generated audiobooks match this search.",
+                            "No audiobooks match this search.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -918,6 +1003,117 @@ private fun AudiobookSearchField(
             }
         }
     )
+}
+
+@Composable
+private fun ImportedAudiobookScreenRow(
+    item: com.xreader.app.audiobook.ImportedAudiobookPackage,
+    playback: com.xreader.app.audiobook.ImportedAudiobookPlaybackState?,
+    onPlay: () -> Unit,
+    onPause: () -> Unit,
+    onStop: () -> Unit,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val audiobook = item.audiobook
+    val active = playback?.active == true
+    val missingFiles = audiobook.filePath.isBlank() || item.tracks.isEmpty()
+    Card(
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                audiobook.title,
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                listOfNotNull(
+                    audiobook.author.takeIf(String::isNotBlank),
+                    audiobook.narrator?.takeIf(String::isNotBlank)?.let { "Narrated by $it" },
+                ).joinToString(" • ").ifBlank { "Imported audiobook" },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                AudiobookInfoPill("Imported")
+                AudiobookInfoPill("${item.tracks.size} ${if (item.tracks.size == 1) "track" else "tracks"}")
+                if (item.chapters.isNotEmpty()) {
+                    AudiobookInfoPill("${item.chapters.size} ${if (item.chapters.size == 1) "chapter" else "chapters"}")
+                }
+                if (audiobook.durationMs > 0L) AudiobookInfoPill(formatDuration(audiobook.durationMs))
+            }
+            when {
+                missingFiles -> Text(
+                    "Original audio is missing. Reimport the same files to repair this record.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                playback?.error != null -> Text(
+                    playback.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                active -> {
+                    LinearProgressIndicator(
+                        progress = {
+                            if (playback.durationMs > 0) {
+                                (playback.positionMs.toFloat() / playback.durationMs.toFloat()).coerceIn(0f, 1f)
+                            } else 0f
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Text(
+                        "Track ${playback.trackIndex + 1} of ${playback.trackCount} • ${formatDuration(playback.positionMs.toLong())} / ${formatDuration(playback.durationMs.toLong())}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                TextButton(
+                    onClick = if (playback?.playing == true) onPause else onPlay,
+                    enabled = !missingFiles && playback?.preparing != true,
+                    modifier = Modifier.heightIn(min = 48.dp),
+                ) {
+                    Text(
+                        when {
+                            playback?.preparing == true -> "Preparing"
+                            playback?.playing == true -> "Pause"
+                            playback?.paused == true -> "Resume"
+                            audiobook.playbackPositionMs > 0 -> "Resume"
+                            else -> "Play"
+                        }
+                    )
+                }
+                if (active) {
+                    TextButton(
+                        onClick = onPrevious,
+                        enabled = playback.trackIndex > 0 || playback.positionMs > 5_000,
+                        modifier = Modifier.heightIn(min = 48.dp),
+                    ) { Text("Previous") }
+                    TextButton(
+                        onClick = onNext,
+                        enabled = playback.trackIndex < playback.trackCount - 1,
+                        modifier = Modifier.heightIn(min = 48.dp),
+                    ) { Text("Next") }
+                    TextButton(onClick = onStop, modifier = Modifier.heightIn(min = 48.dp)) { Text("Stop") }
+                }
+                TextButton(onClick = onDelete, modifier = Modifier.heightIn(min = 48.dp)) { Text("Delete") }
+            }
+        }
+    }
 }
 
 @Composable

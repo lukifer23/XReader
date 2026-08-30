@@ -8,11 +8,15 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -27,6 +31,9 @@ import androidx.navigation.navArgument
 import com.xreader.app.AppContainer
 import com.xreader.app.data.ReaderTheme
 import com.xreader.app.importer.toIncomingBookImport
+import com.xreader.app.importer.IncomingImportKind
+import com.xreader.app.importer.classifyIncomingImport
+import com.xreader.app.importer.ACSM_MIME_TYPE
 import kotlinx.coroutines.delay
 
 @Composable
@@ -40,6 +47,8 @@ fun XReaderApp(
     val settings by settingsViewModel.settings.collectAsStateWithLifecycle()
     val navController = rememberNavController()
     val activity = LocalContext.current.findActivity()
+    val context = LocalContext.current
+    var acsmUri by remember { mutableStateOf<Uri?>(null) }
     LaunchedEffect(container) {
         delay(READER_SERVICE_WARMUP_DELAY_MS)
         container.warmReaderServices()
@@ -50,11 +59,22 @@ fun XReaderApp(
         val intent = incomingIntent ?: return@LaunchedEffect
         val incomingImport = intent.toIncomingBookImport()
         if (incomingImport != null) {
-            navController.navigate("library") {
-                launchSingleTop = true
-                restoreState = true
+            val classified = incomingImport.uris.groupBy { context.contentResolver.classifyIncomingImport(it) }
+            classified[IncomingImportKind.BOOK].orEmpty().takeIf { it.isNotEmpty() }?.let { books ->
+                navController.navigate("library") {
+                    launchSingleTop = true
+                    restoreState = true
+                }
+                libraryViewModel.importFiles(books)
             }
-            libraryViewModel.importFiles(incomingImport.uris)
+            classified[IncomingImportKind.AUDIOBOOK].orEmpty().takeIf { it.isNotEmpty() }?.let { audio ->
+                navController.navigate("audiobooks") {
+                    launchSingleTop = true
+                    restoreState = true
+                }
+                runCatching { container.audiobookRepository.importUris(audio) }
+            }
+            classified[IncomingImportKind.ACSM]?.firstOrNull()?.let { acsmUri = it }
         }
         onIncomingIntentConsumed(intent)
     }
@@ -159,6 +179,25 @@ fun XReaderApp(
                     }
                 )
             }
+        }
+        acsmUri?.let { uri ->
+            AlertDialog(
+                onDismissRequest = { acsmUri = null },
+                title = { Text("Adobe license file") },
+                text = {
+                    Text("This ACSM file contains loan instructions, not an ebook. XReader does not remove DRM or fulfill Adobe loans. You can hand it to an authorized Adobe-compatible app.")
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        val view = Intent(Intent.ACTION_VIEW)
+                            .setDataAndType(uri, ACSM_MIME_TYPE)
+                            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        runCatching { context.startActivity(Intent.createChooser(view, "Open ACSM with")) }
+                        acsmUri = null
+                    }) { Text("Open externally") }
+                },
+                dismissButton = { TextButton(onClick = { acsmUri = null }) { Text("Close") } },
+            )
         }
     }
 }

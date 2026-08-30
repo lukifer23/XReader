@@ -97,6 +97,21 @@ class XReaderDatabaseSchemaTest {
         schema(version = 15).entity("search_index_fts")
     }
 
+    @Test
+    fun version16SeparatesImportedAudioNarrationAndRestoreState() {
+        val current = schema(version = 16)
+        assertEquals(16, current.getInt("version"))
+        listOf(
+            "imported_audiobooks", "audiobook_tracks", "audiobook_chapters", "audiobook_bookmarks",
+            "audiobook_collections", "pronunciation_rules", "narration_overrides", "restore_operations",
+        ).forEach { table -> current.entity(table) }
+        val books = current.entity("books")
+        val formatField = books.getJSONArray("fields").let { fields ->
+            (0 until fields.length()).map(fields::getJSONObject).first { it.getString("columnName") == "format" }
+        }
+        assertEquals("TEXT", formatField.getString("affinity"))
+    }
+
     private fun schema(version: Int): JSONObject {
         val file = File("schemas/com.xreader.app.data.XReaderDatabase/$version.json")
         assertTrue("Missing exported Room schema ${file.path}", file.isFile)

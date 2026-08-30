@@ -54,6 +54,14 @@ Treat single-device numbers as local baselines, not universal claims. Record:
 
 ## Current Local Baseline
 
+2026-08-30 paused backup/narration/imported-audio checkpoint:
+
+- Connected hardware is visible as Samsung SM-F966U / Android 16, but the user paused before install/runtime acceptance; no new codec, MediaSession, foreground-service, foldable layout, migration, restore, Readium, thermal, or QNN performance claim is made.
+- Final checkpoint gate: the clean debug/release lint, 622 JVM tests, debug APK, Android-test APK, unsigned release APK, and release packaging verification all pass. Both lint variants report zero errors and 41 warnings.
+- Packaging artifact: unsigned release APK, 210,485,914 bytes (about 200.7 MiB), below the 220,200,960-byte ceiling.
+- Persistence work is bounded off the UI thread; media inspection/copy/hash work runs on IO, narration preparation runs on Default, and restore archive parsing validates sizes/counts/hashes before mutation.
+- The next session may install the exact checkpoint debug artifact first. Rerun the complete clean gate before installation if the source tree changes, then capture device evidence separately.
+
 2026-08-30 code/build-only reading-loop reliability pass:
 
 - Device or emulator: not attached. No visual, Readium-runtime, foreground-service, thermal, process-death, migration-runtime, or QNN throughput claim is made.

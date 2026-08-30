@@ -249,6 +249,211 @@ data class BookAudioEntity(
 )
 
 @Entity(
+    tableName = "imported_audiobooks",
+    foreignKeys = [
+        ForeignKey(
+            entity = BookEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["linkedBookId"],
+            onDelete = ForeignKey.SET_NULL
+        )
+    ],
+    indices = [
+        Index(value = ["checksum"], unique = true),
+        Index(value = ["linkedBookId"]),
+        Index(value = ["title"]),
+        Index(value = ["author"]),
+        Index(value = ["series"]),
+        Index(value = ["updatedAt"]),
+        Index(value = ["lastPlayedAt"]),
+    ]
+)
+data class ImportedAudiobookEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val title: String,
+    val author: String,
+    val sortTitle: String,
+    val narrator: String? = null,
+    val series: String? = null,
+    val seriesIndex: Double? = null,
+    val description: String? = null,
+    val language: String? = null,
+    val isbn: String? = null,
+    val checksum: String,
+    val fileName: String,
+    val filePath: String,
+    val sourceExtension: String,
+    val mimeType: String,
+    val coverImagePath: String? = null,
+    val durationMs: Long,
+    val fileSizeBytes: Long,
+    val trackCount: Int,
+    val linkedBookId: Long? = null,
+    val playbackTrackIndex: Int = 0,
+    val playbackPositionMs: Int = 0,
+    val playbackSpeed: Float = 1f,
+    val importedAt: Long,
+    val updatedAt: Long,
+    val lastPlayedAt: Long? = null,
+    val favorite: Boolean = false,
+    val finished: Boolean = false,
+)
+
+@Entity(
+    tableName = "audiobook_tracks",
+    primaryKeys = ["audiobookId", "trackIndex"],
+    foreignKeys = [
+        ForeignKey(
+            entity = ImportedAudiobookEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["audiobookId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [Index(value = ["audiobookId"])]
+)
+data class AudiobookTrackEntity(
+    val audiobookId: Long,
+    val trackIndex: Int,
+    val title: String,
+    val fileName: String,
+    val relativePath: String,
+    val checksum: String,
+    val mimeType: String,
+    val durationMs: Long,
+    val fileSizeBytes: Long,
+    val discNumber: Int? = null,
+    val trackNumber: Int? = null,
+)
+
+@Entity(
+    tableName = "audiobook_chapters",
+    primaryKeys = ["audiobookId", "chapterIndex"],
+    foreignKeys = [
+        ForeignKey(
+            entity = ImportedAudiobookEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["audiobookId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [Index(value = ["audiobookId"])]
+)
+data class AudiobookChapterEntity(
+    val audiobookId: Long,
+    val chapterIndex: Int,
+    val title: String,
+    val trackIndex: Int,
+    val startMs: Long,
+    val endMs: Long,
+)
+
+@Entity(
+    tableName = "audiobook_bookmarks",
+    foreignKeys = [
+        ForeignKey(
+            entity = ImportedAudiobookEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["audiobookId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [
+        Index(value = ["audiobookId"]),
+        Index(value = ["createdAt"]),
+        Index(value = ["audiobookId", "trackIndex", "positionMs", "createdAt"], unique = true),
+    ]
+)
+data class AudiobookBookmarkEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val audiobookId: Long,
+    val trackIndex: Int,
+    val positionMs: Long,
+    val label: String,
+    val note: String,
+    val createdAt: Long,
+    val updatedAt: Long,
+)
+
+@Entity(
+    tableName = "audiobook_collections",
+    primaryKeys = ["audiobookId", "collectionId"],
+    foreignKeys = [
+        ForeignKey(
+            entity = ImportedAudiobookEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["audiobookId"],
+            onDelete = ForeignKey.CASCADE
+        ),
+        ForeignKey(
+            entity = CollectionEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["collectionId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [Index(value = ["audiobookId"]), Index(value = ["collectionId"])]
+)
+data class AudiobookCollectionEntity(
+    val audiobookId: Long,
+    val collectionId: Long,
+    val addedAt: Long,
+)
+
+@Entity(
+    tableName = "pronunciation_rules",
+    foreignKeys = [
+        ForeignKey(
+            entity = BookEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["bookId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [Index(value = ["bookId"]), Index(value = ["languageTag"])]
+)
+data class PronunciationRuleEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val bookId: Long? = null,
+    val languageTag: String = "en-US",
+    val phrase: String,
+    val replacement: String,
+    val enabled: Boolean = true,
+    val createdAt: Long,
+    val updatedAt: Long,
+)
+
+@Entity(
+    tableName = "narration_overrides",
+    foreignKeys = [
+        ForeignKey(
+            entity = BookEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["bookId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [Index(value = ["bookId"]), Index(value = ["sourceKey"]), Index(value = ["bookId", "sourceKey"], unique = true)]
+)
+data class NarrationOverrideEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val bookId: Long,
+    val sourceKey: String,
+    val include: Boolean,
+    val replacementText: String? = null,
+    val createdAt: Long,
+    val updatedAt: Long,
+)
+
+@Entity(tableName = "restore_operations")
+data class RestoreOperationEntity(
+    @PrimaryKey val operationId: String,
+    val planSha256: String,
+    val formatVersion: Int,
+    val committedAt: Long,
+)
+
+@Entity(
     tableName = "annotations",
     foreignKeys = [
         ForeignKey(

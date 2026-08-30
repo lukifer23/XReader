@@ -5,6 +5,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -19,11 +20,47 @@ class XReaderMigrationInstrumentedTest {
 
     @Test
     fun everyHistoricalSchemaMigratesToCurrentWithoutDestructiveFallback() {
-        for (version in 1 until 15) {
+        for (version in 1 until XREADER_DATABASE_VERSION) {
             val name = "xreader-migration-$version"
             helper.createDatabase(name, version).close()
-            helper.runMigrationsAndValidate(name, 15, true, *XReaderDatabase.ALL_MIGRATIONS).close()
+            helper.runMigrationsAndValidate(name, XREADER_DATABASE_VERSION, true, *XReaderDatabase.ALL_MIGRATIONS).close()
         }
+    }
+
+    @Test
+    fun migration15To16RetainsBooksAndCreatesPersistenceTables() {
+        val name = "xreader-migration-audiobooks"
+        helper.createDatabase(name, 15).apply {
+            execSQL(
+                """INSERT INTO books (
+                    id, title, author, sortTitle, series, seriesIndex, genre, year, description, language,
+                    format, sourceExtension, fileName, filePath, coverImagePath, checksum, fileSizeBytes,
+                    wordCount, pageCount, readabilityScore, readabilityGradeLevel, importedAt, updatedAt,
+                    lastOpenedAt, favorite, finished
+                ) VALUES (7, 'Retained Book', 'Migration', 'retained book', NULL, NULL, NULL, NULL, NULL, 'en',
+                    'EPUB', 'epub', 'retained.epub', '/private/retained.epub', NULL,
+                    'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 42,
+                    100, NULL, NULL, NULL, 10, 20, NULL, 1, 0)""".trimIndent(),
+            )
+            close()
+        }
+
+        val migrated = helper.runMigrationsAndValidate(name, 16, true, *XReaderDatabase.ALL_MIGRATIONS)
+        migrated.query("SELECT title, checksum FROM books WHERE id = 7").use { cursor ->
+            assertEquals(1, cursor.count)
+            cursor.moveToFirst()
+            assertEquals("Retained Book", cursor.getString(0))
+            assertEquals(64, cursor.getString(1).length)
+        }
+        val expectedTables = setOf(
+            "imported_audiobooks", "audiobook_tracks", "audiobook_chapters", "audiobook_bookmarks",
+            "audiobook_collections", "pronunciation_rules", "narration_overrides", "restore_operations",
+        )
+        migrated.query("SELECT name FROM sqlite_master WHERE type = 'table'").use { cursor ->
+            val actual = buildSet { while (cursor.moveToNext()) add(cursor.getString(0)) }
+            assertTrue(actual.containsAll(expectedTables))
+        }
+        migrated.close()
     }
 
     @Test

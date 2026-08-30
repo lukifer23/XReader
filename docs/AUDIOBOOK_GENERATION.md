@@ -15,7 +15,7 @@ Generation speed is measured as end-to-end segment cost: native model synthesis 
 
 User-facing performance labels report this as `x audio time`, where lower is better: `0.5x audio time` means generation took half the audio duration, while `2.0x audio time` means generation was slower than realtime.
 
-Strict QNN providers require a prepared `model.qnn.onnx` beside the installed model and a matching `xreader-qnn-model-manifest.json` whose `strict_qnn_compatible` field is `true`. A bare `model.qnn.onnx` is not enough, because current device evidence showed an artifact can still contain control-flow, sequence, random, and dynamic-input graph surfaces that leave unsupported work on CPU. QNN provider configs set `disable_cpu_ep_fallback=1`; if ONNX Runtime assigns nodes to CPU, generation fails instead of pretending to accelerate.
+Strict QNN providers require a prepared `model.qnn.onnx` beside the installed model and a matching `xreader-qnn-model-manifest.json`. The app validates the model hash/size, source model hash/revision, fixed token buckets, ONNX/ONNX Runtime/QAIRT versions, blocker analysis, and provenance/license fields in addition to the strict flag. A bare model or boolean-only manifest is incomplete. QNN provider configs keep `disable_cpu_ep_fallback=1`; if ONNX Runtime assigns nodes to CPU, generation fails instead of pretending to accelerate.
 
 Readiness checks used by Settings and generation dialogs are deliberately non-mutating: they report strict hardware availability using provider labels and do not create provider config files. Actual strict QNN provider configs are written only when a real synthesis runtime starts.
 
@@ -26,19 +26,25 @@ WebGPU is retired from the active audiobook generation path. A 2026-06-12 full-b
 Audiobook generation uses the app's indexed reading-order text, then prepares audiobook segments by:
 
 - sorting source chunks by reading order
-- removing URLs, email addresses, ISBN fragments, soft hyphens, repeated boilerplate, duplicate passages, standalone table-of-contents entry rows, and isolated page markers
+- removing URLs, email addresses, ISBN fragments, soft hyphens, structurally evidenced boilerplate, adjacent extraction duplicates, standalone table-of-contents entry rows, and isolated page markers
 - normalizing smart quotes, dashes, punctuation, and paragraph spacing
 - splitting around sentence and clause boundaries
 - skipping obvious publisher/copyright front matter before an early Prologue/Chapter marker
 - detecting anchored chapter labels including numeric, roman numeral, `Chapter`, `Section`, `Episode`, `Prologue`, `Epilogue`, and word-number headings such as `ONE`/`TWO`
 - preserving extractor-provided bare numeric and roman numeral headings as chapter markers while continuing to drop body/footer page numbers from narration text
 - treating `Part` and `Book` headings as audiobook section labels while preserving them in generated audio and chapter navigation
+- preserving non-adjacent refrains, repeated dialogue, poetry, recaps, and intentional chapter text
+- producing a review report with source positions, exclusions/reasons, warnings, chapters, segments, pause classes, deterministic word counts, and estimated duration
+- applying enabled global/per-book exact phrase pronunciations longest-match-first at Unicode word boundaries
+- blocking unsupported non-English neural generation instead of presenting the US-English lexicon and curated English voices as multilingual
 - normalizing bare chapter tokens such as `1`, `IV`, or `ONE` into user-facing labels such as `Chapter 1`, `Chapter IV`, or `Chapter One`
 - targeting roughly 560 characters per narration segment, with an 850-character hard cap for normal text and shorter prompts for heading-only passages
 - merging very short orphan segments when doing so does not create an oversized prompt
 - writing `chapters.tsv` and `segments.tsv` sidecars so playback knows chapter grouping, segment text, and intended pause length after each generated file
 
 The segment target is deliberately below Kokoro's long-utterance risk area while avoiding one-WAV-per-sentence choppiness. Kokoro v1.0 is an 82M-parameter Apache-licensed model whose public examples stream generated chunks from input text rather than treating an entire long work as one prompt. XReader therefore keeps prompts sentence-aware, uses paragraph/chapter/question-aware pause metadata during playback, and keeps chapter changes longer than normal intra-paragraph transitions.
+
+After scanning, the book audiobook dialog exposes a pre-generation review. A reader can restore an automatically excluded section, explicitly exclude a retained section, or save a bounded per-book pronunciation. Those decisions live in Room and backup v2. Preview remains on the real strict provider path; no fake provider or CPU fallback is introduced.
 
 Generation scope is persisted per voice profile:
 
@@ -203,10 +209,13 @@ tools/prepare_kokoro_qnn_model.py \
   --source /path/to/kokoro-multi-lang-v1_0.tar.bz2 \
   --calibration-dir /path/to/kokoro-calibration-npz \
   --output /path/to/kokoro-multi-lang-v1_0-qnn \
+  --source-revision <immutable-upstream-tag-or-commit> \
+  --qairt-version <installed-qairt-version> \
+  --token-bucket 256 \
   --require-strict-qnn-compatible
 ```
 
-The output directory contains the normal Kokoro support files plus `model.qnn.onnx` and `xreader-qnn-model-manifest.json`. Push or package that directory so both files sit next to the installed `model.onnx`. The app chooses the prepared model for strict hardware providers only when the manifest declares `strict_qnn_compatible: true`; otherwise it fails closed and reports the missing strict-compatible artifact.
+The output directory contains the normal Kokoro support files plus `model.qnn.onnx` and `xreader-qnn-model-manifest.json`. Do not publish or enable the prepared artifact until redistribution review and connected-device proof pass. The app chooses it only when the complete manifest and model hash validate; otherwise it fails closed.
 - Verify that QNN fails closed when unavailable, unsupported, or slower than the full-book audio-time threshold.
 - Capture Simpleperf/Perfetto evidence for a short generation run on the Samsung test device and confirm the selected provider in logcat plus the generated manifest.
 - Confirm long-segment heartbeat updates, stop handling, and UI responsiveness while a strict provider is actively generating, not only after segment completion.

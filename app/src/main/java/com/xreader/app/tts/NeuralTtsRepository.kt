@@ -1912,13 +1912,7 @@ internal fun neuralTtsMissingHardwareArtifactReason(
 private fun File.hasStrictQnnCompatibilityManifest(spec: NeuralTtsModelSpec): Boolean {
     val manifestName = spec.hardwareModelManifestFile.takeIf { it.isNotBlank() } ?: return false
     val manifest = File(parentFile ?: return false, manifestName)
-    if (!manifest.isFile) return false
-    val text = runCatching { manifest.readText() }.getOrNull() ?: return false
-    return STRICT_QNN_COMPATIBLE_JSON.containsMatchIn(text) &&
-        Regex(
-            pattern = """"output_model"\s*:\s*"${Regex.escape(name)}"""",
-            option = RegexOption.IGNORE_CASE
-        ).containsMatchIn(text)
+    return QnnArtifactManifestValidator.isValid(this, manifest)
 }
 
 internal enum class NeuralTtsRuntimeWorkload {
@@ -2403,7 +2397,3 @@ internal const val STALE_GENERATING_AUDIO_REPAIR_AGE_MS = 60 * 1000L
 internal const val MAX_AUDIOBOOK_HARDWARE_AUDIO_TIME_FACTOR = 0.55f
 internal const val MIN_HARDWARE_SPEED_GATE_SEGMENTS = 3
 internal const val MIN_HARDWARE_SPEED_GATE_AUDIO_MS = 45_000L
-private val STRICT_QNN_COMPATIBLE_JSON = Regex(
-    pattern = """"strict_qnn_compatible"\s*:\s*true""",
-    option = RegexOption.IGNORE_CASE
-)

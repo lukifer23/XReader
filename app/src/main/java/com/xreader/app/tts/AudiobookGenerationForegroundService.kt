@@ -152,8 +152,17 @@ class AudiobookGenerationForegroundService : Service() {
                 val indexedRows = withContext(Dispatchers.IO) {
                     container.libraryRepository.indexedRowsForBook(bookId)
                 }
+                val narrationPreferences = withContext(Dispatchers.IO) {
+                    container.narrationPreferencesRepository.preferences(bookId)
+                }
                 val plan = withContext(Dispatchers.Default) {
-                    prepareAudiobookPlan(indexedRows, activeScope)
+                    prepareAudiobookPlan(
+                        rows = indexedRows,
+                        scope = activeScope,
+                        languageTag = book.language,
+                        pronunciationRules = narrationPreferences.rules,
+                        overrides = narrationPreferences.overrides,
+                    )
                 }
                 repositoryGenerationStarted = true
                 container.neuralTtsRepository.generatePreparedBookAudio(

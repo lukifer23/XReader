@@ -139,7 +139,6 @@ import kotlinx.coroutines.withContext
 import java.text.DateFormat
 import java.text.SimpleDateFormat
 import java.util.Date
-import java.util.Locale
 
 @Composable
 internal fun SettingsRoute(
@@ -170,7 +169,9 @@ internal fun SettingsRoute(
     val importLibraryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) viewModel.importLibrary(uri)
     }
-    val exportFullBackupLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+    val exportFullBackupLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/vnd.xreader.backup+zip")
+    ) { uri ->
         if (uri != null) viewModel.exportFullBackup(uri)
     }
     val importFullBackupLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -231,7 +232,7 @@ internal fun SettingsRoute(
                     }),
                 )
             }
-            if (settingsSectionMatches(settingsQuery, "Appearance", "theme light dark sepia oled")) item {
+            if (SettingsSectionDefinition.APPEARANCE.matches(settingsQuery)) item {
                 SettingsSection("Appearance") {
                     SettingsChipGroup(
                         title = "Theme",
@@ -242,7 +243,7 @@ internal fun SettingsRoute(
                     )
                 }
             }
-            if (settingsSectionMatches(settingsQuery, "Typography", "spacing font size line height margins weight hyphenation alignment publisher")) item {
+            if (SettingsSectionDefinition.TYPOGRAPHY.matches(settingsQuery)) item {
                 SettingsSection("Typography") {
                     SettingsChipGroup(
                         title = "Spacing preset",
@@ -286,7 +287,7 @@ internal fun SettingsRoute(
                     )
                 }
             }
-            if (settingsSectionMatches(settingsQuery, "Reading", "pdf layout direction orientation fullscreen tap zones animation awake volume dim read aloud voice sleep neural audiobook")) item {
+            if (SettingsSectionDefinition.READING.matches(settingsQuery)) item {
                 SettingsSection("Reading") {
                     SettingsChipGroup(
                         title = "PDF fit",
@@ -388,7 +389,7 @@ internal fun SettingsRoute(
                     )
                 }
             }
-            if (settingsSectionMatches(settingsQuery, "Library", "sort density books list compact comfortable")) item {
+            if (SettingsSectionDefinition.LIBRARY.matches(settingsQuery)) item {
                 SettingsSection("Library") {
                     SettingsChipGroup(
                         title = "Sort",
@@ -406,7 +407,7 @@ internal fun SettingsRoute(
                     )
                 }
             }
-            if (settingsSectionMatches(settingsQuery, "Maintenance", "repair backup restore export import notes bookmarks progress settings collections")) item {
+            if (SettingsSectionDefinition.MAINTENANCE.matches(settingsQuery)) item {
                 SettingsSection("Maintenance") {
                     Button(
                         onClick = viewModel::repairLibrary,
@@ -436,7 +437,7 @@ internal fun SettingsRoute(
                     )
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(
-                            onClick = { exportFullBackupLauncher.launch("xreader-full-backup.json") },
+                            onClick = { exportFullBackupLauncher.launch("xreader-full-backup.xreader-backup") },
                             enabled = !maintenanceBusy
                         ) {
                             if (maintenance.exportingFullBackup) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
@@ -531,22 +532,6 @@ internal fun SettingsRoute(
         }
     }
 }
-
-internal fun settingsSectionMatches(query: String, title: String, terms: String): Boolean {
-    val tokens = query.trim().lowercase(Locale.US).split(Regex("\\s+")).filter(String::isNotBlank)
-    if (tokens.isEmpty()) return true
-    val searchable = "$title $terms".lowercase(Locale.US)
-    return tokens.all(searchable::contains)
-}
-
-private fun settingsHasMatches(query: String): Boolean =
-    listOf(
-        "Appearance" to "theme light dark sepia oled",
-        "Typography" to "spacing font size line height margins weight hyphenation alignment publisher",
-        "Reading" to "pdf layout direction orientation fullscreen tap zones animation awake volume dim read aloud voice sleep neural audiobook",
-        "Library" to "sort density books list compact comfortable",
-        "Maintenance" to "repair backup restore export import notes bookmarks progress settings collections",
-    ).any { (title, terms) -> settingsSectionMatches(query, title, terms) }
 
 @Composable
 private fun SettingsSection(

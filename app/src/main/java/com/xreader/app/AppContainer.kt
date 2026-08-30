@@ -4,6 +4,9 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.util.Log
 import android.webkit.WebView
+import com.xreader.app.audiobook.AudiobookImportService
+import com.xreader.app.audiobook.AudiobookRepository
+import com.xreader.app.audiobook.ImportedAudiobookPlaybackController
 import com.xreader.app.analytics.AnalyticsExportService
 import com.xreader.app.analytics.AnalyticsRepository
 import com.xreader.app.data.BookAudioEntity
@@ -28,6 +31,7 @@ import com.xreader.app.tts.AudiobookGenerationForegroundService
 import com.xreader.app.tts.AudiobookGenerationScope
 import com.xreader.app.tts.ReadAloudEngine
 import com.xreader.app.tts.NeuralTtsRepository
+import com.xreader.app.tts.NarrationPreferencesRepository
 import com.xreader.app.tts.GeneratedAudiobookPlaybackController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CoroutineScope
@@ -62,6 +66,12 @@ class AppContainer(
     }
     val opdsCatalogService: OpdsCatalogService by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         OpdsCatalogService(importService, File(appContext.cacheDir, "opds"))
+    }
+    private val audiobookImportService: AudiobookImportService by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        AudiobookImportService(appContext, database)
+    }
+    val audiobookRepository: AudiobookRepository by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        AudiobookRepository(database, audiobookImportService)
     }
     val readingRepository: ReadingRepository by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         ReadingRepository(database.reading())
@@ -110,8 +120,14 @@ class AppContainer(
     val neuralTtsRepository: NeuralTtsRepository by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         NeuralTtsRepository(appContext, database.neuralTts())
     }
+    val narrationPreferencesRepository: NarrationPreferencesRepository by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        NarrationPreferencesRepository(database.narration())
+    }
     val generatedAudiobookPlayback: GeneratedAudiobookPlaybackController by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         GeneratedAudiobookPlaybackController(appContext, neuralTtsRepository, applicationScope)
+    }
+    val importedAudiobookPlayback: ImportedAudiobookPlaybackController by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        ImportedAudiobookPlaybackController(appContext, audiobookRepository, applicationScope)
     }
 
     init {
@@ -127,6 +143,7 @@ class AppContainer(
     }
 
     private suspend fun runNeuralTtsStartupMaintenance() {
+        fullBackupService.recoverInterruptedRestore()
         neuralTtsRepository.ensureCatalogSeeded()
         neuralTtsRepository.repairInterruptedModelInstalls()
         neuralTtsRepository.repairStaleGeneratingAudio()

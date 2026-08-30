@@ -121,6 +121,8 @@ object SupportedBookTypes {
                 "Modern Kindle AZW/KF8/KFX conversion is not implemented yet; import a DRM-free EPUB, PDF, TXT, MOBI/PRC, CBZ, FB2, RTF, ODT, DOCX, HTML, MHTML, or Markdown file."
             "cbr", "djvu", "djv", "doc" ->
                 "This legacy format is not implemented yet; convert it to EPUB/PDF or import another supported DRM-free format."
+            "acsm" ->
+                "An ACSM file is an Adobe license instruction, not an ebook. Open it with an authorized Adobe-compatible app to fulfill the loan."
             else -> null
         }
 
@@ -130,6 +132,8 @@ object SupportedBookTypes {
             "application/x-kindle-application",
             "application/vnd.amazon.ebook-kf8" ->
                 "Modern Kindle AZW/KF8/KFX conversion is not implemented yet; import a DRM-free EPUB, PDF, TXT, MOBI/PRC, CBZ, FB2, RTF, ODT, DOCX, HTML, MHTML, or Markdown file."
+            "application/vnd.adobe.adept+xml" ->
+                "An ACSM file is an Adobe license instruction, not an ebook. Open it with an authorized Adobe-compatible app to fulfill the loan."
             else -> null
         }
 

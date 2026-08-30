@@ -35,11 +35,14 @@ Implemented:
 - Reader typography and behavior controls: spacing presets, font size, font weight, line height, margins, alignment, hyphenation, publisher styles, PDF fit/layout, page direction, reader-only orientation, fullscreen, keep-screen-awake, app-local reader dimming, page animation toggle, tap-zone sizing, optional volume-button page turns, real Readium/CSS-resolvable font choices including OpenDyslexic, and per-book appearance overrides.
 - Read aloud from the visible reading position through Android TextToSpeech using page-aligned local indexed book text, with persisted spoken position, pause/resume, previous/next passage controls, speech speed, visible sleep timer countdown, installed offline voice selection, audio-focus handling, Android media-session transport controls, and a media-playback foreground notification for headset/Bluetooth/play-pause/next/previous/stop actions while outside the reader.
 - Searchable grouped Settings screen for reader appearance, typography, reading behavior, library display, and maintenance.
-- Bookmarks, highlights, tagged notes, global notes with tag filtering, in-book annotation lists, human-readable Markdown notes export, legacy notes/library JSON compatibility tools, and a primary versioned full backup for catalog metadata, collections, progress, sessions, settings, per-book appearance, notes, highlights, tags, and bookmarks.
+- Bookmarks, highlights, tagged notes, global notes with tag filtering, in-book annotation lists, human-readable Markdown notes export, legacy notes/library JSON compatibility tools, and a primary bounded `.xreader-backup` ZIP with per-section size, count, and SHA-256 validation. The archive covers catalog metadata, collections, progress, sessions, settings, per-book appearance, notes, highlights, tags, bookmarks, imported-audiobook metadata/playback state, and narration preferences without embedding private media files or paths.
 - Offline English dictionary backed by bundled Princeton WordNet data, with phrase, hyphenated-word, plural, possessive, comparative, superlative, adverb, and common irregular lookup.
 - Local full-text search index for imported book text where extraction is supported, including punctuation-safe queries, cleaned PDF text extraction for wrapped words, source-book labels, query-centered snippets, and expandable library search results.
 - Reading analytics for sessions, active reading time, progress, estimated WPM, reader/home ETA, 7-day/30-day/13-week/all-time activity, streaks, book/author/genre summaries, and local CSV/JSON export.
 - Embedded Kokoro v1.0 audiobook generation is under active hardening: preview and full-book generation are constrained to one packaged strict QNN HTP/NPU provider, with prepared fixed-bucket artifacts gated by device proof and a strict compatibility manifest rather than fallback providers. Long jobs persist heartbeat progress, ETA, partial playback state, and stop/retry controls while the app continues to target faster-than-realtime hardware generation.
+- Imported audiobook persistence and playback are in the current development checkpoint: MP3, M4B/M4A/AAC, OGG/Opus, FLAC, and WAV can be validated with Android's media parser, checksum-grouped, copied into app-private storage, chaptered from supported container metadata, resumed, and controlled through a separate MediaSession/foreground-service lifecycle. The Audiobooks surface and Android Open with/Share routing compile, but codec, metadata, notification, and foldable UI acceptance remain pending on the connected device.
+- Neural narration preparation now preserves non-adjacent repeated passages, removes only structurally evidenced boilerplate, reports exclusions with reasons, blocks unsupported non-English neural generation honestly, applies bounded exact-phrase pronunciation rules, and provides a per-book pre-generation source review whose decisions are persisted and backed up.
+- `.acsm` files are recognized as Adobe license instructions and handed off externally with an explicit no-DRM-removal explanation; they are never imported as ebooks.
 - Clear unsupported-format feedback for modern Kindle AZW/AZW3/KF8/KFX and other deferred formats, without surfacing fake conversion controls in the app.
 - Public-domain book fixture coverage for TXT/EPUB import paths.
 
@@ -68,7 +71,7 @@ The project uses Gradle 9.5.1 wrapper, Android Gradle Plugin 9.2.1, Kotlin 2.3.2
 
 `assembleDebugAndroidTest` proves the migration tests compile. Running those tests still requires an emulator or device. `verifyReleasePackaging` inspects the actual unsigned release APK, enforces the 210 MiB ceiling, checks the explicit QNN duplicate allowlist, and rejects prohibited GPU/OpenCL fallback runtimes.
 
-Latest code/build-only evidence (2026-08-30): 609 JVM tests passed with no failures or skips, both lint variants completed with 42 warnings, all three APK assemblies passed, and the unsigned release APK passed packaging verification at 210,356,554 bytes. No device, emulator, visual, accessibility, Readium-runtime, foreground-service, migration-runtime, thermal, or QNN throughput acceptance was performed in that gate.
+Latest completed release gate (2026-08-30, current paused audiobook/backup checkpoint): 622 JVM tests passed with no failures or skips, both lint variants completed with zero errors and 41 warnings, all three APK assemblies passed, and the unsigned release APK passed packaging verification at 210,485,914 bytes against the 220,200,960-byte ceiling. No new device, visual, accessibility, Readium-runtime, foreground-service, codec, migration-runtime, thermal, or QNN throughput acceptance is claimed for the checkpoint.
 
 The debug APK is written to:
 
@@ -126,6 +129,7 @@ XReader is local-first:
 - [Competitive Research](docs/COMPETITIVE_RESEARCH.md)
 - [Performance](docs/PERFORMANCE.md)
 - [Roadmap](docs/ROADMAP.md)
+- [Current paused-work checkpoint](docs/PAUSED_WORK_2026-08-30.md)
 - [Contributing](CONTRIBUTING.md)
 - [Changelog](CHANGELOG.md)
 - [Security](SECURITY.md)

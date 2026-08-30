@@ -78,6 +78,8 @@
                 <data android:mimeType="application/fb2" />
                 <data android:mimeType="text/fb2+xml" />
                 <data android:mimeType="text/fb2" />
+                <data android:mimeType="audio/*" />
+                <data android:mimeType="application/vnd.adobe.adept+xml" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
@@ -117,6 +119,8 @@
                 <data android:mimeType="application/fb2" />
                 <data android:mimeType="text/fb2+xml" />
                 <data android:mimeType="text/fb2" />
+                <data android:mimeType="audio/*" />
+                <data android:mimeType="application/vnd.adobe.adept+xml" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.SEND_MULTIPLE" />
@@ -156,6 +160,7 @@
                 <data android:mimeType="application/fb2" />
                 <data android:mimeType="text/fb2+xml" />
                 <data android:mimeType="text/fb2" />
+                <data android:mimeType="audio/*" />
             </intent-filter>
         </activity>
         <service
@@ -164,6 +169,10 @@
             android:foregroundServiceType="mediaPlayback" />
         <service
             android:name=".tts.GeneratedAudiobookForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+        <service
+            android:name=".tts.ImportedAudiobookForegroundService"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
         <service

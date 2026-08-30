@@ -141,6 +141,8 @@ internal fun BookAudiobookDialog(
     playback: AudiobookPlaybackUiState,
     onDismiss: () -> Unit,
     onScan: () -> Unit,
+    onSetNarrationSectionIncluded: (String, Boolean) -> Unit,
+    onSavePronunciationRule: (String, String) -> Unit,
     onGenerate: (AudiobookGenerationScope) -> Unit,
     onCancelGeneration: (BookAudioEntity) -> Unit,
     onExportAudio: (BookAudioEntity) -> Unit,
@@ -206,6 +208,7 @@ internal fun BookAudiobookDialog(
     var deleteCandidate by remember(book.id) { mutableStateOf<BookAudioEntity?>(null) }
     var deleteAllOpen by remember(book.id) { mutableStateOf(false) }
     var chapterPicker by remember(book.id) { mutableStateOf<BookAudiobookAudioUiItem?>(null) }
+    var narrationReviewOpen by remember(book.id) { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -270,7 +273,8 @@ internal fun BookAudiobookDialog(
                 item {
                     AudiobookScanCard(
                         scan = scan,
-                        onScan = onScan
+                        onScan = onScan,
+                        onReview = { narrationReviewOpen = true },
                     )
                 }
                 item {
@@ -436,6 +440,14 @@ internal fun BookAudiobookDialog(
             }
         )
     }
+    if (narrationReviewOpen && scan != null) {
+        NarrationReviewDialog(
+            scan = scan,
+            onDismiss = { narrationReviewOpen = false },
+            onSetIncluded = onSetNarrationSectionIncluded,
+            onSavePronunciationRule = onSavePronunciationRule,
+        )
+    }
     chapterPicker?.let { item ->
         AudiobookChapterPickerDialog(
             title = item.audio.displayProfileLabel(),
@@ -454,6 +466,7 @@ internal fun BookAudiobookDialog(
 private fun AudiobookScanCard(
     scan: AudiobookScanUiState?,
     onScan: () -> Unit,
+    onReview: () -> Unit,
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -508,9 +521,115 @@ private fun AudiobookScanCard(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
+                OutlinedButton(
+                    onClick = onReview,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                ) {
+                    Text("Review narration (${scan.narrationSources.count { it.included }} included, ${scan.narrationSources.count { !it.included }} excluded)")
+                }
+                if (scan.appliedPronunciationRuleCount > 0) {
+                    Text(
+                        "${scan.appliedPronunciationRuleCount} pronunciation ${if (scan.appliedPronunciationRuleCount == 1) "rule applies" else "rules apply"}.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
     }
+}
+
+@Composable
+private fun NarrationReviewDialog(
+    scan: AudiobookScanUiState,
+    onDismiss: () -> Unit,
+    onSetIncluded: (String, Boolean) -> Unit,
+    onSavePronunciationRule: (String, String) -> Unit,
+) {
+    var phrase by remember { mutableStateOf("") }
+    var replacement by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Narration review") },
+        text = {
+            LazyColumn(
+                modifier = Modifier.heightIn(max = 560.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                item {
+                    Text(
+                        "Review prepared source sections before generation. Restoring an automatic exclusion preserves that section for this book; excluding a retained section removes it only from narration.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                scan.narrationWarnings.forEach { warning ->
+                    item(key = "warning:$warning") {
+                        Text(warning, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                    }
+                }
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Book pronunciation", style = MaterialTheme.typography.titleSmall)
+                        OutlinedTextField(
+                            value = phrase,
+                            onValueChange = { phrase = it.take(500) },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("Exact phrase") },
+                            singleLine = true,
+                        )
+                        OutlinedTextField(
+                            value = replacement,
+                            onValueChange = { replacement = it.take(500) },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("Speak as") },
+                            singleLine = true,
+                        )
+                        Button(
+                            onClick = {
+                                onSavePronunciationRule(phrase, replacement)
+                                phrase = ""
+                                replacement = ""
+                            },
+                            enabled = phrase.isNotBlank() && replacement.isNotBlank(),
+                            modifier = Modifier.heightIn(min = 48.dp),
+                        ) { Text("Save pronunciation") }
+                    }
+                }
+                items(scan.narrationSources, key = { it.sourceKey }) { source ->
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                    ) {
+                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(
+                                source.heading.ifBlank { "Source ${source.unitIndex + 1}" },
+                                style = MaterialTheme.typography.labelLarge,
+                            )
+                            Text(
+                                source.text,
+                                style = MaterialTheme.typography.bodySmall,
+                                maxLines = 6,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            source.reason?.let { reason ->
+                                Text(
+                                    "Excluded: $reason",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                            }
+                            TextButton(
+                                onClick = { onSetIncluded(source.sourceKey, !source.included) },
+                                modifier = Modifier.heightIn(min = 48.dp),
+                            ) { Text(if (source.included) "Exclude from narration" else "Restore to narration") }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+    )
 }
 
 @Composable

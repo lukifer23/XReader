@@ -263,9 +263,7 @@ class NeuralTtsGenerationConfigTest {
         val modelDir = temporaryFolder.newFolder("kokoro")
         File(modelDir, spec.modelFile).writeBytes(byteArrayOf(1))
         File(modelDir, spec.hardwareModelFile).writeBytes(byteArrayOf(2))
-        File(modelDir, spec.hardwareModelManifestFile).writeText(
-            """{"output_model":"${spec.hardwareModelFile}","strict_qnn_compatible":true}"""
-        )
+        writeValidQnnManifest(modelDir, spec)
 
         assertEquals(
             spec.hardwareModelFile,
@@ -308,9 +306,7 @@ class NeuralTtsGenerationConfigTest {
         assertFalse(neuralTtsProviderHasRequiredModelArtifact(spec, modelDir, "qnn-htp"))
         assertFalse(neuralTtsProviderHasRequiredModelArtifact(spec, modelDir, "nnapi"))
         assertFalse(neuralTtsProviderHasRequiredModelArtifact(spec, modelDir, "qnn:/tmp/custom-provider.config"))
-        File(modelDir, spec.hardwareModelManifestFile).writeText(
-            """{"output_model":"${spec.hardwareModelFile}","strict_qnn_compatible":true}"""
-        )
+        writeValidQnnManifest(modelDir, spec)
         assertTrue(
             neuralTtsProviderHasRequiredModelArtifact(
                 spec,
@@ -364,9 +360,7 @@ class NeuralTtsGenerationConfigTest {
         )
 
         File(modelDir, spec.hardwareModelFile).writeBytes(byteArrayOf(2))
-        File(modelDir, spec.hardwareModelManifestFile).writeText(
-            """{"output_model":"${spec.hardwareModelFile}","strict_qnn_compatible":true}"""
-        )
+        writeValidQnnManifest(modelDir, spec)
 
         val previewReady = neuralTtsSelectStrictHardwareProviders(
             providers = providers,
@@ -427,5 +421,27 @@ class NeuralTtsGenerationConfigTest {
         assertTrue(reason.contains("qnn-htp"))
         assertTrue(reason.contains("Kokoro v1.0"))
         assertTrue(reason.contains("model.qnn.onnx"))
+    }
+
+    private fun writeValidQnnManifest(modelDir: File, spec: NeuralTtsModelSpec) {
+        val model = File(modelDir, spec.hardwareModelFile)
+        val sha256 = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(model.readBytes())
+            .joinToString("") { "%02x".format(it) }
+        File(modelDir, spec.hardwareModelManifestFile).writeText(
+            """{
+              "schema_version": 1,
+              "artifact_type": "xreader-kokoro-qnn",
+              "output_model": "${spec.hardwareModelFile}",
+              "output_model_sha256": "$sha256",
+              "output_model_bytes": ${model.length()},
+              "strict_qnn_compatible": true,
+              "source_model": {"name":"model.onnx","sha256":"${"a".repeat(64)}","revision":"test-release"},
+              "toolchain": {"onnx":"1.test","onnxruntime":"1.test","qairt":"2.test"},
+              "token_buckets": [256],
+              "blocker_analysis": {"strict_qnn_compatible":true,"blocking_ops":{},"dynamic_inputs":[],"reason":"compatible"},
+              "provenance": {"source_url":"https://example.invalid/model","license":"Apache-2.0"}
+            }""".trimIndent()
+        )
     }
 }

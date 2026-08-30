@@ -9,7 +9,10 @@ benchmarks, so the script fails fast instead of fabricating random inputs.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import importlib.metadata
 import json
+import platform
 import shutil
 import sys
 import tarfile
@@ -21,6 +24,14 @@ from typing import Iterator
 
 class MissingDependency(RuntimeError):
     pass
+
+
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 STRICT_QNN_BLOCKING_OPS = {
@@ -219,15 +230,47 @@ def prepare(args: argparse.Namespace) -> int:
         source_report = inspect_model(tools["onnx"], input_model)
         output_report = inspect_model(tools["onnx"], output_model)
         strict_report = strict_qnn_compatibility(output_report)
+        fixed_dimensions = {
+            int(dimension)
+            for value in output_report.get("inputs", [])
+            if isinstance(value, dict)
+            for dimension in value.get("shape", [])
+            if isinstance(dimension, int)
+        }
+        if args.token_bucket not in fixed_dimensions:
+            raise ValueError(
+                f"Prepared model does not expose requested fixed token bucket {args.token_bucket}; "
+                f"fixed input dimensions were {sorted(fixed_dimensions)}"
+            )
         manifest = {
-            "source_model": str(input_model),
+            "schema_version": 1,
+            "artifact_type": "xreader-kokoro-qnn",
+            "source_model": {
+                "name": input_model.name,
+                "sha256": sha256(input_model),
+                "revision": args.source_revision,
+            },
             "output_model": output_model.name,
+            "output_model_sha256": sha256(output_model),
+            "output_model_bytes": output_model.stat().st_size,
             "preprocessed_model_changed": bool(changed),
             "calibration_npz_count": len(list(args.calibration_dir.glob("*.npz"))),
             "activation_type": "QUInt16",
             "weight_type": "QUInt8",
+            "token_buckets": [args.token_bucket],
             "strict_qnn_compatible": strict_report["strict_qnn_compatible"],
-            "strict_qnn_report": strict_report,
+            "blocker_analysis": strict_report,
+            "toolchain": {
+                "python": platform.python_version(),
+                "onnx": importlib.metadata.version("onnx"),
+                "onnxruntime": importlib.metadata.version("onnxruntime"),
+                "numpy": importlib.metadata.version("numpy"),
+                "qairt": args.qairt_version,
+            },
+            "provenance": {
+                "source_url": args.source_url,
+                "license": args.model_license,
+            },
             "source_report": source_report,
             "output_report": output_report,
         }
@@ -264,6 +307,16 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument("--model-name", default="model.onnx")
     parser.add_argument("--output-model-name", default="model.qnn.onnx")
+    parser.add_argument("--source-revision", required=True, help="Immutable upstream release tag or commit for the source model.")
+    parser.add_argument("--source-url", default="https://github.com/k2-fsa/sherpa-onnx/releases/tag/tts-models")
+    parser.add_argument("--model-license", default="Apache-2.0")
+    parser.add_argument("--qairt-version", required=True, help="QAIRT version used to build and validate the QNN runtime.")
+    parser.add_argument(
+        "--token-bucket",
+        type=int,
+        required=True,
+        help="Fixed token dimension that must be present in this prepared model's input shapes.",
+    )
     parser.add_argument(
         "--require-strict-qnn-compatible",
         action="store_true",

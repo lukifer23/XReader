@@ -345,6 +345,12 @@ internal fun LibraryRoute(
             playback = state.audiobookPlayback,
             onDismiss = { audiobookTarget = null },
             onScan = { viewModel.scanAudiobook(book) },
+            onSetNarrationSectionIncluded = { sourceKey, include ->
+                viewModel.setNarrationSectionIncluded(book, sourceKey, include)
+            },
+            onSavePronunciationRule = { phrase, replacement ->
+                viewModel.savePronunciationRule(book, phrase, replacement)
+            },
             onGenerate = { scope ->
                 viewModel.generateAudiobook(book, scope)
             },

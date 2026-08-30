@@ -120,6 +120,9 @@ data class AudiobookScanUiState(
     val estimatedAudioMillis: Long = 0L,
     val estimatedStorageBytes: Long = 0L,
     val scannedAtMillis: Long? = null,
+    val narrationSources: List<com.xreader.app.tts.NarrationSourceSection> = emptyList(),
+    val narrationWarnings: List<String> = emptyList(),
+    val appliedPronunciationRuleCount: Int = 0,
     val error: String? = null,
 ) {
     val hasText: Boolean get() = wordCount > 0 && segmentCount > 0
@@ -1085,6 +1088,34 @@ class LibraryViewModel(
         }
     }
 
+    fun setNarrationSectionIncluded(book: BookEntity, sourceKey: String, include: Boolean) {
+        viewModelScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    container.narrationPreferencesRepository.saveOverride(book.id, sourceKey, include, null)
+                }
+                loadAudiobookPlan(book.id)
+            }.onSuccess { plan ->
+                audiobookScans.update { it + (book.id to plan.toScanState()) }
+                postMessage(if (include) "Restored passage to ${book.title} narration." else "Excluded passage from ${book.title} narration.")
+            }.onFailure { error -> postMessage(error.message ?: "Could not update narration review.") }
+        }
+    }
+
+    fun savePronunciationRule(book: BookEntity, phrase: String, replacement: String) {
+        viewModelScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    container.narrationPreferencesRepository.saveRule(book.id, phrase, replacement)
+                }
+                loadAudiobookPlan(book.id)
+            }.onSuccess { plan ->
+                audiobookScans.update { it + (book.id to plan.toScanState()) }
+                postMessage("Saved pronunciation for ${book.title}.")
+            }.onFailure { error -> postMessage(error.message ?: "Could not save pronunciation rule.") }
+        }
+    }
+
     fun generateAudiobook(book: BookEntity, scope: AudiobookGenerationScope = AudiobookGenerationScope.FULL_BOOK) {
         val settings = readerSettings.value
         val readiness = audiobookHardwareReadiness.value
@@ -1209,10 +1240,21 @@ class LibraryViewModel(
     }
 
     private suspend fun loadAudiobookPlan(bookId: Long): PreparedAudiobookPlan {
-        val rows = withContext(Dispatchers.IO) {
-            container.libraryRepository.indexedRowsForBook(bookId)
+        val (book, rows, narrationPreferences) = withContext(Dispatchers.IO) {
+            Triple(
+                container.libraryRepository.getBook(bookId),
+                container.libraryRepository.indexedRowsForBook(bookId),
+                container.narrationPreferencesRepository.preferences(bookId),
+            )
         }
-        return withContext(Dispatchers.Default) { prepareAudiobookPlan(rows) }
+        return withContext(Dispatchers.Default) {
+            prepareAudiobookPlan(
+                rows = rows,
+                languageTag = book?.language,
+                pronunciationRules = narrationPreferences.rules,
+                overrides = narrationPreferences.overrides,
+            )
+        }
     }
 
     private fun PreparedAudiobookPlan.toScanState(): AudiobookScanUiState =
@@ -1230,6 +1272,9 @@ class LibraryViewModel(
             estimatedAudioMillis = estimatedAudioMillis(prepared.wordCount),
             estimatedStorageBytes = estimatedStorageBytes(prepared.wordCount),
             scannedAtMillis = System.currentTimeMillis(),
+            narrationSources = report.sources,
+            narrationWarnings = report.warnings,
+            appliedPronunciationRuleCount = report.appliedPronunciationRules.size,
             error = null
         )
 

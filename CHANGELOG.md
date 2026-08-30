@@ -4,6 +4,12 @@
 
 ### Added
 
+- Imported audiobooks now have their own Room-backed publication, track, chapter, bookmark, collection, link, and playback state instead of pretending audio is an ebook or generated narration. The current checkpoint includes private-copy import, checksum repair, embedded metadata/chapter parsing, Android media playback, and a dedicated foreground-service lifecycle; full device acceptance and the remaining edit/link/collection controls are tracked in the roadmap.
+- Full backup v2 now writes a bounded `.xreader-backup` ZIP with separate library, annotations, settings, audiobook, and narration sections plus declared counts, sizes, and SHA-256 validation. An atomic restore journal coordinates DataStore rollback with one Room transaction and a durable operation record, while unified v1 and legacy separate imports remain accepted.
+- Narration scans now report source sections and exclusion reasons, preserve intentional non-adjacent repetition, support persisted per-book include/exclude decisions, and apply bounded exact-phrase pronunciation rules before strict-provider generation.
+- Android Open with/Share classification now routes supported audio away from ebook conversion and recognizes ACSM as an Adobe license instruction with an external-app handoff instead of DRM handling.
+- QNN prepared-model validation now checks the artifact hash/size, source revision, toolchain, fixed token buckets, blocker analysis, and provenance/license fields rather than trusting one compatibility boolean.
+
 - A versioned full backup now carries library metadata, collections, progress, sessions, settings, per-book appearance, notes, highlights, tags, and bookmarks in one validated local file while preserving the existing separate import tools for compatibility.
 - Settings search now finds existing appearance, typography, reading, library, and maintenance controls without adding another settings hierarchy.
 - Room schema 15 removes the redundant B-tree index on full-text content while retaining FTS as the search authority, with the complete migration chain compiled into Android instrumentation coverage.

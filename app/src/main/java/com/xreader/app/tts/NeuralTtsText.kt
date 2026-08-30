@@ -8,6 +8,11 @@ internal data class NeuralTtsPreparedBook(
     val segmentPauseMillis: List<Long> = List(segments.size) { DEFAULT_AUDIOBOOK_SEGMENT_PAUSE_MS },
 )
 
+internal data class NeuralTtsPreparation(
+    val prepared: NeuralTtsPreparedBook,
+    val exclusions: List<NarrationExclusion>,
+)
+
 internal data class AudiobookChapter(
     val index: Int,
     val title: String,
@@ -104,16 +109,22 @@ private fun List<ReadAloudChunk>.leadingSampleSourceChunks(): List<ReadAloudChun
 }
 
 internal object NeuralTtsText {
-    fun prepare(chunks: List<ReadAloudChunk>): NeuralTtsPreparedBook {
+    fun prepare(chunks: List<ReadAloudChunk>): NeuralTtsPreparedBook = prepareDetailed(chunks).prepared
+
+    fun prepareDetailed(
+        chunks: List<ReadAloudChunk>,
+        forceIncludedSourceKeys: Set<String> = emptySet(),
+    ): NeuralTtsPreparation {
+        val exclusions = mutableListOf<NarrationExclusion>()
         val orderedPassages = chunks
             .sortedBy { it.unitIndex }
-            .flatMap { chunk -> chunk.toAudiobookPassages() }
-            .dropDuplicatePassages()
-            .dropRepeatedShortBoilerplate()
-            .dropIsolatedPageMarkers()
-            .dropTableOfContentsEntries()
-            .filterNot { it.text.isPublisherBoilerplate() }
-            .dropLeadingFrontMatter()
+            .flatMap { chunk -> chunk.toAudiobookPassages(narrationSourceKey(chunk) in forceIncludedSourceKeys) }
+            .dropDuplicatePassages(exclusions)
+            .dropRepeatedShortBoilerplate(exclusions)
+            .dropIsolatedPageMarkers(exclusions)
+            .dropTableOfContentsEntries(exclusions)
+            .filterWithReason(exclusions, "Publisher or distribution boilerplate") { it.text.isPublisherBoilerplate() }
+            .dropLeadingFrontMatter(exclusions)
             .mapNotNull { passage -> passage.text.toNarrationUnit() }
         val segments = mutableListOf<String>()
         val segmentChapterIndexes = mutableListOf<Int>()
@@ -163,26 +174,30 @@ internal object NeuralTtsText {
         )
         val words = coalesced.segments.sumReadableWords()
         val chapterSegmentCounts = coalesced.chapterIndexes.countByValue()
-        return NeuralTtsPreparedBook(
-            segments = coalesced.segments,
-            wordCount = words,
-            chapters = chapterBuilders
-                .mapNotNull { it.toChapter(coalesced.chapterIndexes, chapterSegmentCounts) },
-            segmentChapterIndexes = coalesced.chapterIndexes,
-            segmentPauseMillis = coalesced.pauseMillis
+        return NeuralTtsPreparation(
+            prepared = NeuralTtsPreparedBook(
+                segments = coalesced.segments,
+                wordCount = words,
+                chapters = chapterBuilders
+                    .mapNotNull { it.toChapter(coalesced.chapterIndexes, chapterSegmentCounts) },
+                segmentChapterIndexes = coalesced.chapterIndexes,
+                segmentPauseMillis = coalesced.pauseMillis,
+            ),
+            exclusions = exclusions,
         )
     }
 
-    private fun ReadAloudChunk.toAudiobookPassages(): List<AudiobookPassage> {
+    private fun ReadAloudChunk.toAudiobookPassages(forceInclude: Boolean): List<AudiobookPassage> {
         val body = normalizeForAudiobook(text)
         val heading = normalizeForAudiobookHeading(heading)
-        val bodyPassages = body.map { AudiobookPassage(text = it, fromHeading = false) }
+        val sourceKey = narrationSourceKey(this)
+        val bodyPassages = body.map { AudiobookPassage(it, false, sourceKey, unitIndex, heading, forceInclude) }
         if (heading == null) return bodyPassages
         val firstBody = body.firstOrNull()?.normalizedHeadingComparisonKey()
         return if (firstBody == heading.normalizedHeadingComparisonKey()) {
             bodyPassages
         } else {
-            listOf(AudiobookPassage(text = heading, fromHeading = true)) + bodyPassages
+            listOf(AudiobookPassage(heading, true, sourceKey, unitIndex, heading, forceInclude)) + bodyPassages
         }
     }
 
@@ -350,7 +365,7 @@ internal object NeuralTtsText {
         )
     }
 
-    private fun List<AudiobookPassage>.dropRepeatedShortBoilerplate(): List<AudiobookPassage> {
+    private fun List<AudiobookPassage>.dropRepeatedShortBoilerplate(exclusions: MutableList<NarrationExclusion>): List<AudiobookPassage> {
         val repeated = groupingBy { it.text.normalizedBoilerplateKey() }
             .eachCount()
             .filterKeys { it != null }
@@ -359,16 +374,29 @@ internal object NeuralTtsText {
         if (repeated.isEmpty()) return this
         return filterNot { passage ->
             val key = passage.text.normalizedBoilerplateKey()
-            key != null && key in repeated
+            val exclude = !passage.forceInclude && key != null && key in repeated && passage.text.looksLikeRunningHeaderOrFooter()
+            if (exclude) exclusions += passage.exclusion("Repeated running header or footer")
+            exclude
         }
     }
 
-    private fun List<AudiobookPassage>.dropDuplicatePassages(): List<AudiobookPassage> {
-        val seen = mutableSetOf<String>()
+    private fun List<AudiobookPassage>.dropDuplicatePassages(exclusions: MutableList<NarrationExclusion>): List<AudiobookPassage> {
+        var previousKey: String? = null
         return filter { passage ->
             val key = passage.text.normalizedPassageKey()
-            key == null || seen.add(key)
+            val keep = passage.forceInclude || key == null || key != previousKey
+            if (!keep) exclusions += passage.exclusion("Adjacent extraction duplicate")
+            previousKey = key
+            keep
         }
+    }
+
+    private fun String.looksLikeRunningHeaderOrFooter(): Boolean {
+        val clean = trim()
+        if (clean.length > 96 || clean.any { it == '?' || it == '!' }) return false
+        if (clean.endsWith('.')) return false
+        val words = clean.split(AUDIOBOOK_WHITESPACE_REGEX).filter { it.isNotBlank() }
+        return words.size <= 12 && (any(Char::isDigit) || words.size <= 6)
     }
 
     private fun String.normalizedPassageKey(): String? {
@@ -395,20 +423,50 @@ internal object NeuralTtsText {
             clean.matches(AUDIOBOOK_ROMAN_MARKER_REGEX)
     }
 
-    private fun List<AudiobookPassage>.dropIsolatedPageMarkers(): List<AudiobookPassage> =
-        filterNot { passage ->
+    private fun List<AudiobookPassage>.dropIsolatedPageMarkers(exclusions: MutableList<NarrationExclusion>): List<AudiobookPassage> =
+        filterWithReason(exclusions, "Isolated page marker") { passage ->
             passage.text.isIsolatedPageMarker() && !(passage.fromHeading && passage.text.looksLikeAudiobookChapterHeading())
         }
 
-    private fun List<AudiobookPassage>.dropTableOfContentsEntries(): List<AudiobookPassage> =
-        filterNot { passage -> passage.text.isTableOfContentsEntry() }
+    private fun List<AudiobookPassage>.dropTableOfContentsEntries(exclusions: MutableList<NarrationExclusion>): List<AudiobookPassage> =
+        filterWithReason(exclusions, "Table of contents entry") { passage -> passage.text.isTableOfContentsEntry() }
 
-    private fun List<AudiobookPassage>.dropLeadingFrontMatter(): List<AudiobookPassage> {
+    private fun List<AudiobookPassage>.dropLeadingFrontMatter(exclusions: MutableList<NarrationExclusion>): List<AudiobookPassage> {
         val firstContent = take(FRONT_MATTER_SCAN_LIMIT).indexOfFirst { passage ->
             passage.text.isNarrativeStartMarker() || (passage.fromHeading && passage.text.looksLikeAudiobookChapterHeading())
         }
         if (firstContent <= 0) return this
+        val prefix = take(firstContent)
+        if (!prefix.all { it.forceInclude || it.text.isPositiveFrontMatter() } || prefix.any { it.forceInclude }) return this
+        prefix.forEach { exclusions += it.exclusion("Structurally identified front matter") }
         return drop(firstContent)
+    }
+
+    private fun List<AudiobookPassage>.filterWithReason(
+        exclusions: MutableList<NarrationExclusion>,
+        reason: String,
+        predicate: (AudiobookPassage) -> Boolean,
+    ): List<AudiobookPassage> = filterNot { passage ->
+        val exclude = !passage.forceInclude && predicate(passage)
+        if (exclude) exclusions += passage.exclusion(reason)
+        exclude
+    }
+
+    private fun AudiobookPassage.exclusion(reason: String): NarrationExclusion = NarrationExclusion(
+        sourceKey = sourceKey,
+        unitIndex = unitIndex,
+        heading = heading.orEmpty(),
+        text = text.take(2_000),
+        reason = reason,
+    )
+
+    private fun String.isPositiveFrontMatter(): Boolean {
+        val clean = trim()
+        if (clean.isBlank() || clean.isIsolatedPageMarker() || clean.isPublisherBoilerplate() || clean.isTableOfContentsEntry()) return true
+        val normalized = clean.lowercase().replace(AUDIOBOOK_WHITESPACE_REGEX, " ")
+        return normalized in FRONT_MATTER_HEADINGS ||
+            normalized.startsWith("copyright ") || normalized.startsWith("published by ") ||
+            normalized.startsWith("isbn ") || normalized.startsWith("contents ")
     }
 
     private fun String.isNarrativeStartMarker(): Boolean {
@@ -482,6 +540,10 @@ internal object NeuralTtsText {
     private data class AudiobookPassage(
         val text: String,
         val fromHeading: Boolean,
+        val sourceKey: String,
+        val unitIndex: Int,
+        val heading: String?,
+        val forceInclude: Boolean,
     )
 
     private data class NarrationUnit(
@@ -507,6 +569,9 @@ internal object NeuralTtsText {
     )
     private val AUDIOBOOK_TOC_TRAILING_PAGE_ENTRY_REGEX = Regex(
         """(?i)^(chapter|section|episode|part|book)\s+([0-9]{1,3}|[ivxlcdm]{1,8}|$AUDIOBOOK_WORD_NUMBER_PATTERN)(?:\s*[-:]\s+.+?)?\s+[0-9]{1,4}$"""
+    )
+    private val FRONT_MATTER_HEADINGS = setOf(
+        "contents", "table of contents", "copyright", "title page", "also by the author"
     )
 }
 
