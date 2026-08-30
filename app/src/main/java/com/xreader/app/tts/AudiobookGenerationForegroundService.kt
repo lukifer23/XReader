@@ -1,5 +1,6 @@
 package com.xreader.app.tts
 
+import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.Notification.Action
 import android.app.NotificationChannel
@@ -135,7 +136,8 @@ class AudiobookGenerationForegroundService : Service() {
                 )?.let {
                     return@runCatching
                 }
-                container.neuralTtsRepository.markBookAudioPreparing(
+                container.neuralTtsRepository.requireAudiobookGenerationHardwareReady(activeModelId)
+                val preparingAudio = container.neuralTtsRepository.markBookAudioPreparing(
                     bookId = book.id,
                     modelId = activeModelId,
                     speakerId = activeSpeakerId,
@@ -144,6 +146,9 @@ class AudiobookGenerationForegroundService : Service() {
                     scope = activeScope
                 )
                 preparingRowCreated = true
+                if (preparingAudio.isFreshActiveAudiobookGeneration(System.currentTimeMillis())) {
+                    return@runCatching
+                }
                 val indexedRows = withContext(Dispatchers.IO) {
                     container.libraryRepository.indexedRowsForBook(bookId)
                 }
@@ -312,19 +317,15 @@ class AudiobookGenerationForegroundService : Service() {
     }
 
     private fun startForegroundCompat(notification: Notification) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIFICATION_ID, notification, audiobookGenerationForegroundServiceType(Build.VERSION.SDK_INT))
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
-        }
+        startForegroundWithTypeCompat(
+            NOTIFICATION_ID,
+            notification,
+            audiobookGenerationForegroundServiceType(Build.VERSION.SDK_INT),
+        )
     }
 
     private fun stopForegroundAndSelf(removeNotification: Boolean) {
-        if (foregroundStarted) {
-            stopForeground(if (removeNotification) Service.STOP_FOREGROUND_REMOVE else Service.STOP_FOREGROUND_DETACH)
-            foregroundStarted = false
-        }
-        stopSelf()
+        foregroundStarted = stopForegroundAndSelfCompat(foregroundStarted, removeNotification)
     }
 
     private fun buildNotification(
@@ -362,19 +363,10 @@ class AudiobookGenerationForegroundService : Service() {
         )
 
     private fun openAppIntent(): PendingIntent =
-        PendingIntent.getActivity(
-            this,
-            REQUEST_OPEN_APP,
-            Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
+        openXReaderIntent(REQUEST_OPEN_APP)
 
     private fun ensureNotificationChannel() {
-        val channel = NotificationChannel(CHANNEL_ID, "Audiobook generation", NotificationManager.IMPORTANCE_LOW).apply {
-            description = "Neural audiobook generation"
-            setShowBadge(false)
-        }
-        notificationManager.createNotificationChannel(channel)
+        notificationManager.ensureLowImportanceChannel(CHANNEL_ID, "Audiobook generation", "Neural audiobook generation")
     }
 
     private val notificationManager: NotificationManager
@@ -602,6 +594,8 @@ internal fun shouldIgnoreAudiobookGenerationCancel(
     requestMatchesActive == false ||
         (hasCancelProfileExtras && requestMatchesActive == null)
 
+// These service-type values are compile-time integers and are selected only for their defining API level.
+@SuppressLint("InlinedApi")
 internal fun audiobookGenerationForegroundServiceType(sdkInt: Int): Int =
     if (sdkInt >= 35) {
         ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROCESSING
@@ -632,7 +626,7 @@ internal fun generationNotificationKey(audio: BookAudioEntity?): GenerationNotif
             id = it.id,
             status = it.status,
             error = it.error,
-            progressText = audiobookGenerationProgressText(it, nowMillis = it.updatedAt)
+            progressText = it.audiobookGenerationProgressLabel()
         )
     }
 

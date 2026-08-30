@@ -8,7 +8,6 @@ ORT_DIR="${XREADER_ONNXRUNTIME_DIR:-"$WORK_DIR/onnxruntime"}"
 BUILD_DIR="${XREADER_ONNXRUNTIME_BUILD_DIR:-"$WORK_DIR/onnxruntime-qnn-android"}"
 PACKAGE_DIR="${XREADER_ONNXRUNTIME_QNN_ROOT:-"$WORK_DIR/onnxruntime-qnn-android-package"}"
 QAIRT_COMPAT_PATCH="$ROOT_DIR/tools/patches/onnxruntime-qnn-qairt-2_40-bfloat16-compat.patch"
-QNN_NNAPI_STATIC_PATCH="$ROOT_DIR/tools/patches/onnxruntime-qnn-nnapi-static-nodeattrhelper.patch"
 QNN_HTP_V79_PATCH="$ROOT_DIR/tools/patches/onnxruntime-qnn-htp-v79-arch.patch"
 QNN_HTP_SIGNED_PD_PATCH="$ROOT_DIR/tools/patches/onnxruntime-qnn-htp-signed-pd-option.patch"
 
@@ -72,15 +71,6 @@ if [[ -f "$QAIRT_COMPAT_PATCH" ]]; then
   fi
 fi
 
-if [[ -f "$QNN_NNAPI_STATIC_PATCH" ]]; then
-  if git apply --check "$QNN_NNAPI_STATIC_PATCH" >/dev/null 2>&1; then
-    git apply "$QNN_NNAPI_STATIC_PATCH"
-  elif ! git apply --reverse --check "$QNN_NNAPI_STATIC_PATCH" >/dev/null 2>&1; then
-    echo "ONNX Runtime QNN+NNAPI static provider patch does not apply cleanly: $QNN_NNAPI_STATIC_PATCH" >&2
-    exit 3
-  fi
-fi
-
 if [[ -f "$QNN_HTP_V79_PATCH" ]]; then
   if git apply --check "$QNN_HTP_V79_PATCH" >/dev/null 2>&1; then
     git apply "$QNN_HTP_V79_PATCH"
@@ -116,8 +106,6 @@ python3 tools/ci_build/build.py \
   --targets onnxruntime \
   --use_qnn static_lib \
   --qnn_home "$QNN_SDK_ROOT" \
-  --use_nnapi \
-  --nnapi_min_api "${XREADER_ONNXRUNTIME_NNAPI_MIN_API:-27}" \
   --build_dir "$BUILD_DIR"
 
 LIB="$(find "$BUILD_DIR" -path '*/Release/libonnxruntime.so' -type f | head -n 1)"
@@ -131,24 +119,15 @@ mkdir -p "$PACKAGE_DIR/jni/arm64-v8a" "$PACKAGE_DIR/headers"
 cp "$LIB" "$PACKAGE_DIR/jni/arm64-v8a/libonnxruntime.so"
 cp include/onnxruntime/core/session/*.h "$PACKAGE_DIR/headers/"
 cp include/onnxruntime/core/providers/qnn/qnn_provider_factory.h "$PACKAGE_DIR/headers/" 2>/dev/null || true
-cp include/onnxruntime/core/providers/nnapi/nnapi_provider_factory.h "$PACKAGE_DIR/headers/" 2>/dev/null || true
 
-ORT_NM_FILE="$(mktemp "${TMPDIR:-/tmp}/xreader-ort-nm.XXXXXX")"
 ORT_STRINGS_FILE="$(mktemp "${TMPDIR:-/tmp}/xreader-ort-strings.XXXXXX")"
-nm -D "$PACKAGE_DIR/jni/arm64-v8a/libonnxruntime.so" >"$ORT_NM_FILE"
 strings "$PACKAGE_DIR/jni/arm64-v8a/libonnxruntime.so" >"$ORT_STRINGS_FILE"
 
-if ! grep -q "OrtSessionOptionsAppendExecutionProvider_Nnapi" "$ORT_NM_FILE"; then
-  rm -f "$ORT_NM_FILE" "$ORT_STRINGS_FILE"
-  echo "Built ONNX Runtime does not export OrtSessionOptionsAppendExecutionProvider_Nnapi." >&2
-  exit 4
-fi
-
 if ! grep -Eq "QnnHtp|QNN EP|qnnexecution" "$ORT_STRINGS_FILE"; then
-  rm -f "$ORT_NM_FILE" "$ORT_STRINGS_FILE"
+  rm -f "$ORT_STRINGS_FILE"
   echo "Built ONNX Runtime does not contain QNN provider implementation metadata." >&2
   exit 4
 fi
-rm -f "$ORT_NM_FILE" "$ORT_STRINGS_FILE"
+rm -f "$ORT_STRINGS_FILE"
 
 echo "$PACKAGE_DIR"

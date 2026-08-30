@@ -11,8 +11,9 @@ For now, report security issues privately to the repository owner through GitHub
 - Imported books are copied into app-owned private storage.
 - Reading state, annotations, analytics, search indexes, and dictionary data are stored locally.
 - The app does not request broad all-files access.
-- The app does not intentionally use network access.
+- Network access occurs only for a user-entered direct book or OPDS catalog URL. XReader has no account sync, background telemetry, or automatic network scan.
 - Android backup is disabled in the manifest.
+- User-created full backups exclude imported books, covers, generated audio, neural models, private file paths, and checksum inventories intended for display.
 
 ## Sensitive Test Data
 

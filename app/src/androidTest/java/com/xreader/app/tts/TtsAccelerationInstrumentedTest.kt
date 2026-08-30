@@ -46,27 +46,35 @@ class TtsAccelerationInstrumentedTest {
         assumeTrue("Kokoro model must be installed on this device.", File(modelDir, spec.modelFile).isFile)
 
         val requestedProvider = InstrumentationRegistry.getArguments().getString("xreader.tts.provider")
-        val providers = TtsAccelerationRuntime.providerOrder(
-            context = context,
-            includeExperimentalWebGpu = false,
-            includeCpuFallbacks = false
-        ).filter { neuralTtsProviderHasRequiredModelArtifact(spec, modelDir, it) }
+        val allProviders = TtsAccelerationRuntime.providerOrder(context = context)
+        val manifest = File(modelDir, spec.hardwareModelManifestFile)
+        Log.i(
+            tag,
+            "modelDir=${modelDir.absolutePath} manifestExists=${manifest.isFile} " +
+                "allProviders=${allProviders.joinToString { TtsAccelerationRuntime.providerDisplayKey(it) }}"
+        )
+        val providers = allProviders.filter { provider ->
+            val hasArtifact = TtsAccelerationRuntime.isAudiobookGenerationAcceleratedProvider(provider) &&
+                neuralTtsProviderHasRequiredModelArtifact(spec, modelDir, provider)
+            Log.i(tag, "provider=${TtsAccelerationRuntime.providerDisplayKey(provider)} hasRequiredArtifact=$hasArtifact")
+            hasArtifact
+        }
         assertTrue(
             "No strict hardware TTS provider is available with the required Kokoro model artifact. " +
-                "Package QNN/OpenCL, install model.qnn.onnx for HTP, or use strict NNAPI.",
+                "Package QNN/OpenCL and install a strict-compatible QNN model artifact.",
             requestedProvider != null || providers.isNotEmpty()
         )
         val provider = requestedProvider?.toProviderString(context) ?: providers.first()
+        assertTrue(
+            "Requested provider is not a strict hardware audiobook generation provider.",
+            TtsAccelerationRuntime.isAudiobookGenerationAcceleratedProvider(provider)
+        )
         assertTrue(
             "Requested provider is missing its required Kokoro model artifact.",
             neuralTtsProviderHasRequiredModelArtifact(spec, modelDir, provider)
         )
 
-        val tts = if (requestedProvider == null) {
-            createWithFallback(spec, modelDir, providers)
-        } else {
-            OfflineTts(config = ttsConfig(spec, modelDir, provider))
-        }
+        val tts = OfflineTts(config = ttsConfig(spec, modelDir, provider))
         try {
             val started = System.nanoTime()
             val generated = tts.generateWithConfig(
@@ -116,18 +124,17 @@ class TtsAccelerationInstrumentedTest {
             ?.map { it.trim() }
             ?.filter { it.isNotBlank() }
             ?.takeIf { it.isNotEmpty() }
-            ?: TtsAccelerationRuntime.providerOrder(
-                context = context,
-                includeExperimentalWebGpu = false,
-                includeCpuFallbacks = false
-            )
+            ?: TtsAccelerationRuntime.providerOrder(context = context)
         assertTrue(
             "No strict hardware TTS providers are available for benchmark. Pass -e xreader.tts.providers for explicit comparison providers.",
             requestedProviders.isNotEmpty()
         )
         val providers = requestedProviders
             .map { it.toProviderString(context) }
-            .filter { neuralTtsProviderHasRequiredModelArtifact(spec, modelDir, it) }
+            .filter {
+                TtsAccelerationRuntime.isAudiobookGenerationAcceleratedProvider(it) &&
+                    neuralTtsProviderHasRequiredModelArtifact(spec, modelDir, it)
+            }
         assertTrue(
             "No requested hardware providers have the required Kokoro model artifacts.",
             providers.isNotEmpty()
@@ -218,22 +225,6 @@ class TtsAccelerationInstrumentedTest {
         }
     }
 
-    private fun createWithFallback(
-        spec: NeuralTtsModelSpec,
-        modelDir: File,
-        providers: List<String>,
-    ): OfflineTts {
-        var lastError: Throwable? = null
-        providers.forEach { provider ->
-            runCatching {
-                return OfflineTts(config = ttsConfig(spec, modelDir, provider))
-            }.onFailure { error ->
-                lastError = error
-            }
-        }
-        throw AssertionError("No TTS provider initialized.", lastError)
-    }
-
     private fun String.toProviderString(context: android.content.Context): String {
         val requested = trim().lowercase()
         if (requested !in setOf("qnn", "qnn-gpu", "qnn-htp")) return this
@@ -249,3 +240,11 @@ class TtsAccelerationInstrumentedTest {
     private fun String.providerLabel(): String =
         TtsAccelerationRuntime.providerDisplayKey(this)
 }
+
+private fun generationRealtimeFactor(audioMillis: Long, computeMillis: Long): Float? {
+    if (audioMillis <= 0L || computeMillis <= 0L) return null
+    return computeMillis.toFloat() / audioMillis.toFloat()
+}
+
+private fun isUsableAudiobookHardwareRealtimeFactor(realtimeFactor: Float): Boolean =
+    realtimeFactor <= MAX_AUDIOBOOK_HARDWARE_AUDIO_TIME_FACTOR

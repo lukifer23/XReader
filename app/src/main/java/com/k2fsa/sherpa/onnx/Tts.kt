@@ -102,7 +102,7 @@ data class OfflineTtsModelConfig(
 
     var numThreads: Int = 1,
     var debug: Boolean = false,
-    var provider: String = "cpu",
+    var provider: String = "qnn-htp",
 )
 
 data class OfflineTtsConfig(
@@ -282,7 +282,7 @@ fun getOfflineTtsConfig(
     ruleFsts: String,
     ruleFars: String,
     numThreads: Int? = null,
-    provider: String = "cpu",
+    provider: String = "qnn-htp",
     isKitten: Boolean = false,
     isSupertonic: Boolean = false,
     durationPredictor: String = "", // for Supertonic

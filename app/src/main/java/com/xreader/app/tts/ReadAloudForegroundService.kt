@@ -1,5 +1,6 @@
 package com.xreader.app.tts
 
+import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.Notification.Action
 import android.app.NotificationChannel
@@ -97,30 +98,14 @@ class ReadAloudForegroundService : Service() {
         foregroundStarted = true
     }
 
+    // The shared helper passes this inlined service type only to the API 29+ overload.
+    @SuppressLint("InlinedApi")
     private fun startForegroundCompat(notification: Notification) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(
-                NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
-            )
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
-        }
+        startForegroundWithTypeCompat(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
     }
 
     private fun stopForegroundAndSelf(removeNotification: Boolean) {
-        if (foregroundStarted) {
-            stopForeground(
-                if (removeNotification) {
-                    Service.STOP_FOREGROUND_REMOVE
-                } else {
-                    Service.STOP_FOREGROUND_DETACH
-                }
-            )
-            foregroundStarted = false
-        }
-        stopSelf()
+        foregroundStarted = stopForegroundAndSelfCompat(foregroundStarted, removeNotification)
     }
 
     private fun buildReadAloudNotification(state: ReadAloudState): Notification {
@@ -210,24 +195,10 @@ class ReadAloudForegroundService : Service() {
         )
 
     private fun openAppIntent(): PendingIntent =
-        PendingIntent.getActivity(
-            this,
-            REQUEST_OPEN_APP,
-            Intent(this, MainActivity::class.java)
-                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
+        openXReaderIntent(REQUEST_OPEN_APP)
 
     private fun ensureNotificationChannel() {
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            "Read aloud",
-            NotificationManager.IMPORTANCE_LOW
-        ).apply {
-            description = "Read-aloud playback controls"
-            setShowBadge(false)
-        }
-        notificationManager.createNotificationChannel(channel)
+        notificationManager.ensureLowImportanceChannel(CHANNEL_ID, "Read aloud", "Read-aloud playback controls")
     }
 
     private val notificationManager: NotificationManager

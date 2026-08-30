@@ -1,18 +1,26 @@
 diff --git a/sherpa-onnx/csrc/provider.cc b/sherpa-onnx/csrc/provider.cc
-index 8f7fe317..5e1fd06c 100644
+index 8f7fe317..d7866763 100644
 --- a/sherpa-onnx/csrc/provider.cc
 +++ b/sherpa-onnx/csrc/provider.cc
-@@ -31,6 +31,10 @@ Provider StringToProvider(std::string s) {
+@@ -7,3 +7,4 @@
+ #include <algorithm>
+ #include <cctype>
++#include <stdexcept>
+ #include <string>
+@@ -31,8 +32,13 @@ Provider StringToProvider(std::string s) {
      return Provider::kDirectML;
    } else if (s == "spacemit") {
      return Provider::kSpacemiT;
 +  } else if (s == "qnn") {
 +    return Provider::kQNN;
-+  } else if (s == "webgpu") {
-+    return Provider::kWebGPU;
    } else {
-     SHERPA_ONNX_LOGE("Unsupported string: %s. Fallback to cpu", s.c_str());
-     return Provider::kCPU;
+-    SHERPA_ONNX_LOGE("Unsupported string: %s. Fallback to cpu", s.c_str());
+-    return Provider::kCPU;
++    std::string error_msg = std::string("Unsupported provider string: ") + s;
++    SHERPA_ONNX_LOGE("%s", error_msg.c_str());
++    throw std::runtime_error(error_msg);
+   }
+ }
 diff --git a/sherpa-onnx/csrc/provider.h b/sherpa-onnx/csrc/provider.h
 index 8842c797..2f1197c1 100644
 --- a/sherpa-onnx/csrc/provider.h
@@ -22,15 +30,14 @@ index 8842c797..2f1197c1 100644
    kDirectML = 6,  // DmlExecutionProvider
    kSpacemiT = 7,  // SpacemiTExecutionProvider
 +  kQNN = 8,       // QNNExecutionProvider
-+  kWebGPU = 9,    // WebGpuExecutionProvider
  };
  
  /**
 diff --git a/sherpa-onnx/csrc/session.cc b/sherpa-onnx/csrc/session.cc
-index 8206bb99..9ff70662 100755
+index 8206bb99..42c2f300 100755
 --- a/sherpa-onnx/csrc/session.cc
 +++ b/sherpa-onnx/csrc/session.cc
-@@ -5,6 +5,7 @@
+@@ -7,6 +7,7 @@
  #include <algorithm>
  #include <fstream>
  #include <sstream>
@@ -38,7 +45,7 @@ index 8206bb99..9ff70662 100755
  #include <string>
  #include <unordered_map>
  #include <utility>
-@@ -424,6 +425,107 @@ Ort::SessionOptions GetSessionOptionsImpl(
+@@ -424,6 +425,130 @@ Ort::SessionOptions GetSessionOptionsImpl(
  #endif
        break;
      }
@@ -116,52 +123,6 @@ index 8206bb99..9ff70662 100755
 +        throw std::runtime_error(error_msg);
 +      } else {
 +        SHERPA_ONNX_LOGE("Use QNNExecutionProvider");
-+      }
-+      break;
-+    }
-+    case Provider::kWebGPU: {
-+      if (std::find(available_providers.begin(), available_providers.end(),
-+                    "WebGpuExecutionProvider") == available_providers.end()) {
-+        SHERPA_ONNX_LOGE(
-+            "WebGpuExecutionProvider is unavailable. Available providers: %s. "
-+            "Fallback to cpu!",
-+            os.str().c_str());
-+        break;
-+      }
-+
-+      std::unordered_map<std::string, std::string> provider_options(config);
-+
-+      std::vector<std::string> keys;
-+      std::vector<std::string> values;
-+      keys.reserve(provider_options.size());
-+      values.reserve(provider_options.size());
-+      for (const auto &kv : provider_options) {
-+        keys.push_back(kv.first);
-+        values.push_back(kv.second);
-+      }
-+
-+      std::vector<const char *> key_ptrs;
-+      std::vector<const char *> value_ptrs;
-+      key_ptrs.reserve(keys.size());
-+      value_ptrs.reserve(values.size());
-+      for (size_t i = 0; i != keys.size(); ++i) {
-+        key_ptrs.push_back(keys[i].c_str());
-+        value_ptrs.push_back(values[i].c_str());
-+      }
-+
-+      const auto &api = Ort::GetApi();
-+      OrtStatus *status = api.SessionOptionsAppendExecutionProvider(
-+          sess_opts, "WebGPU", key_ptrs.data(), value_ptrs.data(),
-+          key_ptrs.size());
-+      if (status) {
-+        const char *msg = api.GetErrorMessage(status);
-+        SHERPA_ONNX_LOGE(
-+            "Failed to enable WebGpuExecutionProvider: %s. Available "
-+            "providers: %s. Fallback to cpu",
-+            msg, os.str().c_str());
-+        api.ReleaseStatus(status);
-+      } else {
-+        SHERPA_ONNX_LOGE("Use WebGpuExecutionProvider");
 +      }
 +      break;
 +    }

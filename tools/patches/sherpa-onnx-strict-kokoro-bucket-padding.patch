@@ -1,0 +1,156 @@
+diff --git a/sherpa-onnx/csrc/offline-tts-kokoro-model.cc b/sherpa-onnx/csrc/offline-tts-kokoro-model.cc
+index 4e583c8e..f03eedf8 100644
+--- a/sherpa-onnx/csrc/offline-tts-kokoro-model.cc
++++ b/sherpa-onnx/csrc/offline-tts-kokoro-model.cc
+@@ -6,6 +6,8 @@
+ #include "sherpa-onnx/csrc/ort-env.h"
+
+ #include <algorithm>
++#include <array>
++#include <cstdlib>
+ #include <memory>
+ #include <string>
+ #include <utility>
+@@ -70,9 +72,27 @@ class OfflineTtsKokoroModel::Impl {
+
+     // there is a 0 at the front and end of x
+     int32_t len = static_cast<int32_t>(x_shape[1]) - 2;
++    const int64_t original_token_count = x_shape[1];
+     int32_t num_speakers = meta_data_.num_speakers;
+     int32_t dim0 = style_dim_[0];
+     int32_t dim1 = style_dim_[2];
++    if (strict_token_bucket_ > 0 && original_token_count != strict_token_bucket_) {
++      if (original_token_count > strict_token_bucket_) {
++        SHERPA_ONNX_LOGE(
++            "Strict Kokoro model requires at most %d tokens. Given: %d",
++            static_cast<int32_t>(strict_token_bucket_),
++            static_cast<int32_t>(original_token_count));
++        SHERPA_ONNX_EXIT(-1);
++      }
++      strict_token_buffer_.assign(strict_token_bucket_, 0);
++      const auto *src = x.GetTensorData<int64_t>();
++      std::copy(src, src + original_token_count, strict_token_buffer_.begin());
++      std::array<int64_t, 2> padded_x_shape = {1, strict_token_bucket_};
++      x = Ort::Value::CreateTensor(memory_info, strict_token_buffer_.data(),
++                                   strict_token_buffer_.size(),
++                                   padded_x_shape.data(),
++                                   padded_x_shape.size());
++    }
+     if (len >= dim0) {
+       SHERPA_ONNX_LOGE("Bad things happened! %d vs %d", len, dim0);
+       SHERPA_ONNX_EXIT(-1);
+@@ -100,7 +120,7 @@ class OfflineTtsKokoroModel::Impl {
+         sess_->Run({}, input_names_ptr_.data(), inputs.data(), inputs.size(),
+                    output_names_ptr_.data(), output_names_ptr_.size());
+
+-    return std::move(out[0]);
++    return MaybeTrimStrictOutput(std::move(out));
+   }
+
+  private:
+@@ -146,6 +166,17 @@ class OfflineTtsKokoroModel::Impl {
+ #endif
+     }
+
++    auto token_shape =
++        sess_->GetInputTypeInfo(0).GetTensorTypeAndShapeInfo().GetShape();
++    if (token_shape.size() == 2 && token_shape[0] == 1 && token_shape[1] > 0) {
++      strict_token_bucket_ = token_shape[1];
++    }
++
++    strict_max_frames_ =
++        ReadPositiveIntMetadata(meta_data, "xreader_strict_max_frames");
++    strict_samples_per_frame_ =
++        ReadPositiveIntMetadata(meta_data, "xreader_strict_samples_per_frame");
++
+     Ort::AllocatorWithDefaultOptions allocator;  // used in the macro below
+     SHERPA_ONNX_READ_META_DATA(meta_data_.sample_rate, "sample_rate");
+     SHERPA_ONNX_READ_META_DATA_WITH_DEFAULT(meta_data_.version, "version", 1);
+@@ -211,6 +242,73 @@ class OfflineTtsKokoroModel::Impl {
+     meta_data_.max_token_len = style_dim_[0];
+   }
+
++  int64_t ReadPositiveIntMetadata(const Ort::ModelMetadata &meta_data,
++                                  const char *key) {
++    auto value = LookupCustomModelMetaData(meta_data, key, allocator_);
++    if (value.empty()) {
++      return 0;
++    }
++
++    char *end = nullptr;
++    long parsed = std::strtol(value.c_str(), &end, 10);  // NOLINT
++    if (end == value.c_str() || *end != '\0' || parsed <= 0) {
++      SHERPA_ONNX_LOGE("Invalid positive integer metadata %s=%s", key,
++                       value.c_str());
++      SHERPA_ONNX_EXIT(-1);
++    }
++    return static_cast<int64_t>(parsed);
++  }
++
++  Ort::Value MaybeTrimStrictOutput(std::vector<Ort::Value> out) {
++    if (strict_token_bucket_ <= 0 || strict_max_frames_ <= 0 ||
++        strict_samples_per_frame_ <= 0 || out.size() < 2) {
++      return std::move(out[0]);
++    }
++
++    const float *audio = out[0].GetTensorData<float>();
++    auto audio_shape = out[0].GetTensorTypeAndShapeInfo().GetShape();
++    int64_t audio_samples = 1;
++    for (auto dim : audio_shape) {
++      audio_samples *= dim;
++    }
++    if (audio_samples <= 0) {
++      return std::move(out[0]);
++    }
++
++    const float *duration = out[1].GetTensorData<float>();
++    auto duration_shape = out[1].GetTensorTypeAndShapeInfo().GetShape();
++    int64_t duration_count = 1;
++    for (auto dim : duration_shape) {
++      duration_count *= dim;
++    }
++    if (duration_count <= 0) {
++      return std::move(out[0]);
++    }
++
++    double frames = 0.0;
++    for (int64_t i = 0; i != duration_count; ++i) {
++      if (duration[i] > 0) {
++        frames += duration[i];
++      }
++    }
++    const int64_t bounded_frames =
++        std::max<int64_t>(1, std::min<int64_t>(
++                                 strict_max_frames_,
++                                 static_cast<int64_t>(frames + 0.5)));
++    const int64_t trimmed_samples =
++        std::max<int64_t>(1, std::min<int64_t>(
++                                 audio_samples,
++                                 bounded_frames * strict_samples_per_frame_));
++    strict_audio_buffer_.assign(audio, audio + trimmed_samples);
++    strict_audio_shape_ = {1, trimmed_samples};
++    auto memory_info =
++        Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeDefault);
++    return Ort::Value::CreateTensor(memory_info, strict_audio_buffer_.data(),
++                                   strict_audio_buffer_.size(),
++                                   strict_audio_shape_.data(),
++                                   strict_audio_shape_.size());
++  }
++
+  private:
+   OfflineTtsModelConfig config_;
+   Ort::Env env_;
+@@ -230,6 +328,13 @@ class OfflineTtsKokoroModel::Impl {
+
+   // (num_speakers, style_dim_[0], style_dim_[2])
+   std::vector<float> styles_;
++
++  int64_t strict_token_bucket_ = 0;
++  int64_t strict_max_frames_ = 0;
++  int64_t strict_samples_per_frame_ = 0;
++  std::vector<int64_t> strict_token_buffer_;
++  std::vector<float> strict_audio_buffer_;
++  std::array<int64_t, 2> strict_audio_shape_ = {1, 0};
+ };
+
+ OfflineTtsKokoroModel::OfflineTtsKokoroModel(

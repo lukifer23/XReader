@@ -19,7 +19,7 @@ XReader is a single-module native Android app built around a local-first library
 
 `XReaderApplication` owns an `AppContainer`. The container constructs the database, repositories, import services, reader services, dictionary repository, analytics repository, and shared application coroutine scope. Expensive reader initialization is kept out of app startup. Readium/PDF service setup is warmed shortly after the first screen, while WebView warmup stays delayed on the main thread to avoid stealing startup frames. Neural audiobook startup maintenance is split by cost: supported-model catalog seeding and interrupted-install repair run shortly after launch, while stale generated-audio repair and obsolete model-storage pruning are deferred so cold startup and the first library render do not compete with filesystem-heavy cleanup.
 
-The UI is Compose-first. ViewModels expose immutable state objects and one-shot actions. UI code delegates persistence, file access, parsing, and indexing to repositories and services. Library, Stats, Notes, and Settings are primary destinations with one shared bottom navigation bar and selected state; reader and book-specific flows remain secondary surfaces.
+The UI is Compose-first. ViewModels expose immutable state objects and one-shot actions. UI code delegates persistence, file access, parsing, and indexing to repositories and services. Library, Stats, Audiobooks, Notes, and Settings are the five primary destinations with one shared bottom navigation bar and selected state; reader and book-specific flows remain secondary surfaces.
 
 ## Data Model
 
@@ -39,6 +39,8 @@ Room stores:
 - `BookAudioEntity`
 
 Search uses a normal table plus an FTS table. Book deletion removes search rows and stored files.
+
+The Room schema is version 15. Migration 14 to 15 removes only the redundant B-tree index on `search_index.normalizedBody`; the FTS table remains authoritative for full-text queries. The database registers the complete 1 to 15 migration chain, exports every schema, and compiles instrumentation coverage for each historical starting version plus representative retained rows. Those migration tests require an emulator or device to execute.
 
 ## Import Flow
 
@@ -65,7 +67,9 @@ Book rows expose a save-copy action that launches Android's `CreateDocument` pic
 
 Manual metadata edits canonicalize author, genre, and series values before persistence, then can optionally apply shared author, genre, and series metadata to other books that match the same old or new author and series pair. The bulk cleanup runs in a Room transaction and keeps per-book fields such as title, year, and series index isolated to each book.
 
-The Books home derives series continuation recommendations from the already loaded Room library state. It groups books by normalized series name, orders each series by series index with year/title fallback, and surfaces the next unfinished title after the most recently finished series book as a single compact action card.
+The Books home derives search filtering, grouping, continuation, and series recommendations from the loaded Room library state on `Dispatchers.Default`. Superseded projections are canceled by Flow collection, and Compose receives stable presentation sections rather than regrouping the full library during composition. It groups series by normalized name, orders each series by series index with year/title fallback, and surfaces the next unfinished title after the most recently finished series book as a single compact action card.
+
+The ten format converters share only the byte-level EPUB ZIP primitives for stored mimetype entries, deflated entries, and XML escaping. Each converter still owns its input parser, metadata rules, chapter markup, navigation, and package content so format behavior does not collapse into a speculative conversion framework.
 
 ## Reader Flow
 
@@ -94,7 +98,7 @@ Read aloud is handled by `ReadAloudEngine`, a small wrapper around Android `Text
 
 Embedded neural audiobook generation is handled separately by `NeuralTtsRepository`. Settings exposes a compact local neural voice downloader backed by the Sherpa-ONNX Android JNI runtime and the Kokoro v1.0 model. Downloads are stored in app-private model storage, progress is persisted in Room, archive size and SHA-256 are verified before extraction, and extraction rejects unsafe archive paths. Startup maintenance removes obsolete voice models that are no longer in the supported catalog. The book action menu can generate cached audiobook audio from XReader's indexed reading-order text. Generation prepares text by removing common extraction noise and repeated boilerplate, detects chapter headings, then splits full-book text into sentence-aware bounded speech segments tuned for Kokoro cadence. Sample, first-chapter, and full-book scopes are applied to the prepared segment model so scan estimates and generated output agree. It synthesizes each segment to a WAV file, writes heartbeat progress during long native synthesis calls, writes a manifest with the runtime provider, writes sanitized chapter and segment sidecars with playback pause metadata, and links the generated audio directory to the book/model/speaker/speed/narration-style tuple in Room so repeat requests reuse the prior output. The generated-audio surfaces expose scan estimates, active segment status, partial playback, resume, chapter selection, delete, and ZIP export through Android's `CreateDocument` picker while caching unchanged row models to avoid repeated sidecar parsing during progress refreshes. The global Audiobooks screen observes one Room relation query for visible `BookAudioEntity` rows and their `BookEntity` records, then materializes verified playable files and sidecar metadata on the IO dispatcher. This keeps progress updates from repeatedly joining the entire library in Compose state and keeps stale sidecar cache entries pruned to the visible active set.
 
-The current full-book embedded path requires measured acceleration. It tries eligible Sherpa-ONNX providers in order: strict QNN GPU, strict QNN HTP/NPU, then strict NNAPI. CPU-backed `xnnpack`/`cpu` are excluded from full-book generation, and providers that are unavailable, missing required model artifacts, fail initialization, assign graph nodes to CPU, or run slower than the full-book audio-time threshold fail closed instead of silently generating unusably slow audio. Strict QNN full-book providers require both `model.qnn.onnx` and a matching `xreader-qnn-model-manifest.json` with `strict_qnn_compatible: true`; a bare quantized artifact is treated as incomplete for GPU and HTP/NPU alike. Readiness checks for Settings and dialogs use non-mutating QNN provider labels, while the generation path writes strict provider config files only when initializing a real synthesis runtime. Preview generation can still fall back to `xnnpack`/`cpu` for short voice checks. Long generation remains isolated in the `:audiobook_generation` process so native provider failures do not kill the main reader UI.
+The current embedded neural path requires measured QNN acceleration. It allows one strict QNN HTP/NPU provider only; `qnn-gpu`, `nnapi`, `webgpu`, `xnnpack`, and `cpu` are excluded as alternate preview and full-book generation backends and GPU/OpenCL runtime libraries are not packaged. Runtime initialization attempts that selected QNN provider, and providers that are unavailable, missing required model artifacts, fail initialization, assign graph nodes to CPU, or run slower than the full-book audio-time threshold fail closed instead of silently generating unusably slow audio. Strict QNN providers require both `model.qnn.onnx` and a matching `xreader-qnn-model-manifest.json` with `strict_qnn_compatible: true`; a bare quantized artifact is treated as incomplete. Readiness checks for Settings and dialogs use non-mutating provider labels, while the generation path writes strict QNN provider config files only when initializing a real synthesis runtime. Long generation remains isolated in the `:audiobook_generation` process so native provider failures do not kill the main reader UI.
 
 Reader search first tries Readium's publication search and falls back to XReader's local search index when needed. Search results carry an approximate reading unit so the compact find bar can jump to the previous or next match from the visible page, then keep the search active until the user closes it. Library full-text search uses the same FTS index joined to book metadata so result rows can show the source title/author and a query-centered snippet before jumping into the matched reading unit. User search text is normalized into bounded FTS terms so punctuation, hyphenated phrases, possessives, and pasted quotes do not break local search. PDF imports sort extracted text by page position and clean soft hyphens/wrapped line-break hyphens before indexing so search and read-aloud do not inherit common PDF extraction artifacts.
 
@@ -128,6 +132,7 @@ Reader and library settings are persisted with DataStore. Settings include:
 - idle timeout
 - library sort
 - library density
+- library group
 
 Per-book reader appearance overrides are also stored in DataStore, keyed by book id. They only override typography, hyphenation, publisher styles, alignment, PDF fit/layout, and page direction. Theme, fullscreen, reader orientation, keep-screen-awake, reader dimming, tap zones, page animations, volume-button page turns, and idle timeout stay global so reading behavior remains predictable across books.
 
@@ -137,7 +142,9 @@ Reader dimming is implemented as a reader-only Compose overlay capped by `MAX_RE
 
 Font choices are limited to families that Android/Readium CSS can resolve or fall back from cleanly, including Readium's bundled OpenDyslexic asset. XReader does not expose user font import until the reader stack can serve those files reliably.
 
-Settings also exposes local JSON backup and restore through Android's Storage Access Framework. Notes/bookmark backups contain notes, highlights, normalized annotation tags, and bookmarks. The global notes screen supports text, kind, and tag filtering, and it exports human-readable Markdown grouped by book while omitting private file paths and checksums. Library backups contain catalog metadata, favorites, finished state, reading progress, reading sessions, custom collections, collection membership, global reader/library settings, and per-book reader appearance, but never imported book files or cover image files. Restores match book-scoped items to already-imported books by file checksum. Items for books that are not in the local library are skipped instead of creating orphan records, and malformed annotation/bookmark rows are counted as invalid so restore summaries expose bad backup content instead of silently hiding it.
+Settings search filters the existing sections and controls without creating a second settings hierarchy. The selected library group is persisted with sort and density; transient library query and expanded-result state use `SavedStateHandle` so ordinary recreation does not erase the current search task.
+
+Settings exposes a versioned full JSON backup through Android's Storage Access Framework. The envelope composes the existing library and annotation formats, validates both payloads before mutation, and restores Room-backed library and annotation records in one database transaction. DataStore settings remain a separate persistence boundary. The archive contains catalog metadata, favorites, finished state, reading progress, reading sessions, custom collections and membership, global reader/library settings, per-book reader appearance, notes, highlights, normalized tags, and bookmarks. It never contains imported books, covers, neural models, generated audio, private paths, or user-visible checksum lists. Restores match book-scoped records to already-imported books by checksum, are idempotent on repeated import, and report restored, skipped, missing, and invalid records. Existing version-1 library and notes/bookmark JSON imports remain available in a labeled compatibility section. Markdown note export remains checksum-free and human-readable.
 
 ## Dictionary
 
@@ -152,9 +159,10 @@ Settings also exposes local JSON backup and restore through Android's Storage Ac
 Primary local gates:
 
 ```bash
-./gradlew :app:lintDebug :app:testDebugUnitTest :app:assembleDebug --console=plain
-./gradlew :app:lintRelease :app:assembleRelease --console=plain
+./gradlew clean :app:lintDebug :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintRelease :app:assembleRelease :app:verifyReleasePackaging --console=plain
 ```
+
+This local gate verifies source lint, JVM behavior, both APK variants, Android-test compilation, and the real release artifact's size/runtime inventory. It does not run instrumentation, render Compose on a device, exercise Readium, validate foreground services, or prove QNN performance.
 
 Performance baselines:
 

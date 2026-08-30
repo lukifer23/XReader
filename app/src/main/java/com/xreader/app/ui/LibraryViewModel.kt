@@ -7,6 +7,8 @@ import android.util.Log
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.xreader.app.AppContainer
 import com.xreader.app.data.BookAudioEntity
@@ -23,6 +25,7 @@ import com.xreader.app.opds.OpdsFeed
 import com.xreader.app.opds.OpdsCatalogLoadResult
 import com.xreader.app.opds.OpdsLink
 import com.xreader.app.settings.LibraryDensity
+import com.xreader.app.settings.LibraryGroup
 import com.xreader.app.settings.LibrarySort
 import com.xreader.app.settings.NeuralTtsGender
 import com.xreader.app.settings.NeuralTtsPace
@@ -50,26 +53,12 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
-
-enum class LibraryGroup {
-    BOOKS,
-    AUTHORS,
-    SERIES,
-    GENRES,
-    FORMATS,
-    YEARS,
-    COLLECTIONS,
-    RECENT,
-    UNREAD,
-    IN_PROGRESS,
-    FINISHED,
-    FAVORITES,
-}
 
 data class BookListItem(
     val book: BookEntity,
@@ -197,8 +186,8 @@ internal fun BookAudioEntity.audiobookUiInvalidationKey(): AudiobookUiInvalidati
         sampleRate = sampleRate,
         fileSizeBytes = fileSizeBytes.takeUnless { status == BookAudioStatus.GENERATING } ?: 0L,
         generationProvider = generationProvider,
-        generationAudioMillis = generationAudioMillis.takeUnless { status == BookAudioStatus.GENERATING } ?: 0L,
-        generationComputeMillis = generationComputeMillis.takeUnless { status == BookAudioStatus.GENERATING } ?: 0L,
+        generationAudioMillis = generationAudioMillis,
+        generationComputeMillis = generationComputeMillis,
         generationStartedAt = generationStartedAt,
         generationSessionStartCompletedSegments = generationSessionStartCompletedSegments,
         generatedAt = generatedAt,
@@ -235,10 +224,8 @@ internal fun sameAudiobookUiInvalidationRow(previous: BookAudioEntity, next: Boo
         previous.fileSizeBytes.takeUnless { previous.status == BookAudioStatus.GENERATING }.orZero() ==
             next.fileSizeBytes.takeUnless { next.status == BookAudioStatus.GENERATING }.orZero() &&
         previous.generationProvider == next.generationProvider &&
-        previous.generationAudioMillis.takeUnless { previous.status == BookAudioStatus.GENERATING }.orZero() ==
-            next.generationAudioMillis.takeUnless { next.status == BookAudioStatus.GENERATING }.orZero() &&
-        previous.generationComputeMillis.takeUnless { previous.status == BookAudioStatus.GENERATING }.orZero() ==
-            next.generationComputeMillis.takeUnless { next.status == BookAudioStatus.GENERATING }.orZero() &&
+        previous.generationAudioMillis == next.generationAudioMillis &&
+        previous.generationComputeMillis == next.generationComputeMillis &&
         previous.generationStartedAt == next.generationStartedAt &&
         previous.generationSessionStartCompletedSegments == next.generationSessionStartCompletedSegments &&
         previous.generatedAt == next.generatedAt &&
@@ -259,23 +246,20 @@ internal class BookAudiobookAudioUiItemCache {
     private val items = linkedMapOf<Long, CachedBookAudiobookAudioMetadata>()
 
     @Synchronized
-    fun toUiItems(rows: List<BookAudioEntity>): List<BookAudiobookAudioUiItem> {
-        val activeIds = HashSet<Long>(rows.size)
-        val uiItems = ArrayList<BookAudiobookAudioUiItem>(rows.size)
-        rows.forEach { audio ->
-            activeIds += audio.id
-            uiItems += toUiItemLocked(audio)
-        }
-        items.keys.retainAll(activeIds)
-        return uiItems
-    }
+    fun toUiItems(rows: List<BookAudioEntity>): List<BookAudiobookAudioUiItem> =
+        rows.toCachedUiItemsLocked { it }
 
     @Synchronized
-    fun toUiItemsForRows(rows: List<BookAudioWithBook>): List<BookAudiobookAudioUiItem> {
-        val activeIds = HashSet<Long>(rows.size)
-        val uiItems = ArrayList<BookAudiobookAudioUiItem>(rows.size)
-        rows.forEach { row ->
-            val audio = row.audio
+    fun toUiItemsForRows(rows: List<BookAudioWithBook>): List<BookAudiobookAudioUiItem> =
+        rows.toCachedUiItemsLocked { it.audio }
+
+    private inline fun <T> List<T>.toCachedUiItemsLocked(
+        audioForRow: (T) -> BookAudioEntity,
+    ): List<BookAudiobookAudioUiItem> {
+        val activeIds = HashSet<Long>(size)
+        val uiItems = ArrayList<BookAudiobookAudioUiItem>(size)
+        forEach { row ->
+            val audio = audioForRow(row)
             activeIds += audio.id
             uiItems += toUiItemLocked(audio)
         }
@@ -286,7 +270,7 @@ internal class BookAudiobookAudioUiItemCache {
     private fun toUiItemLocked(audio: BookAudioEntity): BookAudiobookAudioUiItem {
         val key = audio.audiobookMetadataInvalidationKey()
         items[audio.id]?.takeIf { it.key == key }?.let { cached ->
-            val liveGeneratingPlayableCount = audio.playableSegmentCount()
+            val liveGeneratingPlayableCount = audio.databaseBackedGeneratingPlayableSegmentCount()
             val liveGeneratingChapters = if (audio.status == BookAudioStatus.GENERATING) {
                 cached.generatingChapters.takeIf {
                     cached.generatingPlayableSegmentFiles == liveGeneratingPlayableCount
@@ -350,6 +334,13 @@ private fun BookAudioEntity.audiobookMetadataInvalidationKey(): AudiobookMetadat
         updatedAt = audiobookUiVisibleUpdatedAt()
     )
 
+private fun BookAudioEntity.databaseBackedGeneratingPlayableSegmentCount(): Int =
+    if (status == BookAudioStatus.GENERATING) {
+        completedSegments.coerceIn(0, segmentCount.coerceAtLeast(0))
+    } else {
+        playableSegmentCount()
+    }
+
 internal fun BookAudioEntity.toBookAudiobookAudioUiItem(): BookAudiobookAudioUiItem {
     val snapshot = generatedAudiobookFileSnapshot()
     return BookAudiobookAudioUiItem(
@@ -372,7 +363,7 @@ internal fun AudiobookPlaybackUiState.forLibraryChrome(): AudiobookPlaybackUiSta
         segmentDurationMs = 0
     )
 
-data class LibraryUiState(
+internal data class LibraryUiState(
     val query: String = "",
     val group: LibraryGroup = LibraryGroup.BOOKS,
     val sort: LibrarySort = LibrarySort.RECENT,
@@ -390,6 +381,15 @@ data class LibraryUiState(
     val audiobookScans: Map<Long, AudiobookScanUiState> = emptyMap(),
     val audiobookPlayback: AudiobookPlaybackUiState = EMPTY_AUDIOBOOK_PLAYBACK_UI_STATE,
     val opdsCatalog: OpdsCatalogUiState = OpdsCatalogUiState(),
+    val searchExpanded: Boolean = false,
+    val continueItem: BookListItem? = null,
+    val nextSeriesItem: SeriesNextRecommendation? = null,
+    val sections: List<LibrarySection> = emptyList(),
+)
+
+internal data class LibrarySection(
+    val header: String,
+    val books: List<BookListItem>,
 )
 
 data class LibraryMetadataOptionsUiState(
@@ -408,13 +408,16 @@ data class OpdsCatalogUiState(
 
 @SuppressLint("LogNotTimber")
 @OptIn(ExperimentalCoroutinesApi::class)
-class LibraryViewModel(private val container: AppContainer) : ViewModel() {
+class LibraryViewModel(
+    private val container: AppContainer,
+    private val savedStateHandle: SavedStateHandle,
+) : ViewModel() {
     private var neuralPreviewPlayer: MediaPlayer? = null
     private var neuralPreviewJob: Job? = null
     private val audiobookUiItemCache = BookAudiobookAudioUiItemCache()
 
-    private val query = MutableStateFlow("")
-    private val group = MutableStateFlow(LibraryGroup.BOOKS)
+    private val query = MutableStateFlow(savedStateHandle[QUERY_KEY] ?: "")
+    private val searchExpanded = MutableStateFlow(savedStateHandle[SEARCH_EXPANDED_KEY] ?: false)
     private val importing = MutableStateFlow(false)
     private val message = MutableStateFlow<LibraryMessage?>(null)
     private var nextMessageId = 0L
@@ -463,11 +466,9 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         val opdsCatalog: OpdsCatalogUiState,
     )
 
-    private val selectionState = combine(group, container.settingsRepository.librarySettings) {
-            currentGroup,
-            librarySettings ->
-        LibrarySelectionState(currentGroup, librarySettings.sort, librarySettings.density)
-    }.distinctUntilChanged()
+    private val selectionState = container.settingsRepository.librarySettings
+        .map { settings -> LibrarySelectionState(settings.group, settings.sort, settings.density) }
+        .distinctUntilChanged()
 
     private val chromeState = combine(selectionState, importing, message, searchResults, opdsCatalog) {
             selection,
@@ -479,8 +480,16 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     }.distinctUntilChanged()
 
     private data class LibraryBooksState(
+        val query: String,
         val queriedItems: List<BookListItem>,
         val allItems: List<BookListItem>,
+    )
+
+    private data class LibraryRawBooksState(
+        val books: List<BookEntity>,
+        val states: List<ReadingStateEntity>,
+        val collections: List<com.xreader.app.data.BookCollectionName>,
+        val pendingRemovalIds: Set<Long>,
     )
 
     private data class LibraryDisplayBooksState(
@@ -488,6 +497,9 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         val visibleItems: List<BookListItem>,
         val queriedItems: List<BookListItem>,
         val allItems: List<BookListItem>,
+        val continueItem: BookListItem?,
+        val nextSeriesItem: SeriesNextRecommendation?,
+        val sections: List<LibrarySection>,
     )
 
     private data class LibrarySupportState(
@@ -504,33 +516,35 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         val audiobookScans: Map<Long, AudiobookScanUiState>,
     )
 
-    private val allBookItems = combine(
+    private val rawBooksState = combine(
         allBooks,
         states,
         bookCollectionNames,
         pendingRemovalIds
     ) { currentAllBooks, currentStates, currentBookCollections, removingIds ->
+        LibraryRawBooksState(currentAllBooks, currentStates, currentBookCollections, removingIds)
+    }
+
+    private val allBookItems = rawBooksState.mapLatest { raw ->
         withContext(Dispatchers.Default) {
-            val statesByBook = currentStates.associateBy { it.bookId }
-            val collectionsByBook = currentBookCollections
+            val statesByBook = raw.states.associateBy { it.bookId }
+            val collectionsByBook = raw.collections
                 .groupBy { it.bookId }
                 .mapValues { (_, rows) ->
                     rows
                         .distinctBy { it.collectionId }
                         .map { CollectionUiItem(id = it.collectionId, name = it.name) }
                 }
-            val visibleAllBooks = currentAllBooks.withoutPendingRemovalIds(removingIds)
+            val visibleAllBooks = raw.books.withoutPendingRemovalIds(raw.pendingRemovalIds)
             visibleAllBooks.map { BookListItem(it, statesByBook[it.id], collectionsByBook[it.id].orEmpty()) }
         }
     }.distinctUntilChanged()
 
-    private val bookItems = combine(
-        allBookItems,
-        query
-    ) { allItems, currentQuery ->
+    private val bookItems = combine(allBookItems, query, ::Pair).mapLatest { (allItems, currentQuery) ->
         withContext(Dispatchers.Default) {
             val projection = allItems.toLibraryBooksProjection(currentQuery)
             LibraryBooksState(
+                query = currentQuery,
                 queriedItems = projection.queriedItems,
                 allItems = projection.allItems
             )
@@ -560,29 +574,48 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         )
     }.distinctUntilChanged()
 
-    private val displayBooks = combine(selectionState, bookItems) { selection, libraryBooks ->
+    private val displayBooks = combine(selectionState, bookItems, ::Pair).mapLatest { (selection, libraryBooks) ->
         withContext(Dispatchers.Default) {
+            val visibleItems = libraryBooks.queriedItems
+                .filteredBy(selection.group)
+                .sortedForLibrary(selection.sort)
+            val continueItem = if (selection.group == LibraryGroup.BOOKS) {
+                visibleItems
+                    .filter { it.isLibraryInProgress() }
+                    .maxByOrNull { it.state?.lastReadAt ?: it.book.lastOpenedAt ?: it.book.importedAt }
+            } else null
+            val nextSeriesItem = if (selection.group == LibraryGroup.BOOKS && libraryBooks.query.isBlank()) {
+                recommendNextSeriesBook(libraryBooks.allItems)
+                    ?.takeUnless { it.next.book.id == continueItem?.book?.id }
+            } else null
+            val sectionBooks = if (continueItem == null) visibleItems else visibleItems.filterNot { it.book.id == continueItem.book.id }
             LibraryDisplayBooksState(
                 selection = selection,
-                visibleItems = libraryBooks.queriedItems
-                    .filteredBy(selection.group)
-                    .sortedForLibrary(selection.sort),
+                visibleItems = visibleItems,
                 queriedItems = libraryBooks.queriedItems,
-                allItems = libraryBooks.allItems
+                allItems = libraryBooks.allItems,
+                continueItem = continueItem,
+                nextSeriesItem = nextSeriesItem,
+                sections = groupBooks(selection.group, sectionBooks, selection.sort)
+                    .map { (header, books) -> LibrarySection(header, books) },
             )
         }
     }.distinctUntilChanged()
 
-    val uiState: StateFlow<LibraryUiState> =
-        combine(query, chromeState, displayBooks, supportState, libraryAudiobookPlayback) {
-                currentQuery,
+    private data class LibraryQueryState(val query: String, val expanded: Boolean)
+
+    private val queryState = combine(query, searchExpanded, ::LibraryQueryState).distinctUntilChanged()
+
+    internal val uiState: StateFlow<LibraryUiState> =
+        combine(queryState, chromeState, displayBooks, supportState, libraryAudiobookPlayback) {
+                currentQueryState,
                 chrome,
                 libraryBooks,
                 support,
                 playback ->
             val selection = libraryBooks.selection
             LibraryUiState(
-                query = currentQuery,
+                query = currentQueryState.query,
                 group = selection.group,
                 sort = selection.sort,
                 density = selection.density,
@@ -598,7 +631,11 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
                 repairingBookIds = support.repairingBookIds,
                 audiobookScans = support.audiobookScans,
                 audiobookPlayback = playback,
-                opdsCatalog = chrome.opdsCatalog
+                opdsCatalog = chrome.opdsCatalog,
+                searchExpanded = currentQueryState.expanded,
+                continueItem = libraryBooks.continueItem,
+                nextSeriesItem = libraryBooks.nextSeriesItem,
+                sections = libraryBooks.sections,
             )
         }
             .distinctUntilChanged()
@@ -642,11 +679,17 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     fun setQuery(value: String) {
         val previous = query.value.trim()
         query.value = value
+        savedStateHandle[QUERY_KEY] = value
         if (value.trim() != previous) searchResults.value = emptyList()
     }
 
     fun setGroup(value: LibraryGroup) {
-        group.value = value
+        viewModelScope.launch { container.settingsRepository.setLibraryGroup(value) }
+    }
+
+    fun setSearchExpanded(value: Boolean) {
+        searchExpanded.value = value
+        savedStateHandle[SEARCH_EXPANDED_KEY] = value
     }
 
     fun setSort(value: LibrarySort) {
@@ -1044,6 +1087,11 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
 
     fun generateAudiobook(book: BookEntity, scope: AudiobookGenerationScope = AudiobookGenerationScope.FULL_BOOK) {
         val settings = readerSettings.value
+        val readiness = audiobookHardwareReadiness.value
+        if (!readiness.ready) {
+            postMessage(readiness.reason ?: "Audiobook generation requires strict hardware acceleration.")
+            return
+        }
         container.startAudiobookGeneration(
             bookId = book.id,
             modelId = settings.neuralTtsModelId,
@@ -1371,12 +1419,14 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         private const val AUDIOBOOK_ESTIMATED_WORDS_PER_MINUTE = 150
         private const val AUDIOBOOK_ESTIMATED_WAV_BYTES_PER_SECOND = 44_100L
         private const val AUDIOBOOK_SCAN_PREVIEW_CHAPTERS = 3
+        private const val QUERY_KEY = "library_query"
+        private const val SEARCH_EXPANDED_KEY = "library_search_expanded"
 
         fun factory(container: AppContainer): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
-                override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                    LibraryViewModel(container) as T
+                override fun <T : ViewModel> create(modelClass: Class<T>, extras: androidx.lifecycle.viewmodel.CreationExtras): T =
+                    LibraryViewModel(container, extras.createSavedStateHandle()) as T
             }
     }
 }

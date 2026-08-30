@@ -7,7 +7,6 @@ import java.nio.charset.CharacterCodingException
 import java.nio.charset.Charset
 import java.nio.charset.CodingErrorAction
 import java.util.UUID
-import java.util.zip.CRC32
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
@@ -26,7 +25,7 @@ class TxtToEpubConverter {
         output.parentFile?.mkdirs()
         ZipOutputStream(output.outputStream().buffered()).use { zip ->
             writeStored(zip, "mimetype", "application/epub+zip".toByteArray(Charsets.US_ASCII))
-            writeDeflated(zip, "META-INF/container.xml", containerXml.toByteArray(Charsets.UTF_8))
+            writeDeflated(zip, "META-INF/container.xml", EPUB_CONTAINER_BYTES)
             writeDeflated(zip, "OEBPS/package.opf", packageDocument(parsed.title, identifier, parsed.chapters).toByteArray(Charsets.UTF_8))
             writeDeflated(zip, "OEBPS/nav.xhtml", navigationDocument(parsed.title, parsed.chapters).toByteArray(Charsets.UTF_8))
             parsed.chapters.forEachIndexed { index, chapter ->
@@ -255,32 +254,6 @@ class TxtToEpubConverter {
         }
     }
 
-    private fun writeStored(zip: ZipOutputStream, name: String, bytes: ByteArray) {
-        val crc = CRC32().apply { update(bytes) }
-        val entry = ZipEntry(name).apply {
-            method = ZipEntry.STORED
-            size = bytes.size.toLong()
-            compressedSize = bytes.size.toLong()
-            this.crc = crc.value
-        }
-        zip.putNextEntry(entry)
-        zip.write(bytes)
-        zip.closeEntry()
-    }
-
-    private fun writeDeflated(zip: ZipOutputStream, name: String, bytes: ByteArray) {
-        zip.putNextEntry(ZipEntry(name))
-        zip.write(bytes)
-        zip.closeEntry()
-    }
-
-    private fun escapeXml(value: String): String =
-        value.replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-            .replace("\"", "&quot;")
-            .replace("'", "&apos;")
-
     private fun StringBuilder.appendTitlePart(value: String?) {
         val clean = value?.trim().orEmpty()
         if (clean.isBlank()) return
@@ -308,14 +281,6 @@ class TxtToEpubConverter {
         val text: String,
     )
 
-    private val containerXml = """
-        <?xml version="1.0" encoding="UTF-8"?>
-        <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
-          <rootfiles>
-            <rootfile full-path="OEBPS/package.opf" media-type="application/oebps-package+xml"/>
-          </rootfiles>
-        </container>
-    """.trimIndent()
 
     private companion object {
         const val MAX_TXT_BYTES = 32L * 1024L * 1024L

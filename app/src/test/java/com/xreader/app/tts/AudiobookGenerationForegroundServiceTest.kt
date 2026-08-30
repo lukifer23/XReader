@@ -205,7 +205,24 @@ class AudiobookGenerationForegroundServiceTest {
     }
 
     @Test
-    fun generationNotificationKeyTracksVisibleEtaTextChanges() {
+    fun generationNotificationKeyIgnoresEtaOnlyAging() {
+        val base = audio(
+            status = BookAudioStatus.GENERATING,
+            segmentCount = 100,
+            completedSegments = 10,
+            generationStartedAt = 1_000L,
+            generationSessionStartCompletedSegments = 0,
+            updatedAt = 61_000L
+        )
+
+        assertEquals(
+            generationNotificationKey(base),
+            generationNotificationKey(base.copy(updatedAt = 601_000L))
+        )
+    }
+
+    @Test
+    fun generationNotificationKeyTracksActualSegmentProgress() {
         val base = audio(
             status = BookAudioStatus.GENERATING,
             segmentCount = 100,
@@ -217,7 +234,7 @@ class AudiobookGenerationForegroundServiceTest {
 
         assertTrue(
             generationNotificationKey(base) !=
-                generationNotificationKey(base.copy(updatedAt = 601_000L))
+                generationNotificationKey(base.copy(completedSegments = 11, updatedAt = 90_000L))
         )
     }
 

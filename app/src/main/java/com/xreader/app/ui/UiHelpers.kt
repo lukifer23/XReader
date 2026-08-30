@@ -72,6 +72,7 @@ import com.xreader.app.data.ReaderTheme
 import com.xreader.app.settings.ReaderOrientation
 import com.xreader.app.data.ReadingStateEntity
 import com.xreader.app.settings.LibrarySort
+import com.xreader.app.settings.LibraryGroup
 import java.util.Locale
 import kotlin.math.ceil
 import kotlin.math.roundToInt
@@ -131,7 +132,7 @@ internal enum class AppTab {
 internal fun ThemeToggleButton(theme: ReaderTheme, onClick: () -> Unit) {
     val dark = theme == ReaderTheme.DARK || theme == ReaderTheme.OLED
     val label = if (dark) "Switch to light mode" else "Switch to dark mode"
-    TooltipIconButton(label = label, onClick = onClick, modifier = Modifier.size(44.dp)) {
+    TooltipIconButton(label = label, onClick = onClick, modifier = Modifier.size(48.dp)) {
         Icon(
             imageVector = if (dark) Icons.Filled.LightMode else Icons.Filled.DarkMode,
             contentDescription = null
@@ -142,7 +143,7 @@ internal fun ThemeToggleButton(theme: ReaderTheme, onClick: () -> Unit) {
 @Composable
 internal fun FullScreenToggleButton(fullScreen: Boolean, onClick: () -> Unit) {
     val label = if (fullScreen) "Exit fullscreen" else "Enter fullscreen"
-    TooltipIconButton(label = label, onClick = onClick, modifier = Modifier.size(44.dp)) {
+    TooltipIconButton(label = label, onClick = onClick, modifier = Modifier.size(48.dp)) {
         Icon(
             imageVector = if (fullScreen) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen,
             contentDescription = null

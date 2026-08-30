@@ -4,6 +4,10 @@
 
 ### Added
 
+- A versioned full backup now carries library metadata, collections, progress, sessions, settings, per-book appearance, notes, highlights, tags, and bookmarks in one validated local file while preserving the existing separate import tools for compatibility.
+- Settings search now finds existing appearance, typography, reading, library, and maintenance controls without adding another settings hierarchy.
+- Room schema 15 removes the redundant B-tree index on full-text content while retaining FTS as the search authority, with the complete migration chain compiled into Android instrumentation coverage.
+- Release packaging verification now inspects the real APK, enforces a 210 MiB ceiling, inventories intentional QNN native/DSP duplicates against an explicit allowlist, and rejects prohibited GPU/OpenCL fallback runtimes.
 - Embedded Kokoro v1.0 audiobook generation with model download/install/delete controls, narrator selection, narration style, pacing, scan summaries, sample/first-chapter/full-book scopes, persisted progress/ETA, partial playback, generated-audio resume, chapter picker/jump controls, delete, and ZIP export.
 - Global Audiobooks screen for completed, partial, active, failed, and generated audio rows, with compact playback controls and chapter navigation.
 - Collection additions can now be applied to every book in the same-author series from the existing book collections dialog.
@@ -11,6 +15,12 @@
 
 ### Changed
 
+- Library grouping now persists with sort and density, while transient search state survives recreation through saved state.
+- Library filtering, grouping, continuation, and recommendation projection now runs off the Compose thread and cancels stale calculations before publishing stable display sections.
+- Reader and library layout decisions now use actual Compose window/container measurements, and compact icon controls use 48 dp touch targets.
+- Library audiobook controls and the full Settings surface now live in focused screen files instead of the two catch-all Compose files, with navigation and actions unchanged.
+- All ten EPUB-producing converters now share tested ZIP-entry and XML-escaping primitives while preserving their format-specific parsing, metadata, chapter, and navigation behavior.
+- Read-aloud, generated playback, and audiobook generation services now share Android compatibility helpers for notification channels, foreground startup/teardown, and app intents without merging their distinct lifecycles.
 - Documentation now records the current audiobook acceleration focus: strict hardware generation only, no CPU fallback masquerading as acceleration, and prepared QNN/NPU artifacts gated by a strict compatibility manifest.
 - Audiobook hardware readiness now probes strict QNN availability with non-mutating provider labels; real provider config files are written only when generation initializes a runtime.
 - Long native audiobook segment generation now separates lightweight cancellation polling from row-dirtying heartbeat writes, reducing Room invalidations and UI churn while generation is under hardware load.

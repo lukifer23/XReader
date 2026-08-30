@@ -1,13 +1,12 @@
 package com.xreader.app.tts
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Build
 import android.system.Os
-import android.system.OsConstants
 import android.util.Log
 import com.xreader.app.BuildConfig
 import java.io.File
-import java.io.FileDescriptor
 import java.util.Collections
 import java.util.Locale
 import java.util.zip.ZipFile
@@ -18,7 +17,6 @@ internal object TtsAccelerationRuntime {
     private val failedProviderReasons = Collections.synchronizedMap(mutableMapOf<String, String>())
     private val packagedNativeLibrariesCacheLock = Any()
     private var packagedNativeLibrariesCache: PackagedNativeLibrariesCache? = null
-    private var qnnGpuOpenClDriverFd: FileDescriptor? = null
     private var qnnSignedProcessDomainOverride: Boolean? = null
     private var qnnSignedProcessDomainOptionOverride: Boolean? = null
     private var qnnSocModelOverride: Int? = null
@@ -26,13 +24,6 @@ internal object TtsAccelerationRuntime {
 
     private val requiredQnnCoreLibraries = setOf(
         "libQnnSystem.so",
-    )
-
-    private val requiredQnnGpuLibraries = setOf(
-        "libQnnGpu.so",
-        "libQnnGpuNetRunExtensions.so",
-        "libOpenCL.so",
-        "libOpenCL_adreno.so",
     )
 
     private val requiredQnnHtpLibraries = setOf(
@@ -43,8 +34,6 @@ internal object TtsAccelerationRuntime {
 
     fun providerOrder(
         context: Context,
-        includeExperimentalWebGpu: Boolean = false,
-        includeCpuFallbacks: Boolean = true,
         configureQnnProviders: Boolean = true,
     ): List<String> {
         val installedLibraries = packagedNativeLibraries(context)
@@ -63,30 +52,24 @@ internal object TtsAccelerationRuntime {
         )
         return providerOrder(
             installedLibraries = installedLibraries,
-            hasVulkan = context.packageManager.hasSystemFeature("android.hardware.vulkan.level"),
-            includeExperimentalWebGpu = includeExperimentalWebGpu,
             androidApiLevel = Build.VERSION.SDK_INT,
             hardware = hardware,
             boardPlatform = boardPlatform,
             socManufacturer = socManufacturer,
             socModel = socModel,
             qnnProviders = qnnProviders,
-            includeCpuFallbacks = includeCpuFallbacks,
             logDecisions = true,
         )
     }
 
     internal fun providerOrder(
         installedLibraries: Set<String>,
-        hasVulkan: Boolean,
-        includeExperimentalWebGpu: Boolean,
         androidApiLevel: Int = Build.VERSION.SDK_INT,
         hardware: String,
         boardPlatform: String,
         socManufacturer: String,
         socModel: String,
         qnnProviders: List<String> = listOf("qnn"),
-        includeCpuFallbacks: Boolean = true,
         logDecisions: Boolean = false,
     ): List<String> {
         val providers = mutableListOf<String>()
@@ -97,47 +80,25 @@ internal object TtsAccelerationRuntime {
             socManufacturer = socManufacturer,
             socModel = socModel,
         )
-        val nnapi = nnapiReadiness(
-            installedLibraries = installedLibraries,
-            androidApiLevel = androidApiLevel,
-        )
-        if (qnn.ready && qnnProviders.isNotEmpty()) {
-            providers += qnnProviders
-            if (logDecisions) Log.i(TAG, "QNN providers enabled: ${qnn.reason}")
+        val selectedQnnProvider = selectedQnnProvider(qnnProviders)
+        if (qnn.ready && selectedQnnProvider != null) {
+            providers += selectedQnnProvider
+            if (logDecisions) {
+                Log.i(
+                    TAG,
+                    "QNN hardware provider enabled: " +
+                        "${providerDisplayKey(selectedQnnProvider)}. ${qnn.reason}"
+                )
+            }
         } else if (qnn.ready) {
             if (logDecisions) Log.i(TAG, "QNN provider staged but no provider config could be written.")
         } else {
             if (logDecisions) Log.i(TAG, "QNN provider unavailable: ${qnn.reason}")
         }
-        if (nnapi.ready) {
-            providers += NNAPI_PROVIDER
-            if (logDecisions) Log.i(TAG, "NNAPI provider enabled: ${nnapi.reason}")
-        } else if (logDecisions) {
-            Log.i(TAG, "NNAPI provider unavailable: ${nnapi.reason}")
-        }
-        if (includeExperimentalWebGpu) {
-            val webGpu = webGpuReadiness(
-                installedLibraries = installedLibraries,
-                hasVulkan = hasVulkan,
-            )
-            if (webGpu.ready) {
-                providers += "webgpu"
-                if (logDecisions) Log.i(TAG, "WebGPU provider enabled for experimental Android Vulkan acceleration.")
-            } else {
-                if (logDecisions) Log.i(TAG, "WebGPU provider unavailable: ${webGpu.reason}")
-            }
-        } else {
-            if (logDecisions) Log.i(TAG, "WebGPU provider skipped for stable audiobook generation.")
-        }
-        if (includeCpuFallbacks) {
-            providers += "xnnpack"
-            providers += "cpu"
-        } else if (logDecisions) {
-            Log.i(TAG, "CPU-backed providers skipped for strict audiobook generation.")
-        }
+        if (logDecisions) Log.i(TAG, "Only QNN HTP/NPU neural TTS generation is enabled.")
         return providers.filter { provider ->
             val key = providerFailureKey(provider)
-            val keep = key == "cpu" || key !in failedProviderKeys
+            val keep = key !in failedProviderKeys
             if (!keep && logDecisions) {
                 val reason = failedProviderReasons[key]?.let { " Reason: $it" }.orEmpty()
                 Log.i(TAG, "Skipping provider=$key after a previous initialization failure in this process.$reason")
@@ -150,14 +111,18 @@ internal object TtsAccelerationRuntime {
         provider.substringBefore(':').trim().lowercase(Locale.US)
 
     fun isHardwareAcceleratedProvider(provider: String): Boolean =
-        providerKey(provider) in setOf("qnn", "nnapi", "webgpu")
+        isStrictQnnHardwareProvider(provider)
 
     fun isStrictAudiobookHardwareProvider(provider: String): Boolean =
-        providerKey(provider) == "qnn"
+        isAudiobookGenerationAcceleratedProvider(provider)
 
     fun isAudiobookGenerationAcceleratedProvider(provider: String): Boolean {
+        return isStrictQnnHardwareProvider(provider)
+    }
+
+    private fun isStrictQnnHardwareProvider(provider: String): Boolean {
         val displayKey = providerDisplayKey(provider)
-        return displayKey == "qnn-gpu" || displayKey == "qnn-htp"
+        return displayKey == "qnn-htp"
     }
 
     fun providerDisplayKey(provider: String): String {
@@ -165,11 +130,7 @@ internal object TtsAccelerationRuntime {
         if (normalized.startsWith("qnn:")) {
             val path = normalized.substringAfter(':')
             return when {
-                "qnn-gpu-hybrid-provider.config" in path -> "qnn-gpu-hybrid"
-                "qnn-htp-hybrid-provider.config" in path -> "qnn-htp-hybrid"
-                "qnn-gpu-strict-provider.config" in path -> "qnn-gpu"
                 "qnn-htp-strict-provider.config" in path -> "qnn-htp"
-                "qnn-gpu-provider.config" in path -> "qnn-gpu"
                 "qnn-htp-provider.config" in path -> "qnn-htp"
                 else -> "qnn"
             }
@@ -179,12 +140,12 @@ internal object TtsAccelerationRuntime {
 
     fun qnnBackend(provider: String): QnnBackend? =
         when (providerDisplayKey(provider)) {
-            "qnn-gpu",
-            "qnn-gpu-hybrid" -> QnnBackend.GPU
-            "qnn-htp",
-            "qnn-htp-hybrid" -> QnnBackend.HTP
+            "qnn-htp" -> QnnBackend.HTP
             else -> null
         }
+
+    internal fun selectedQnnProvider(providers: List<String>): String? =
+        providers.firstOrNull { providerDisplayKey(it) == "qnn-htp" }
 
     fun recordProviderInitialized(provider: String) {
         val key = providerFailureKey(provider)
@@ -224,9 +185,6 @@ internal object TtsAccelerationRuntime {
     fun providerInitializationFailureSummary(provider: String, error: Throwable?): String? {
         if (error == null) return null
         return when {
-            isQnnGpuOpenClFailure(provider, error) ->
-                "QNN GPU failed before audio generation. " +
-                    "The Qualcomm runtime could not load a usable OpenCL driver from the app process."
             isQnnHtpTransportFailure(provider, error) ->
                 "QNN HTP/NPU transport failed before audio generation. " +
                     "The Qualcomm runtime could not create the DSP/HTP device for this app process."
@@ -235,40 +193,7 @@ internal object TtsAccelerationRuntime {
     }
 
     fun audiobookHardwareProviderBlockReason(): String? =
-        orderedProviderFailureSummary(
-            first = failedProviderReasons["qnn-gpu"],
-            second = failedProviderReasons["qnn-htp"],
-        )
-
-    internal fun orderedProviderFailureSummary(first: String?, second: String?): String? {
-        val summary = StringBuilder()
-        val firstCleaned = first?.trim().orEmpty()
-        val secondCleaned = second?.trim().orEmpty()
-        if (firstCleaned.isNotBlank()) {
-            summary.append(firstCleaned)
-        }
-        if (secondCleaned.isNotBlank() && secondCleaned != firstCleaned) {
-            if (summary.isNotEmpty()) summary.append(' ')
-            summary.append(secondCleaned)
-        }
-        return summary.toString().ifBlank { null }
-    }
-
-    internal fun isQnnGpuOpenClFailure(provider: String, error: Throwable): Boolean {
-        if (providerDisplayKey(provider) != "qnn-gpu") return false
-        val details = error.throwableChainText().lowercase(Locale.US)
-        return listOf(
-            "invalid opencl driver path",
-            "unable to open opencl driver",
-            "failed to retrieve opencl platform",
-            "failed to retrieve opencl platforms",
-            "failed to retrieve opencl devices",
-            "gpu_error_failed_creation",
-            "qnn_common_error_platform_not_supported",
-            "libopencl.so",
-            "opencl is not enabled"
-        ).any { it in details }
-    }
+        failedProviderReasons["qnn-htp"]?.trim()?.takeIf { it.isNotBlank() }
 
     internal fun isQnnHtpTransportFailure(provider: String, error: Throwable): Boolean {
         if (providerDisplayKey(provider) != "qnn-htp") return false
@@ -298,26 +223,6 @@ internal object TtsAccelerationRuntime {
         }
     }
 
-    fun webGpuReadiness(context: Context): WebGpuReadiness {
-        return webGpuReadiness(
-            installedLibraries = packagedNativeLibraries(context),
-            hasVulkan = context.packageManager.hasSystemFeature("android.hardware.vulkan.level"),
-        )
-    }
-
-    internal fun webGpuReadiness(
-        installedLibraries: Set<String>,
-        hasVulkan: Boolean,
-    ): WebGpuReadiness {
-        if (!hasVulkan) {
-            return WebGpuReadiness(false, "Device does not advertise Vulkan support.")
-        }
-        if ("libonnxruntime.so" !in installedLibraries || "libsherpa-onnx-jni.so" !in installedLibraries) {
-            return WebGpuReadiness(false, "Missing packaged Sherpa/ONNX Runtime libraries.")
-        }
-        return WebGpuReadiness(true, "Device advertises Vulkan and packaged ONNX Runtime includes WebGPU on supported builds.")
-    }
-
     fun qnnReadiness(context: Context): QnnReadiness {
         val installedLibraries = packagedNativeLibraries(context)
         return qnnReadiness(
@@ -343,42 +248,23 @@ internal object TtsAccelerationRuntime {
         if (missingCore.isNotEmpty()) {
             return QnnReadiness(false, "Missing packaged QNN core libraries: ${missingCore.joinToString()}.")
         }
-        val gpu = qnnBackendReadiness(installedLibraries, QnnBackend.GPU)
         val htp = qnnBackendReadiness(installedLibraries, QnnBackend.HTP)
-        if (!gpu.ready && !htp.ready) {
+        if (!htp.ready) {
             return QnnReadiness(
                 false,
-                "No packaged QNN hardware backend is usable. GPU: ${gpu.reason} HTP: ${htp.reason}"
+                "QNN HTP/NPU hardware pipeline is not usable. ${htp.reason}"
             )
         }
         return QnnReadiness(
             true,
             buildString {
-                append("Qualcomm target with packaged QNN hardware runtime.")
-                if (gpu.ready) append(" GPU ready.")
-                if (htp.ready) append(" HTP/NPU ready.")
-                if (!gpu.ready) append(" GPU unavailable: ${gpu.reason}")
-                if (!htp.ready) append(" HTP unavailable: ${htp.reason}")
+                append("Qualcomm target with packaged QNN HTP/NPU hardware runtime.")
             }
         )
     }
 
-    internal fun nnapiReadiness(
-        installedLibraries: Set<String>,
-        androidApiLevel: Int,
-    ): NnapiReadiness {
-        if (androidApiLevel < 27) {
-            return NnapiReadiness(false, "Android API $androidApiLevel is below NNAPI's supported API 27 floor.")
-        }
-        if ("libonnxruntime.so" !in installedLibraries || "libsherpa-onnx-jni.so" !in installedLibraries) {
-            return NnapiReadiness(false, "Missing packaged Sherpa/ONNX Runtime libraries.")
-        }
-        return NnapiReadiness(true, "Android NNAPI runtime is available for strict hardware execution.")
-    }
-
-    fun qnnProviderString(context: Context): String? {
-        return qnnProviderStrings(context).firstOrNull()
-    }
+    fun qnnProviderString(context: Context): String? =
+        qnnProviderStrings(context).firstOrNull()
 
     fun qnnProviderStrings(context: Context): List<String> {
         return qnnProviderStrings(
@@ -409,42 +295,37 @@ internal object TtsAccelerationRuntime {
             socModel = socModel,
         )
         if (!readiness.ready) return emptyList()
-        return qnnProviderModes(installedLibraries).map { mode ->
-            if (configureProviders) {
-                val configFile = writeQnnProviderConfig(context, socModel, mode)
-                "qnn:${configFile.absolutePath}"
-            } else {
-                "qnn-${mode.backend.configName}"
-            }
+        val mode = qnnProviderMode(installedLibraries) ?: return emptyList()
+        val provider = if (configureProviders) {
+            val configFile = writeQnnProviderConfig(context, socModel, mode)
+            "qnn:${configFile.absolutePath}"
+        } else {
+            "qnn-${mode.backend.configName}"
         }
+        return listOf(provider)
     }
 
     internal fun qnnProviderModes(installedLibraries: Set<String>): List<QnnProviderMode> =
-        buildList {
-            if (qnnBackendReadiness(installedLibraries, QnnBackend.GPU).ready) {
-                add(QnnProviderMode(QnnBackend.GPU, QnnExecutionMode.STRICT))
-            }
-            if (qnnBackendReadiness(installedLibraries, QnnBackend.HTP).ready) {
-                add(QnnProviderMode(QnnBackend.HTP, QnnExecutionMode.STRICT))
-            }
+        qnnProviderMode(installedLibraries)?.let(::listOf).orEmpty()
+
+    internal fun qnnProviderMode(installedLibraries: Set<String>): QnnProviderMode? =
+        when {
+            qnnBackendReadiness(installedLibraries, QnnBackend.HTP).ready ->
+                QnnProviderMode(QnnBackend.HTP, QnnExecutionMode.STRICT)
+            else -> null
         }
 
     internal fun qnnBackendReadiness(
         installedLibraries: Set<String>,
         backend: QnnBackend,
     ): QnnBackendReadiness {
-        val missing = when (backend) {
-            QnnBackend.GPU -> requiredQnnGpuLibraries.filterNot { it in installedLibraries }
-            QnnBackend.HTP -> requiredQnnHtpLibraries.filterNot { it in installedLibraries }
-        }
+        val missing = requiredQnnHtpLibraries.filterNot { it in installedLibraries }
         if (missing.isNotEmpty()) {
             return QnnBackendReadiness(false, "Missing ${backend.displayName} libraries: ${missing.joinToString()}.")
         }
-        if (backend == QnnBackend.HTP) {
-            val packagedArchitectures = qnnHtpPackagedArchitectureVersions(installedLibraries)
-            if (packagedArchitectures.isEmpty()) {
-                return QnnBackendReadiness(false, "Missing matching QNN HTP Stub/Skel/DSP libraries.")
-            }
+        val packagedArchitectures = qnnHtpPackagedArchitectureVersions(installedLibraries)
+        if (packagedArchitectures.isEmpty()) {
+            return QnnBackendReadiness(false, "Missing matching QNN HTP Stub/Skel/DSP libraries.")
         }
         return QnnBackendReadiness(true, "${backend.displayName} runtime is packaged.")
     }
@@ -496,11 +377,6 @@ internal object TtsAccelerationRuntime {
         val nativeLibraryDir = context.applicationInfo.nativeLibraryDir
             ?.takeIf { it.isNotBlank() }
             ?: return
-        if (mode.backend == QnnBackend.GPU) {
-            configureQnnGpuProcessEnvironment(context, nativeLibraryDir)
-            return
-        }
-        if (mode.backend != QnnBackend.HTP) return
         val dspRuntimePath = qnnExtractedDspRuntimePath(context)
         val useSignedProcessDomain = qnnUseSignedProcessDomain()
         val adspLibraryPath = qnnHtpAdspLibraryPath(
@@ -521,90 +397,6 @@ internal object TtsAccelerationRuntime {
         }.onFailure { error ->
             Log.w(TAG, "Could not configure $QNN_ADSP_LIBRARY_PATH for QNN HTP.", error)
         }
-    }
-
-    private fun configureQnnGpuProcessEnvironment(
-        context: Context,
-        nativeLibraryDir: String,
-    ) {
-        val packagedOpenClDirectory = qnnGpuOpenClDriverPath(nativeLibraryDir) ?: return
-        val fixedOpenClDriver = bindQnnGpuOpenClDriverFd(nativeLibraryDir)
-        val openClDriver = fixedOpenClDriver ?: packagedOpenClDirectory
-        val libraryPath = qnnGpuLibrarySearchPath(
-            nativeLibraryDir = nativeLibraryDir,
-            existingPath = Os.getenv(QNN_GPU_LD_LIBRARY_PATH)
-        )
-        val icdVendorsPath = qnnGpuIcdVendorsPath(context, nativeLibraryDir)
-        runCatching {
-            Os.setenv(QNN_GPU_LD_LIBRARY_PATH, libraryPath, true)
-            Os.setenv(QNN_GPU_CL_LIBRARY_PATH, openClDriver, true)
-            icdVendorsPath?.let { Os.setenv(QNN_GPU_OCL_ICD_VENDORS, it, true) }
-            Log.i(
-                TAG,
-                "Configured QNN GPU OpenCL environment: " +
-                    "$QNN_GPU_LD_LIBRARY_PATH=$libraryPath " +
-                    "$QNN_GPU_CL_LIBRARY_PATH=$openClDriver " +
-                    "fixedOpenClDriver=${fixedOpenClDriver.orEmpty()} " +
-                    "$QNN_GPU_OCL_ICD_VENDORS=${icdVendorsPath.orEmpty()}"
-            )
-        }.onFailure { error ->
-            Log.w(TAG, "Could not configure QNN GPU OpenCL environment.", error)
-        }
-    }
-
-    internal fun qnnGpuOpenClDriverPath(nativeLibraryDir: String): String? {
-        val directory = File(nativeLibraryDir)
-        return directory
-            .takeIf { File(it, "libOpenCL.so").isFile && File(it, "libOpenCL_adreno.so").isFile }
-            ?.absolutePath
-    }
-
-    internal fun qnnGpuLibrarySearchPath(
-        nativeLibraryDir: String,
-        existingPath: String? = null,
-    ): String {
-        val orderedPaths = buildList {
-            add(nativeLibraryDir)
-            existingPath
-                ?.split(QNN_GPU_LIBRARY_PATH_SEPARATOR)
-                ?.map { it.trim() }
-                ?.filter { it.isNotBlank() }
-                ?.let(::addAll)
-        }
-        return orderedPaths
-            .distinct()
-            .joinToString(QNN_GPU_LIBRARY_PATH_SEPARATOR)
-    }
-
-    internal fun qnnGpuIcdVendorFileText(nativeLibraryDir: String): String =
-        File(nativeLibraryDir, "libOpenCL_adreno.so").absolutePath + "\n"
-
-    private fun bindQnnGpuOpenClDriverFd(nativeLibraryDir: String): String? {
-        val source = File(nativeLibraryDir, "libOpenCL.so")
-        if (!source.isFile) return null
-        return runCatching {
-            val opened = Os.open(source.absolutePath, OsConstants.O_RDONLY, 0)
-            qnnGpuOpenClDriverFd = Os.dup2(opened, QNN_GPU_OPENCL_DRIVER_FD)
-            QNN_GPU_OPENCL_DRIVER_FD_PATH
-        }.onFailure { error ->
-            Log.w(TAG, "Could not bind QNN GPU OpenCL loader to $QNN_GPU_OPENCL_DRIVER_FD_PATH.", error)
-        }.getOrNull()
-    }
-
-    private fun qnnGpuIcdVendorsPath(
-        context: Context,
-        nativeLibraryDir: String,
-    ): String? {
-        val driver = File(nativeLibraryDir, "libOpenCL_adreno.so")
-        if (!driver.isFile) return null
-        return runCatching {
-            val directory = File(context.cacheDir, "opencl-vendors").apply { mkdirs() }
-            val vendorFile = File(directory, "xreader-adreno.icd")
-            vendorFile.writeText(qnnGpuIcdVendorFileText(nativeLibraryDir))
-            directory.absolutePath
-        }.onFailure { error ->
-            Log.w(TAG, "Could not write QNN GPU OpenCL ICD vendor file.", error)
-        }.getOrNull()
     }
 
     internal fun qnnHtpAdspLibraryPath(
@@ -703,7 +495,7 @@ internal object TtsAccelerationRuntime {
         val normalizedSoc = socModel.uppercase(Locale.US)
         val options = linkedMapOf(
             "backend_path" to (backendPath ?: mode.backend.providerLibrary),
-            "disable_cpu_ep_fallback" to if (mode.execution == QnnExecutionMode.STRICT) "1" else "0",
+            "disable_cpu_ep_fallback" to "1",
             "offload_graph_io_quantization" to "0",
             "log_severity_level" to "0",
             "skip_qnn_version_check" to "0",
@@ -786,6 +578,8 @@ internal object TtsAccelerationRuntime {
         return listOf("qcom", "qti", "qualcomm", "snapdragon", "sm8").any { it in haystack }
     }
 
+    // Read-only debug/runtime hints have no public API; failures are contained and become an empty value.
+    @SuppressLint("PrivateApi")
     private fun systemProperty(name: String): String =
         runCatching {
             Class.forName("android.os.SystemProperties")
@@ -887,15 +681,8 @@ internal object TtsAccelerationRuntime {
             .takeIf { version -> version.isNotBlank() && version.all(Char::isDigit) }
     }
 
-    private const val NNAPI_PROVIDER = "nnapi"
     private const val QNN_ADSP_LIBRARY_PATH = "ADSP_LIBRARY_PATH"
     private const val QNN_DSP_ASSET_ROOT = "qnn-dsp"
-    private const val QNN_GPU_LD_LIBRARY_PATH = "LD_LIBRARY_PATH"
-    private const val QNN_GPU_CL_LIBRARY_PATH = "CL_LIBRARY_PATH"
-    private const val QNN_GPU_OCL_ICD_VENDORS = "OCL_ICD_VENDORS"
-    private const val QNN_GPU_LIBRARY_PATH_SEPARATOR = ":"
-    private const val QNN_GPU_OPENCL_DRIVER_FD = 198
-    private const val QNN_GPU_OPENCL_DRIVER_FD_PATH = "/dev/fd/198"
     private const val QNN_ADSP_PATH_SEPARATOR = ";"
     private const val QNN_HTP_DEVICE_ID = 0
     private const val QNN_HTP_RPC_CONTROL_LATENCY_MS = 200
@@ -938,23 +725,12 @@ internal data class QnnBackendReadiness(
     val reason: String,
 )
 
-internal data class WebGpuReadiness(
-    val ready: Boolean,
-    val reason: String,
-)
-
-internal data class NnapiReadiness(
-    val ready: Boolean,
-    val reason: String,
-)
-
 internal enum class QnnBackend(
     val configName: String,
     val displayName: String,
     val providerType: String,
     val providerLibrary: String,
 ) {
-    GPU("gpu", "GPU", "gpu", "libQnnGpu.so"),
     HTP("htp", "HTP/NPU", "htp", "libQnnHtp.so"),
 }
 
@@ -968,5 +744,4 @@ internal enum class QnnExecutionMode(
     val displayName: String,
 ) {
     STRICT("strict", "strict"),
-    HYBRID("hybrid", "hybrid"),
 }

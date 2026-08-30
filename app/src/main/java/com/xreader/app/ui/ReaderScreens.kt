@@ -585,7 +585,7 @@ internal fun ReaderTopChrome(
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            TooltipIconButton(label = "Back to library", onClick = onBack, modifier = Modifier.size(44.dp)) {
+            TooltipIconButton(label = "Back to library", onClick = onBack, modifier = Modifier.size(48.dp)) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
             }
             Column(Modifier.weight(1f)) {
@@ -692,7 +692,7 @@ internal fun ReaderBottomBar(
                         label = "Previous read-aloud passage",
                         onClick = onReadAloudPrevious,
                         enabled = readAloudCanSkipPrevious(readAloud),
-                        modifier = Modifier.size(44.dp)
+                        modifier = Modifier.size(48.dp)
                     ) {
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = null)
                     }
@@ -702,7 +702,7 @@ internal fun ReaderBottomBar(
                     TooltipIconButton(
                         label = "Stop read aloud",
                         onClick = onStopReadAloud,
-                        modifier = Modifier.size(44.dp)
+                        modifier = Modifier.size(48.dp)
                     ) {
                         Icon(Icons.Filled.Stop, contentDescription = null)
                     }
@@ -712,7 +712,7 @@ internal fun ReaderBottomBar(
                         label = "Next read-aloud passage",
                         onClick = onReadAloudNext,
                         enabled = readAloudCanSkipNext(readAloud),
-                        modifier = Modifier.size(44.dp)
+                        modifier = Modifier.size(48.dp)
                     ) {
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
                     }
@@ -722,7 +722,7 @@ internal fun ReaderBottomBar(
                         label = "Previous page",
                         onClick = onPrevious,
                         enabled = canGoPreviousPage,
-                        modifier = Modifier.size(44.dp)
+                        modifier = Modifier.size(48.dp)
                     ) {
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = null)
                     }
@@ -744,7 +744,7 @@ internal fun ReaderBottomBar(
                         label = "Next page",
                         onClick = onNext,
                         enabled = canGoNextPage,
-                        modifier = Modifier.size(44.dp)
+                        modifier = Modifier.size(48.dp)
                     ) {
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
                     }
@@ -756,7 +756,7 @@ internal fun ReaderBottomBar(
 
 @Composable
 private fun ReadAloudButton(readAloud: ReadAloudState, onClick: () -> Unit) {
-    TooltipIconButton(label = readAloudToggleLabel(readAloud), onClick = onClick, modifier = Modifier.size(44.dp)) {
+    TooltipIconButton(label = readAloudToggleLabel(readAloud), onClick = onClick, modifier = Modifier.size(48.dp)) {
         when {
             readAloud.initializing -> CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
             readAloud.playing -> Icon(Icons.Filled.Pause, contentDescription = null)

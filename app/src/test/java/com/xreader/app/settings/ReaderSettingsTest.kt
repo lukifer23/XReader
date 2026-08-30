@@ -1,6 +1,7 @@
 package com.xreader.app.settings
 
 import org.junit.Assert.assertEquals
+import com.xreader.app.settings.LibraryGroup
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -38,6 +39,7 @@ class ReaderSettingsTest {
     fun libraryDefaultsKeepHomeScreenPredictable() {
         assertEquals(LibrarySort.RECENT, LibrarySettings().sort)
         assertEquals(LibraryDensity.COMFORTABLE, LibrarySettings().density)
+        assertEquals(LibraryGroup.BOOKS, LibrarySettings().group)
     }
 
     @Test

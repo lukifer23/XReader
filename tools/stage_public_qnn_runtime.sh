@@ -30,8 +30,6 @@ stage_lib() {
 }
 
 for lib in \
-  libQnnGpu.so \
-  libQnnGpuNetRunExtensions.so \
   libQnnHtp.so \
   libQnnHtpNetRunExtensions.so \
   libQnnHtpPrepare.so \

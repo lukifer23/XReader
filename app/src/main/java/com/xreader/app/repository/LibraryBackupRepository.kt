@@ -14,6 +14,7 @@ import com.xreader.app.data.ReaderTheme
 import com.xreader.app.data.SeriesEntity
 import com.xreader.app.settings.BookReaderAppearance
 import com.xreader.app.settings.LibraryDensity
+import com.xreader.app.settings.LibraryGroup
 import com.xreader.app.settings.LibrarySettings
 import com.xreader.app.settings.LibrarySort
 import com.xreader.app.settings.NeuralTtsGender
@@ -576,12 +577,14 @@ class LibraryBackupRepository(
         JSONObject()
             .put("sort", sort.name)
             .put("density", density.name)
+            .put("group", group.name)
 
     private fun JSONObject.toLibrarySettingsOrNull(): LibrarySettings? =
         runCatching {
             LibrarySettings(
                 sort = enumValueOrNull<LibrarySort>("sort") ?: LibrarySort.RECENT,
-                density = enumValueOrNull<LibraryDensity>("density") ?: LibraryDensity.COMFORTABLE
+                density = enumValueOrNull<LibraryDensity>("density") ?: LibraryDensity.COMFORTABLE,
+                group = enumValueOrNull<LibraryGroup>("group") ?: LibraryGroup.BOOKS
             )
         }.getOrNull()
 

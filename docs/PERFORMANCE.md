@@ -54,6 +54,16 @@ Treat single-device numbers as local baselines, not universal claims. Record:
 
 ## Current Local Baseline
 
+2026-08-30 code/build-only reading-loop reliability pass:
+
+- Device or emulator: not attached. No visual, Readium-runtime, foreground-service, thermal, process-death, migration-runtime, or QNN throughput claim is made.
+- Library projection: full-library filtering, grouping, continuation, and recommendation work moved off composition to `Dispatchers.Default`, with stale Flow projections canceled before Compose receives stable sections.
+- Reader sizing: responsive decisions use the actual Compose window/container size instead of configuration-wide screen dimensions.
+- Automated evidence: the clean debug/release lint, 609 JVM tests, debug APK, Android-test APK, unsigned release APK, and release packaging verification all passed. Both lint variants report 42 warnings, limited to the intentional logging-detector policy, pinned dependency/tool versions, ARM64-only native target, and one KTX style suggestion.
+- Packaging artifact: unsigned release APK, 210,356,554 bytes (about 200.6 MiB).
+- Packaging gate: `:app:verifyReleasePackaging` checks the real APK against a 210 MiB ceiling, inventories intentional QNN native/DSP duplicates through an explicit allowlist, and rejects GPU/OpenCL fallback binaries.
+- Runtime acceptance remains open until the connected-device gates below run. These changes reduce avoidable app-side work; they do not prove faster rendering or generation on hardware.
+
 2026-06-25 code-only audiobook responsiveness pass:
 
 - Device: not required for this documentation/build gate.

@@ -42,6 +42,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
@@ -97,8 +98,6 @@ class NeuralTtsRepository(
         }
         val providers = TtsAccelerationRuntime.providerOrder(
             context = appContext,
-            includeExperimentalWebGpu = false,
-            includeCpuFallbacks = false,
             configureQnnProviders = false
         )
         val hardwareProviders = providers.filter(TtsAccelerationRuntime::isAudiobookGenerationAcceleratedProvider)
@@ -110,7 +109,7 @@ class NeuralTtsRepository(
                 reason = if (blockedReason != null) {
                     "$blockedReason QNN status: ${qnn.reason}"
                 } else {
-                    "No strict QNN hardware audiobook provider is available in this build. " +
+                    "No strict hardware audiobook provider is available in this build. " +
                         "QNN status: ${qnn.reason}"
                 }
             )
@@ -130,6 +129,16 @@ class NeuralTtsRepository(
             ready = true,
             providerLabels = usableProviders.map(TtsAccelerationRuntime::providerDisplayKey)
         )
+    }
+
+    suspend fun requireAudiobookGenerationHardwareReady(
+        modelId: String = NeuralTtsModelCatalog.DEFAULT_MODEL_ID,
+    ): AudiobookGenerationHardwareReadiness {
+        val readiness = audiobookGenerationHardwareReadiness(modelId)
+        require(readiness.ready) {
+            readiness.reason ?: "Full-book neural audiobook generation requires strict hardware acceleration."
+        }
+        return readiness
     }
 
     suspend fun generatedBookAudio(
@@ -597,6 +606,9 @@ class NeuralTtsRepository(
         if (existing?.hasCompletePlayableAudiobook() == true) {
             return@withContext existing
         }
+        if (existing?.isFreshActiveAudiobookGeneration(clock.millis()) == true) {
+            return@withContext existing
+        }
         val now = clock.millis()
         val preparing = (existing ?: BookAudioEntity(
             bookId = bookId,
@@ -715,6 +727,7 @@ class NeuralTtsRepository(
         require(model?.status == NeuralTtsModelStatus.INSTALLED && !model.localPath.isNullOrBlank()) {
             "Download the neural voice before generating audiobook audio."
         }
+        requireAudiobookGenerationHardwareReady(modelId)
         require(prepared.segments.isNotEmpty()) { "This book has no extractable text for audiobook generation." }
 
         val speed = pace.speed
@@ -722,6 +735,9 @@ class NeuralTtsRepository(
         val target = audioDirectory(bookId, modelId, speakerId, pace, tone, scope)
         val existing = dao.bookAudio(bookId, modelId, speakerId, speed, tone.name, scope.key)
         if (existing?.hasCompletePlayableAudiobook() == true) {
+            return@withContext existing
+        }
+        if (existing?.isFreshActiveAudiobookGeneration(clock.millis()) == true) {
             return@withContext existing
         }
         val canResumeExistingAudio = existing.canResumeGeneration(
@@ -834,7 +850,6 @@ class NeuralTtsRepository(
         runCatching {
             val modelDir = requireNotNull(model.localPath)
             var runtime: TtsRuntime? = null
-            var segmentsOnRuntime = 0
             val activeGenerationJob = requireNotNull(currentCoroutineContext()[Job]) {
                 "Audiobook generation job unavailable."
             }
@@ -886,7 +901,7 @@ class NeuralTtsRepository(
                 prepared.segments.forEachIndexed { index, segment ->
                     currentCoroutineContext().ensureActive()
                     if (index < reusableSegments) return@forEachIndexed
-                    if (runtime == null || runtime.shouldRotateAfter(segmentsOnRuntime)) {
+                    if (runtime == null) {
                         runtime?.releaseOnGenerationDispatcher()
                         runtime = withContext(generationDispatcher) {
                             traced("XReader TTS init runtime") {
@@ -894,12 +909,10 @@ class NeuralTtsRepository(
                                     spec = spec,
                                     modelDir = modelDir,
                                     tone = tone,
-                                    workload = NeuralTtsRuntimeWorkload.AUDIOBOOK_GENERATION,
-                                    includeExperimentalWebGpu = false
+                                    workload = NeuralTtsRuntimeWorkload.AUDIOBOOK_GENERATION
                                 )
                             }
                         }
-                        segmentsOnRuntime = 0
                         val activeRuntime = requireNotNull(runtime)
                         activeProvider = activeRuntime.provider
                         activeHostThreadCount = activeRuntime.hostThreadCount
@@ -987,11 +1000,10 @@ class NeuralTtsRepository(
                             ?: "unknown"
                         "Hardware audiobook generation is too slow for full-book use: " +
                             "audioTimeFactor=$audioTimeFactor after $sessionGeneratedSegments segments. " +
-                            "Use a faster QNN/OpenCL/NNAPI build before generating this book."
+                            "Use a faster strict QNN HTP/NPU build before generating this book."
                     }
                     completedSegments = index + 1
                     generatedSegmentFileSizeBytes += savedBytes
-                    segmentsOnRuntime += 1
                     heartbeatSnapshot.set(
                         GenerationHeartbeatSnapshot(
                             completedSegments = completedSegments,
@@ -1093,7 +1105,9 @@ class NeuralTtsRepository(
                     error = null
                 )
             } finally {
-                heartbeatJob.cancel()
+                withContext(NonCancellable) {
+                    heartbeatJob.cancelAndJoin()
+                }
                 runtime?.releaseOnGenerationDispatcher()
             }
         }.fold(
@@ -1213,8 +1227,7 @@ class NeuralTtsRepository(
                 spec = spec,
                 modelDir = modelDir,
                 tone = tone,
-                workload = NeuralTtsRuntimeWorkload.PREVIEW,
-                includeExperimentalWebGpu = false
+                workload = NeuralTtsRuntimeWorkload.PREVIEW
             )
         }
         try {
@@ -1542,12 +1555,9 @@ class NeuralTtsRepository(
         modelDir: String,
         tone: NeuralTtsTone,
         workload: NeuralTtsRuntimeWorkload,
-        includeExperimentalWebGpu: Boolean,
     ): TtsRuntime {
         val providers = TtsAccelerationRuntime.providerOrder(
             context = appContext,
-            includeExperimentalWebGpu = includeExperimentalWebGpu,
-            includeCpuFallbacks = workload != NeuralTtsRuntimeWorkload.AUDIOBOOK_GENERATION
         )
         val runtimeProviders = providers.enforceRequiredAccelerator(
             workload = workload,
@@ -1559,50 +1569,43 @@ class NeuralTtsRepository(
             "Starting ${spec.displayName} runtime initialization for workload=$workload " +
                 "with providers=${runtimeProviders.joinToString { TtsAccelerationRuntime.providerDisplayKey(it) }}."
         )
-        var lastError: Throwable? = null
-        val attemptErrors = mutableListOf<String>()
-        runtimeProviders.forEach { provider ->
-            val hostThreadCount = neuralTtsHostThreadCount(provider, workload = workload)
+        val provider = runtimeProviders.single()
+        val hostThreadCount = neuralTtsHostThreadCount(provider, workload = workload)
+        Log.i(
+            tag,
+            "Trying ${spec.displayName} provider=${TtsAccelerationRuntime.providerKey(provider)} " +
+                "for workload=$workload with hostThreads=$hostThreadCount."
+        )
+        val startedAt = clock.millis()
+        return runCatching {
+            OfflineTts(config = ttsConfig(spec, modelDir, tone, provider, hostThreadCount, workload))
+        }.map { engine ->
+            val initializationMillis = (clock.millis() - startedAt).coerceAtLeast(0L)
+            TtsAccelerationRuntime.recordProviderInitialized(provider)
+            val providerKey = TtsAccelerationRuntime.providerDisplayKey(provider)
             Log.i(
                 tag,
-                "Trying ${spec.displayName} provider=${TtsAccelerationRuntime.providerKey(provider)} " +
-                    "for workload=$workload with hostThreads=$hostThreadCount."
+                "Initialized ${spec.displayName} with provider=$providerKey, " +
+                    "hostThreads=$hostThreadCount, initMs=$initializationMillis."
             )
-            val startedAt = clock.millis()
-            runCatching {
-                OfflineTts(config = ttsConfig(spec, modelDir, tone, provider, hostThreadCount, workload))
-            }.onSuccess { engine ->
-                val initializationMillis = (clock.millis() - startedAt).coerceAtLeast(0L)
-                TtsAccelerationRuntime.recordProviderInitialized(provider)
-                val providerKey = TtsAccelerationRuntime.providerDisplayKey(provider)
-                Log.i(
-                    tag,
-                    "Initialized ${spec.displayName} with provider=$providerKey, " +
-                        "hostThreads=$hostThreadCount, initMs=$initializationMillis."
-                )
-                return TtsRuntime(
-                    engine = engine,
-                    provider = providerKey,
-                    hostThreadCount = hostThreadCount,
-                    initializationMillis = initializationMillis
-                )
-            }.onFailure { error ->
-                TtsAccelerationRuntime.recordProviderInitializationFailed(provider, error)
-                Log.w(tag, "Could not initialize ${spec.displayName} with provider=$provider.", error)
-                val summary = TtsAccelerationRuntime.providerInitializationFailureSummary(provider, error)
-                    ?: error.message
-                    ?: error::class.java.simpleName
-                attemptErrors += "${TtsAccelerationRuntime.providerDisplayKey(provider)}: $summary"
-                lastError = error
-            }
+            TtsRuntime(
+                engine = engine,
+                provider = providerKey,
+                hostThreadCount = hostThreadCount,
+                initializationMillis = initializationMillis
+            )
+        }.getOrElse { error ->
+            TtsAccelerationRuntime.recordProviderInitializationFailed(provider, error)
+            Log.w(tag, "Could not initialize ${spec.displayName} with provider=$provider.", error)
+            val summary = TtsAccelerationRuntime.providerInitializationFailureSummary(provider, error)
+                ?: error.message
+                ?: error::class.java.simpleName
+            throw IllegalStateException(
+                "Could not initialize local neural TTS runtime with " +
+                    "${TtsAccelerationRuntime.providerDisplayKey(provider)}: $summary",
+                error
+            )
         }
-        val details = attemptErrors.takeIf { it.isNotEmpty() }?.joinToString(separator = "; ")
-        val message = if (details == null) {
-            "Could not initialize local neural TTS runtime."
-        } else {
-            "Could not initialize local neural TTS runtime. Provider failures: $details"
-        }
-        throw IllegalStateException(message, lastError)
     }
 
     private fun List<String>.enforceRequiredAccelerator(
@@ -1610,29 +1613,16 @@ class NeuralTtsRepository(
         spec: NeuralTtsModelSpec,
         modelDir: File,
     ): List<String> {
-        if (workload != NeuralTtsRuntimeWorkload.AUDIOBOOK_GENERATION) return this
-        val acceleratedCandidates = filter(TtsAccelerationRuntime::isAudiobookGenerationAcceleratedProvider)
-        val missingArtifactProviders = acceleratedCandidates.filterNot {
-            neuralTtsProviderHasRequiredModelArtifact(spec, modelDir, it)
+        val selection = neuralTtsSelectStrictHardwareProviders(
+            providers = this,
+            spec = spec,
+            modelDir = modelDir,
+            workload = workload
+        )
+        check(selection.usableProviders.isNotEmpty()) {
+            neuralTtsNoUsableHardwareProviderReason(selection, workload)
         }
-        val hardwareProviders = acceleratedCandidates - missingArtifactProviders.toSet()
-        check(hardwareProviders.isNotEmpty()) {
-            buildString {
-                append("Full-book neural audiobook generation requires packaged QNN hardware acceleration. ")
-                append("No usable hardware provider is available on this device/build.")
-                if (acceleratedCandidates.isNotEmpty()) {
-                    append(" Candidates=")
-                    append(acceleratedCandidates.joinToString { TtsAccelerationRuntime.providerDisplayKey(it) })
-                    append(".")
-                }
-                if (missingArtifactProviders.isNotEmpty()) {
-                    append(" Missing prepared model artifacts for ")
-                    append(missingArtifactProviders.joinToString { TtsAccelerationRuntime.providerDisplayKey(it) })
-                    append(".")
-                }
-            }
-        }
-        return hardwareProviders
+        return listOf(selection.usableProviders.single())
     }
 
     private suspend fun ensureAudiobookGenerationStillActive(audioId: Long, segmentNumber: Int) {
@@ -1708,7 +1698,6 @@ class NeuralTtsRepository(
 
     private companion object {
         const val DOWNLOAD_PROGRESS_STEP_BYTES = 1_048_576L
-        const val STALE_GENERATING_AUDIO_REPAIR_AGE_MS = 60 * 1000L
         const val PREVIEW_TEXT = "This is XReader's local neural voice preview, generated privately on this device."
         const val FINAL_MANIFEST = "manifest.txt"
         const val IN_PROGRESS_MANIFEST = "manifest.in-progress.txt"
@@ -1843,10 +1832,67 @@ internal fun neuralTtsProviderHasRequiredModelArtifact(
     modelDir: File,
     provider: String,
 ): Boolean {
-    if (!neuralTtsProviderRequiresPreparedHardwareModel(provider)) return true
+    if (!neuralTtsProviderRequiresPreparedHardwareModel(provider)) return false
     val hardwareModel = spec.hardwareModelFile.takeIf { it.isNotBlank() } ?: return false
     val modelFile = File(modelDir, hardwareModel)
     return modelFile.isFile && modelFile.hasStrictQnnCompatibilityManifest(spec)
+}
+
+internal data class NeuralTtsStrictHardwareProviderSelection(
+    val candidateProviders: List<String>,
+    val missingArtifactProviders: List<String>,
+) {
+    val usableProviders: List<String> =
+        candidateProviders - missingArtifactProviders.toSet()
+}
+
+internal fun neuralTtsSelectStrictHardwareProviders(
+    providers: List<String>,
+    spec: NeuralTtsModelSpec,
+    modelDir: File,
+    workload: NeuralTtsRuntimeWorkload,
+): NeuralTtsStrictHardwareProviderSelection {
+    val candidates = when (workload) {
+        NeuralTtsRuntimeWorkload.PREVIEW ->
+            providers.filter(TtsAccelerationRuntime::isHardwareAcceleratedProvider)
+        NeuralTtsRuntimeWorkload.AUDIOBOOK_GENERATION ->
+            providers.filter(TtsAccelerationRuntime::isAudiobookGenerationAcceleratedProvider)
+    }
+    val selectedCandidates = TtsAccelerationRuntime.selectedQnnProvider(candidates)
+        ?.let(::listOf)
+        .orEmpty()
+    val missingArtifacts = selectedCandidates.filterNot {
+        neuralTtsProviderHasRequiredModelArtifact(spec, modelDir, it)
+    }
+    return NeuralTtsStrictHardwareProviderSelection(
+        candidateProviders = selectedCandidates,
+        missingArtifactProviders = missingArtifacts
+    )
+}
+
+internal fun neuralTtsNoUsableHardwareProviderReason(
+    selection: NeuralTtsStrictHardwareProviderSelection,
+    workload: NeuralTtsRuntimeWorkload,
+): String = buildString {
+    append(
+        when (workload) {
+            NeuralTtsRuntimeWorkload.PREVIEW ->
+                "Neural voice preview requires packaged hardware acceleration. "
+            NeuralTtsRuntimeWorkload.AUDIOBOOK_GENERATION ->
+                "Full-book neural audiobook generation requires packaged hardware acceleration. "
+        }
+    )
+    append("No usable hardware provider is available on this device/build.")
+    if (selection.candidateProviders.isNotEmpty()) {
+        append(" Candidates=")
+        append(selection.candidateProviders.joinToString { TtsAccelerationRuntime.providerDisplayKey(it) })
+        append(".")
+    }
+    if (selection.missingArtifactProviders.isNotEmpty()) {
+        append(" Missing prepared model artifacts for ")
+        append(selection.missingArtifactProviders.joinToString { TtsAccelerationRuntime.providerDisplayKey(it) })
+        append(".")
+    }
 }
 
 internal fun neuralTtsMissingHardwareArtifactReason(
@@ -1891,19 +1937,9 @@ internal fun neuralTtsHostThreadCount(
     workload: NeuralTtsRuntimeWorkload = NeuralTtsRuntimeWorkload.PREVIEW,
     availableProcessors: Int = Runtime.getRuntime().availableProcessors(),
 ): Int {
-    val cores = availableProcessors.coerceAtLeast(1)
     return when (TtsAccelerationRuntime.providerKey(provider)) {
-        "qnn",
-        "nnapi",
-        "webgpu" -> 1
-        else -> when (workload) {
-            NeuralTtsRuntimeWorkload.PREVIEW ->
-                (cores - PREVIEW_UI_RESERVED_CORES)
-                    .coerceIn(MIN_CPU_TTS_THREADS, MAX_PREVIEW_CPU_TTS_THREADS)
-            NeuralTtsRuntimeWorkload.AUDIOBOOK_GENERATION ->
-                (cores - AUDIOBOOK_GENERATION_RESERVED_CORES)
-                    .coerceIn(MIN_CPU_TTS_THREADS, MAX_AUDIOBOOK_GENERATION_CPU_TTS_THREADS)
-        }
+        "qnn" -> 1
+        else -> error("Neural TTS requires strict QNN hardware acceleration. Provider '$provider' is disabled.")
     }
 }
 
@@ -1956,17 +1992,6 @@ internal fun File.deleteStaleNeuralPreviewTempAudio(): Int {
         }
     }
     return deleted
-}
-
-internal fun ttsRuntimeRotationSegmentLimit(provider: String): Int? =
-    when (provider) {
-        "webgpu" -> WEBGPU_SEGMENTS_PER_RUNTIME
-        else -> null
-    }
-
-private fun TtsRuntime.shouldRotateAfter(generatedSegments: Int): Boolean {
-    val limit = ttsRuntimeRotationSegmentLimit(provider) ?: return false
-    return generatedSegments >= limit
 }
 
 internal fun shouldWriteGenerationCheckpoint(completedSegments: Int, totalSegments: Int): Boolean =
@@ -2131,6 +2156,14 @@ private fun BookAudioEntity?.canResumeGeneration(
     if (this.wordCount != wordCount) return false
     return target.isDirectory
 }
+
+internal fun BookAudioEntity.isFreshActiveAudiobookGeneration(
+    nowMillis: Long,
+    staleAgeMillis: Long = STALE_GENERATING_AUDIO_REPAIR_AGE_MS,
+): Boolean =
+    status == BookAudioStatus.GENERATING &&
+        segmentCount > 0 &&
+        updatedAt >= nowMillis - staleAgeMillis
 
 internal fun shouldWriteRecoveredGeneratingProgress(
     reusableSegments: Int,
@@ -2355,7 +2388,6 @@ private inline fun <T> traced(name: String, block: () -> T): T {
     }
 }
 
-private const val WEBGPU_SEGMENTS_PER_RUNTIME = 128
 internal const val KOKORO_PREVIEW_MAX_NUM_SENTENCES = 1
 internal const val KOKORO_AUDIOBOOK_GENERATION_MAX_NUM_SENTENCES = 3
 private const val GENERATION_MANIFEST_CHECKPOINT_SEGMENTS = 4
@@ -2367,11 +2399,7 @@ private const val GENERATION_PROGRESS_WRITE_INTERVAL_MS = 8_000L
 private const val GENERATION_CANCELLATION_POLL_INTERVAL_MS = 10_000L
 private const val GENERATION_HEARTBEAT_WRITE_INTERVAL_MS = 30_000L
 private const val MAX_GENERATING_AUDIO_ERROR_LENGTH = 240
-private const val PREVIEW_UI_RESERVED_CORES = 2
-private const val AUDIOBOOK_GENERATION_RESERVED_CORES = 1
-private const val MIN_CPU_TTS_THREADS = 1
-private const val MAX_PREVIEW_CPU_TTS_THREADS = 2
-private const val MAX_AUDIOBOOK_GENERATION_CPU_TTS_THREADS = 4
+internal const val STALE_GENERATING_AUDIO_REPAIR_AGE_MS = 60 * 1000L
 internal const val MAX_AUDIOBOOK_HARDWARE_AUDIO_TIME_FACTOR = 0.55f
 internal const val MIN_HARDWARE_SPEED_GATE_SEGMENTS = 3
 internal const val MIN_HARDWARE_SPEED_GATE_AUDIO_MS = 45_000L

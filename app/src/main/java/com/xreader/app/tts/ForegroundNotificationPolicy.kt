@@ -1,5 +1,6 @@
 package com.xreader.app.tts
 
+import android.annotation.SuppressLint
 import android.Manifest
 import android.app.Notification
 import android.app.NotificationManager
@@ -26,6 +27,8 @@ internal fun canPostForegroundNotificationUpdate(
 ): Boolean =
     androidApiLevel < Build.VERSION_CODES.TIRAMISU || postNotificationsGranted
 
+// POST_NOTIFICATIONS is an inlined permission string; its result is enforced only on API 33+ by the policy above.
+@SuppressLint("InlinedApi")
 internal fun postForegroundNotificationUpdate(
     context: Context,
     notificationManager: NotificationManager,

@@ -6,7 +6,6 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.charset.Charset
 import java.util.UUID
-import java.util.zip.CRC32
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
@@ -24,7 +23,7 @@ class MobiToEpubConverter {
         output.parentFile?.mkdirs()
         ZipOutputStream(output.outputStream().buffered()).use { zip ->
             writeStored(zip, "mimetype", EPUB_MIME_TYPE.toByteArray(Charsets.US_ASCII))
-            writeDeflated(zip, "META-INF/container.xml", containerXml.toByteArray(Charsets.UTF_8))
+            writeDeflated(zip, "META-INF/container.xml", EPUB_CONTAINER_BYTES)
             writeDeflated(zip, "OEBPS/package.opf", packageDocument(document, identifier).toByteArray(Charsets.UTF_8))
             writeDeflated(zip, "OEBPS/nav.xhtml", navigationDocument(document.title).toByteArray(Charsets.UTF_8))
             writeDeflated(zip, "OEBPS/content.xhtml", contentDocument(document.title, blocks).toByteArray(Charsets.UTF_8))
@@ -219,25 +218,6 @@ class MobiToEpubConverter {
         """.trimIndent()
     }
 
-    private fun writeStored(zip: ZipOutputStream, name: String, bytes: ByteArray) {
-        val crc = CRC32().apply { update(bytes) }
-        val entry = ZipEntry(name).apply {
-            method = ZipEntry.STORED
-            size = bytes.size.toLong()
-            compressedSize = bytes.size.toLong()
-            this.crc = crc.value
-        }
-        zip.putNextEntry(entry)
-        zip.write(bytes)
-        zip.closeEntry()
-    }
-
-    private fun writeDeflated(zip: ZipOutputStream, name: String, bytes: ByteArray) {
-        zip.putNextEntry(ZipEntry(name))
-        zip.write(bytes)
-        zip.closeEntry()
-    }
-
     private fun ByteArray.record(offsets: List<Int>, index: Int): ByteArray {
         val start = offsets[index]
         val end = offsets.getOrNull(index + 1) ?: size
@@ -276,13 +256,6 @@ class MobiToEpubConverter {
             .trim()
             .takeIf { it.length > 1 && it.any(Char::isLetterOrDigit) }
 
-    private fun escapeXml(value: String): String =
-        value.replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-            .replace("\"", "&quot;")
-            .replace("'", "&apos;")
-
     private data class MobiHeader(
         val title: String,
         val author: String?,
@@ -296,14 +269,6 @@ class MobiToEpubConverter {
         val text: String,
     )
 
-    private val containerXml = """
-        <?xml version="1.0" encoding="UTF-8"?>
-        <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
-          <rootfiles>
-            <rootfile full-path="OEBPS/package.opf" media-type="application/oebps-package+xml"/>
-          </rootfiles>
-        </container>
-    """.trimIndent()
 
     private companion object {
         private const val MAX_MOBI_BYTES = 80L * 1024L * 1024L

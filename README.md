@@ -22,7 +22,7 @@ Implemented:
 - MHTML and MHT web-archive import converted into EPUB with page metadata, embedded image assets including lazy/responsive image references, headings, lists, tables, blockquotes, and searchable text extraction.
 - Markdown import converted into EPUB with front matter metadata, headings, lists, blockquotes, code blocks, and searchable text extraction.
 - Private app-library imports from selected files, SAF folders, Android Open with/Share actions, direct supported book URLs, or optional redirect-aware OPDS Atom/JSON catalog URLs, with checksum duplicate detection, missing private-file recovery on re-import, and an `Open` action after single-book imports or duplicate re-imports.
-- Library organization by books, authors, series, genres, formats, years, custom collections, recent, unread, in progress, finished, and favorites, with group-aware ordering.
+- Library organization by books, authors, series, genres, formats, years, custom collections, recent, unread, in progress, finished, and favorites, with group-aware ordering and a persisted selected group.
 - Home-screen series continuation that suggests the next unfinished title after the most recently finished book in a series.
 - Persisted library sort and comfortable/compact density controls that apply in grouped and ungrouped views.
 - Compact book actions for custom collections, favorites, manual finished/not-finished state, metadata edits, save-copy export, and undoable removal.
@@ -34,12 +34,12 @@ Implemented:
 - Reader themes: light, dark, sepia, and OLED black.
 - Reader typography and behavior controls: spacing presets, font size, font weight, line height, margins, alignment, hyphenation, publisher styles, PDF fit/layout, page direction, reader-only orientation, fullscreen, keep-screen-awake, app-local reader dimming, page animation toggle, tap-zone sizing, optional volume-button page turns, real Readium/CSS-resolvable font choices including OpenDyslexic, and per-book appearance overrides.
 - Read aloud from the visible reading position through Android TextToSpeech using page-aligned local indexed book text, with persisted spoken position, pause/resume, previous/next passage controls, speech speed, visible sleep timer countdown, installed offline voice selection, audio-focus handling, Android media-session transport controls, and a media-playback foreground notification for headset/Bluetooth/play-pause/next/previous/stop actions while outside the reader.
-- Grouped Settings screen for reader appearance, typography, reading behavior, library display, and maintenance.
-- Bookmarks, highlights, tagged notes, global notes with tag filtering, in-book annotation lists, human-readable Markdown notes export, local notes/bookmark JSON export/import with invalid-row reporting, and library metadata/progress/app settings/per-book appearance backup.
+- Searchable grouped Settings screen for reader appearance, typography, reading behavior, library display, and maintenance.
+- Bookmarks, highlights, tagged notes, global notes with tag filtering, in-book annotation lists, human-readable Markdown notes export, legacy notes/library JSON compatibility tools, and a primary versioned full backup for catalog metadata, collections, progress, sessions, settings, per-book appearance, notes, highlights, tags, and bookmarks.
 - Offline English dictionary backed by bundled Princeton WordNet data, with phrase, hyphenated-word, plural, possessive, comparative, superlative, adverb, and common irregular lookup.
 - Local full-text search index for imported book text where extraction is supported, including punctuation-safe queries, cleaned PDF text extraction for wrapped words, source-book labels, query-centered snippets, and expandable library search results.
 - Reading analytics for sessions, active reading time, progress, estimated WPM, reader/home ETA, 7-day/30-day/13-week/all-time activity, streaks, book/author/genre summaries, and local CSV/JSON export.
-- Embedded Kokoro v1.0 audiobook generation is under active hardening: full-book generation is constrained to real strict hardware providers, with QNN/NPU artifacts gated by device proof and a strict compatibility manifest rather than CPU fallback. Long jobs persist heartbeat progress, ETA, partial playback state, and stop/retry controls while the app continues to target faster-than-realtime hardware generation.
+- Embedded Kokoro v1.0 audiobook generation is under active hardening: preview and full-book generation are constrained to one packaged strict QNN HTP/NPU provider, with prepared fixed-bucket artifacts gated by device proof and a strict compatibility manifest rather than fallback providers. Long jobs persist heartbeat progress, ETA, partial playback state, and stop/retry controls while the app continues to target faster-than-realtime hardware generation.
 - Clear unsupported-format feedback for modern Kindle AZW/AZW3/KF8/KFX and other deferred formats, without surfacing fake conversion controls in the app.
 - Public-domain book fixture coverage for TXT/EPUB import paths.
 
@@ -63,8 +63,12 @@ The project uses Gradle 9.5.1 wrapper, Android Gradle Plugin 9.2.1, Kotlin 2.3.2
 ## Build
 
 ```bash
-./gradlew :app:lintDebug :app:testDebugUnitTest :app:assembleDebug --console=plain
+./gradlew clean :app:lintDebug :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintRelease :app:assembleRelease :app:verifyReleasePackaging --console=plain
 ```
+
+`assembleDebugAndroidTest` proves the migration tests compile. Running those tests still requires an emulator or device. `verifyReleasePackaging` inspects the actual unsigned release APK, enforces the 210 MiB ceiling, checks the explicit QNN duplicate allowlist, and rejects prohibited GPU/OpenCL fallback runtimes.
+
+Latest code/build-only evidence (2026-08-30): 609 JVM tests passed with no failures or skips, both lint variants completed with 42 warnings, all three APK assemblies passed, and the unsigned release APK passed packaging verification at 210,356,554 bytes. No device, emulator, visual, accessibility, Readium-runtime, foreground-service, migration-runtime, thermal, or QNN throughput acceptance was performed in that gate.
 
 The debug APK is written to:
 
@@ -118,6 +122,7 @@ XReader is local-first:
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md)
+- [Audiobook Generation](docs/AUDIOBOOK_GENERATION.md)
 - [Competitive Research](docs/COMPETITIVE_RESEARCH.md)
 - [Performance](docs/PERFORMANCE.md)
 - [Roadmap](docs/ROADMAP.md)

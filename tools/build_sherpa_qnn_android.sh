@@ -5,8 +5,9 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORK_DIR="${XREADER_NATIVE_WORK_DIR:-"$ROOT_DIR/.native-build"}"
 SHERPA_DIR="${SHERPA_ONNX_DIR:-"$WORK_DIR/sherpa-onnx"}"
 SHERPA_PATCH="$ROOT_DIR/tools/patches/sherpa-onnx-qnn-session-provider.patch"
-SHERPA_STRICT_NNAPI_PATCH="$ROOT_DIR/tools/patches/sherpa-onnx-strict-nnapi-provider.patch"
-SHERPA_STRICT_HARDWARE_FAILURE_PATCH="$ROOT_DIR/tools/patches/sherpa-onnx-strict-hardware-provider-failures.patch"
+SHERPA_STRICT_NO_PROVIDER_FALLBACKS_PATCH="$ROOT_DIR/tools/patches/sherpa-onnx-strict-no-provider-fallbacks.patch"
+SHERPA_STRICT_KOKORO_BUCKET_PATCH="$ROOT_DIR/tools/patches/sherpa-onnx-strict-kokoro-bucket-padding.patch"
+SHERPA_DISABLE_NNAPI_PATCH="$ROOT_DIR/tools/patches/sherpa-onnx-disable-nnapi-provider.patch"
 
 if [[ -z "${QNN_SDK_ROOT:-}" ]]; then
   echo "QNN_SDK_ROOT is not set. Install Qualcomm AI Runtime/QNN SDK and export QNN_SDK_ROOT." >&2
@@ -90,7 +91,7 @@ apply_patch_if_needed() {
   if [[ ! -f "$patch_file" ]]; then
     return
   fi
-  if grep -q "$marker" sherpa-onnx/csrc/session.cc sherpa-onnx/csrc/provider.h 2>/dev/null; then
+  if grep -q "$marker" sherpa-onnx/csrc/session.cc sherpa-onnx/csrc/provider.h sherpa-onnx/csrc/offline-tts-kokoro-model.cc 2>/dev/null; then
     echo "$label patch is already present."
     return
   fi
@@ -107,8 +108,9 @@ apply_patch_if_needed() {
 }
 
 apply_patch_if_needed "$SHERPA_PATCH" "Provider::kQNN" "Sherpa QNN provider"
-apply_patch_if_needed "$SHERPA_STRICT_NNAPI_PATCH" "uint32_t nnapi_flags = NNAPI_FLAG_CPU_DISABLED" "Sherpa strict NNAPI provider"
-apply_patch_if_needed "$SHERPA_STRICT_HARDWARE_FAILURE_PATCH" "Failed to enable NNAPI: \") +" "Sherpa strict hardware provider failures"
+apply_patch_if_needed "$SHERPA_STRICT_NO_PROVIDER_FALLBACKS_PATCH" "XNNPACKExecutionProvider is unavailable" "Sherpa strict no-provider-fallbacks"
+apply_patch_if_needed "$SHERPA_DISABLE_NNAPI_PATCH" "NNAPI provider is disabled in XReader strict QNN builds" "Sherpa disabled NNAPI provider"
+apply_patch_if_needed "$SHERPA_STRICT_KOKORO_BUCKET_PATCH" "strict_token_bucket_" "Sherpa strict Kokoro bucket padding"
 
 require_source_marker() {
   local marker="$1"
@@ -120,8 +122,25 @@ require_source_marker() {
   fi
 }
 
+require_source_absent() {
+  local marker="$1"
+  local path="$2"
+  local label="$3"
+  if grep -q "$marker" "$path"; then
+    echo "$label is still present in $SHERPA_DIR/$path. Provider fallback branches must fail closed." >&2
+    exit 3
+  fi
+}
+
 require_source_marker "session_config_entries" "sherpa-onnx/csrc/session.cc" "Sherpa QNN session-config split"
 require_source_marker "session.disable_cpu_ep_fallback" "sherpa-onnx/csrc/session.cc" "Sherpa strict CPU fallback disable"
+require_source_marker "strict_token_bucket_" "sherpa-onnx/csrc/offline-tts-kokoro-model.cc" "Sherpa strict Kokoro fixed-bucket adapter"
+require_source_absent "Fallback to cpu" "sherpa-onnx/csrc/session.cc" "Sherpa provider CPU fallback"
+require_source_absent "Fallback to cuda" "sherpa-onnx/csrc/session.cc" "Sherpa provider CUDA fallback"
+require_source_absent "OrtSessionOptionsAppendExecutionProvider_Nnapi" "sherpa-onnx/csrc/session.cc" "Sherpa NNAPI provider call"
+require_source_absent "WebGpuExecutionProvider" "sherpa-onnx/csrc/session.cc" "Sherpa WebGPU provider path"
+require_source_absent "kWebGPU" "sherpa-onnx/csrc/provider.h" "Sherpa WebGPU provider enum"
+require_source_absent "webgpu" "sherpa-onnx/csrc/provider.cc" "Sherpa WebGPU provider parser"
 
 export QNN_SDK_ROOT
 export ANDROID_NDK="$ANDROID_NDK_PATH"

@@ -1,5 +1,6 @@
 package com.xreader.app.tts
 
+import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.Notification.Action
 import android.app.NotificationChannel
@@ -95,20 +96,14 @@ class GeneratedAudiobookForegroundService : Service() {
         foregroundStarted = true
     }
 
+    // The shared helper passes this inlined service type only to the API 29+ overload.
+    @SuppressLint("InlinedApi")
     private fun startForegroundCompat(notification: Notification) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
-        }
+        startForegroundWithTypeCompat(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
     }
 
     private fun stopForegroundAndSelf(removeNotification: Boolean) {
-        if (foregroundStarted) {
-            stopForeground(if (removeNotification) Service.STOP_FOREGROUND_REMOVE else Service.STOP_FOREGROUND_DETACH)
-            foregroundStarted = false
-        }
-        stopSelf()
+        foregroundStarted = stopForegroundAndSelfCompat(foregroundStarted, removeNotification)
     }
 
     private fun buildNotification(state: AudiobookPlaybackUiState): Notification {
@@ -164,19 +159,14 @@ class GeneratedAudiobookForegroundService : Service() {
         )
 
     private fun openAppIntent(): PendingIntent =
-        PendingIntent.getActivity(
-            this,
-            REQUEST_OPEN_APP,
-            Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
+        openXReaderIntent(REQUEST_OPEN_APP)
 
     private fun ensureNotificationChannel() {
-        val channel = NotificationChannel(CHANNEL_ID, "Generated audiobooks", NotificationManager.IMPORTANCE_LOW).apply {
-            description = "Generated audiobook playback controls"
-            setShowBadge(false)
-        }
-        notificationManager.createNotificationChannel(channel)
+        notificationManager.ensureLowImportanceChannel(
+            CHANNEL_ID,
+            "Generated audiobooks",
+            "Generated audiobook playback controls",
+        )
     }
 
     private val notificationManager: NotificationManager
@@ -223,7 +213,7 @@ internal fun notificationProgressText(state: AudiobookPlaybackUiState): String? 
     return "$current/$total"
 }
 
-private data class PlaybackNotificationKey(
+internal data class PlaybackNotificationKey(
     val foregroundActive: Boolean,
     val audioId: Long?,
     val bookTitle: String?,
@@ -235,7 +225,7 @@ private data class PlaybackNotificationKey(
     val error: String?,
 )
 
-internal fun AudiobookPlaybackUiState.toPlaybackNotificationKey(): Any =
+internal fun AudiobookPlaybackUiState.toPlaybackNotificationKey(): PlaybackNotificationKey =
     PlaybackNotificationKey(
         foregroundActive = foregroundActive,
         audioId = audioId,
@@ -252,12 +242,4 @@ internal fun samePlaybackNotificationState(
     previous: AudiobookPlaybackUiState,
     next: AudiobookPlaybackUiState,
 ): Boolean =
-    previous.foregroundActive == next.foregroundActive &&
-        previous.audioId == next.audioId &&
-        previous.bookTitle == next.bookTitle &&
-        previous.profileLabel == next.profileLabel &&
-        previous.playing == next.playing &&
-        previous.segmentIndex == next.segmentIndex &&
-        previous.segmentCount == next.segmentCount &&
-        previous.preparing == next.preparing &&
-        previous.error == next.error
+    previous.toPlaybackNotificationKey() == next.toPlaybackNotificationKey()

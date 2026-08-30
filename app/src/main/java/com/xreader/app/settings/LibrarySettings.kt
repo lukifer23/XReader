@@ -15,7 +15,23 @@ enum class LibraryDensity {
     COMPACT,
 }
 
+enum class LibraryGroup {
+    BOOKS,
+    AUTHORS,
+    SERIES,
+    GENRES,
+    FORMATS,
+    YEARS,
+    COLLECTIONS,
+    RECENT,
+    UNREAD,
+    IN_PROGRESS,
+    FINISHED,
+    FAVORITES,
+}
+
 data class LibrarySettings(
     val sort: LibrarySort = LibrarySort.RECENT,
     val density: LibraryDensity = LibraryDensity.COMFORTABLE,
+    val group: LibraryGroup = LibraryGroup.BOOKS,
 )

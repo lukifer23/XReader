@@ -57,6 +57,7 @@ class SettingsRepository(
         val idleTimeoutMillis = longPreferencesKey("idle_timeout_millis")
         val librarySort = stringPreferencesKey("library_sort")
         val libraryDensity = stringPreferencesKey("library_density")
+        val libraryGroup = stringPreferencesKey("library_group")
     }
 
     private data class BookAppearanceKeys(
@@ -167,7 +168,9 @@ class SettingsRepository(
                 sort = prefs[Keys.librarySort]?.let { runCatching { LibrarySort.valueOf(it) }.getOrNull() }
                     ?: LibrarySort.RECENT,
                 density = prefs[Keys.libraryDensity]?.let { runCatching { LibraryDensity.valueOf(it) }.getOrNull() }
-                    ?: LibraryDensity.COMFORTABLE
+                    ?: LibraryDensity.COMFORTABLE,
+                group = prefs[Keys.libraryGroup]?.let { runCatching { LibraryGroup.valueOf(it) }.getOrNull() }
+                    ?: LibraryGroup.BOOKS
             )
         }
 
@@ -470,10 +473,15 @@ class SettingsRepository(
         dataStore.edit { it[Keys.libraryDensity] = value.name }
     }
 
+    suspend fun setLibraryGroup(value: LibraryGroup) {
+        dataStore.edit { it[Keys.libraryGroup] = value.name }
+    }
+
     suspend fun setLibrarySettings(value: LibrarySettings) {
         dataStore.edit {
             it[Keys.librarySort] = value.sort.name
             it[Keys.libraryDensity] = value.density.name
+            it[Keys.libraryGroup] = value.group.name
         }
     }
 

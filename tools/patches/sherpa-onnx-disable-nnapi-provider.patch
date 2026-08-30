@@ -1,0 +1,35 @@
+--- a/sherpa-onnx/csrc/session.cc
++++ b/sherpa-onnx/csrc/session.cc
+@@ -369,28 +369,10 @@
+     }
+     case Provider::kNNAPI: {
+ #if __ANDROID_API__ >= 27
+-      SHERPA_ONNX_LOGE("Current API level %d ", (int32_t)__ANDROID_API__);
+-
+-      // Please see
+-      // https://onnxruntime.ai/docs/execution-providers/NNAPI-ExecutionProvider.html#usage
+-      // to enable different flags
+-      uint32_t nnapi_flags = NNAPI_FLAG_CPU_DISABLED;
+-      nnapi_flags |= NNAPI_FLAG_USE_FP16;
+-      sess_opts.AddConfigEntry("session.disable_cpu_ep_fallback", "1");
+-      OrtStatus *status = OrtSessionOptionsAppendExecutionProvider_Nnapi(
+-          sess_opts, nnapi_flags);
+-
+-      if (status) {
+-        const auto &api = Ort::GetApi();
+-        const char *msg = api.GetErrorMessage(status);
+-        std::string error_msg = std::string("Failed to enable NNAPI: ") +
+-                                msg + ". Available providers: " + os.str();
+-        SHERPA_ONNX_LOGE("%s", error_msg.c_str());
+-        api.ReleaseStatus(status);
+-        throw std::runtime_error(error_msg);
+-      } else {
+-        SHERPA_ONNX_LOGE("Use nnapi");
+-      }
++      std::string error_msg =
++          "NNAPI provider is disabled in XReader strict QNN builds.";
++      SHERPA_ONNX_LOGE("%s", error_msg.c_str());
++      throw std::runtime_error(error_msg);
+ #elif defined(__ANDROID_API__)
+       std::ostringstream msg;
+       msg << "Android NNAPI requires API level >= 27. Current API level "

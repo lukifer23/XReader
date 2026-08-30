@@ -307,6 +307,25 @@ class GeneratedAudiobookResumeTest {
     }
 
     @Test
+    fun freshPreparedGeneratingRowsAreTreatedAsActiveWork() {
+        val now = 120_000L
+        val active = audio(filePath = "/tmp/book-audio").copy(
+            status = BookAudioStatus.GENERATING,
+            segmentCount = 10,
+            completedSegments = 3,
+            updatedAt = now - 1_000L
+        )
+        val preparingPlaceholder = active.copy(segmentCount = 0, completedSegments = 0)
+        val stale = active.copy(updatedAt = now - STALE_GENERATING_AUDIO_REPAIR_AGE_MS - 1L)
+        val generated = active.copy(status = BookAudioStatus.GENERATED)
+
+        assertTrue(active.isFreshActiveAudiobookGeneration(now))
+        assertFalse(preparingPlaceholder.isFreshActiveAudiobookGeneration(now))
+        assertFalse(stale.isFreshActiveAudiobookGeneration(now))
+        assertFalse(generated.isFreshActiveAudiobookGeneration(now))
+    }
+
+    @Test
     fun recoveredGeneratingProgressWritesOnlyWhenRowWillRemainGenerating() {
         assertTrue(
             shouldWriteRecoveredGeneratingProgress(
@@ -687,9 +706,13 @@ class GeneratedAudiobookResumeTest {
             completedSegments = 4,
             generatedAt = null
         )
+        assertEquals(
+            generating.generatedAudiobookPlaybackPreparationKey(),
+            generating.copy(updatedAt = 35_000L, fileSizeBytes = 120_000L).generatedAudiobookPlaybackPreparationKey()
+        )
         assertFalse(
             generating.generatedAudiobookPlaybackPreparationKey() ==
-                generating.copy(updatedAt = 35_000L).generatedAudiobookPlaybackPreparationKey()
+                generating.copy(completedSegments = 5).generatedAudiobookPlaybackPreparationKey()
         )
     }
 

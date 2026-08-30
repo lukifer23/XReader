@@ -42,6 +42,8 @@ data class SettingsMaintenanceUiState(
     val importingLibrary: Boolean = false,
     val exportingAnnotations: Boolean = false,
     val importingAnnotations: Boolean = false,
+    val exportingFullBackup: Boolean = false,
+    val importingFullBackup: Boolean = false,
     val message: String? = null,
 )
 
@@ -324,6 +326,54 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    fun exportFullBackup(uri: Uri) {
+        if (_maintenance.value.isBusy()) return
+        viewModelScope.launch {
+            _maintenance.update { it.copy(exportingFullBackup = true, message = null) }
+            val message = runCatching { container.fullBackupService.exportTo(uri) }
+                .fold(
+                    onSuccess = { result ->
+                        "Exported ${result.library.books} books, ${result.library.readingStates} reading positions, " +
+                            "${result.annotations.annotations} notes/highlights, and ${result.annotations.bookmarks} bookmarks"
+                    },
+                    onFailure = { it.message ?: "Could not export full backup" },
+                )
+            _maintenance.update { it.copy(exportingFullBackup = false, message = message) }
+        }
+    }
+
+    fun importFullBackup(uri: Uri) {
+        if (_maintenance.value.isBusy()) return
+        viewModelScope.launch {
+            _maintenance.update { it.copy(importingFullBackup = true, message = null) }
+            val message = runCatching { container.fullBackupService.importFrom(uri) }
+                .fold(
+                    onSuccess = { result ->
+                        val libraryChanged = result.library.booksUpdated + result.library.collectionsImported +
+                            result.library.collectionMembershipsImported + result.library.globalSettingsImported +
+                            result.library.readerAppearancesImported + result.library.readingStatesImported +
+                            result.library.readingSessionsImported
+                        val noteChanged = result.annotations.annotationsImported + result.annotations.annotationsUpdated +
+                            result.annotations.bookmarksImported
+                        val skipped = result.library.collectionMembershipsSkipped +
+                            result.library.globalSettingsSkipped + result.library.readerAppearancesSkipped +
+                            result.library.readingStatesSkipped + result.library.readingSessionsSkipped +
+                            result.annotations.annotationsSkipped + result.annotations.bookmarksSkipped
+                        val missing = result.library.missingBooks + result.annotations.missingBooks
+                        val invalid = result.library.invalidItems + result.annotations.invalidItems
+                        buildString {
+                            append("Restored ${libraryChanged + noteChanged} items")
+                            if (skipped > 0) append("; $skipped already current or skipped")
+                            if (missing > 0) append("; $missing references need imported books")
+                            if (invalid > 0) append("; $invalid invalid")
+                        }
+                    },
+                    onFailure = { it.message ?: "Could not import full backup" },
+                )
+            _maintenance.update { it.copy(importingFullBackup = false, message = message) }
+        }
+    }
+
     fun importLibrary(uri: Uri) {
         if (_maintenance.value.isBusy()) return
         viewModelScope.launch {
@@ -399,7 +449,8 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     private fun SettingsMaintenanceUiState.isBusy(): Boolean =
-        repairingLibrary || exportingLibrary || importingLibrary || exportingAnnotations || importingAnnotations
+        repairingLibrary || exportingLibrary || importingLibrary || exportingAnnotations || importingAnnotations ||
+            exportingFullBackup || importingFullBackup
 
     companion object {
         fun factory(container: AppContainer): ViewModelProvider.Factory =

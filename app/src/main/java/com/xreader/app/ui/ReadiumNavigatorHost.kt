@@ -34,9 +34,9 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.net.toUri
@@ -93,7 +93,10 @@ internal fun ReadiumPublicationView(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val configuration = LocalConfiguration.current
+    val density = LocalDensity.current
+    val containerSize = LocalWindowInfo.current.containerSize
+    val viewportWidthDp = (containerSize.width / density.density).roundToInt().coerceAtLeast(1)
+    val viewportHeightDp = (containerSize.height / density.density).roundToInt().coerceAtLeast(1)
     val activity = remember(context) { context.findFragmentActivity() }
     val containerId = remember(publication.book.id) { View.generateViewId() }
     val tag = remember(publication.book.id) { "readium-reader-${publication.book.id}" }
@@ -103,7 +106,7 @@ internal fun ReadiumPublicationView(
     val latestLookupHandler by rememberUpdatedState(onLookup)
     val latestSelectedNoteHandler by rememberUpdatedState(onSelectedNote)
     val latestSelectedHighlightHandler by rememberUpdatedState(onSelectedHighlight)
-    val tapEdgeInsetPx = with(LocalDensity.current) { settings.tapZonePreset.edgeGuardDp.dp.toPx() }
+    val tapEdgeInsetPx = with(density) { settings.tapZonePreset.edgeGuardDp.dp.toPx() }
     val latestTapEdgeInsetPx by rememberUpdatedState(tapEdgeInsetPx)
     val selectionScope = rememberCoroutineScope()
     var navigator by remember(publication.book.id) { mutableStateOf<OverflowableNavigator?>(null) }
@@ -241,8 +244,8 @@ internal fun ReadiumPublicationView(
         val factory = publication.fragmentFactory(
             initialLocator = initialLocator,
             settings = settings,
-            viewportWidthDp = configuration.screenWidthDp,
-            viewportHeightDp = configuration.screenHeightDp,
+            viewportWidthDp = viewportWidthDp,
+            viewportHeightDp = viewportHeightDp,
             onLocator = ::publishLocator,
             context = context,
             selectionActionModeCallback = selectionActionModeCallback
@@ -319,7 +322,7 @@ internal fun ReadiumPublicationView(
         }
     }
 
-    LaunchedEffect(navigator, settings, configuration.screenWidthDp, configuration.screenHeightDp) {
+    LaunchedEffect(navigator, settings, viewportWidthDp, viewportHeightDp) {
         traced("XReader:readerPreferences") {
             when (val active = navigator) {
                 is EpubNavigatorFragment -> active.submitPreferences(settings.toEpubPreferences())
@@ -328,8 +331,8 @@ internal fun ReadiumPublicationView(
                     (active as PdfNavigatorFragment<PdfiumSettings, PdfiumPreferences>)
                         .submitPreferences(
                             settings.toPdfiumPreferences(
-                                viewportWidthDp = configuration.screenWidthDp,
-                                viewportHeightDp = configuration.screenHeightDp
+                                viewportWidthDp = viewportWidthDp,
+                                viewportHeightDp = viewportHeightDp
                             )
                         )
                 }

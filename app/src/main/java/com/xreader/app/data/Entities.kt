@@ -304,7 +304,7 @@ data class BookmarkEntity(
             onDelete = ForeignKey.CASCADE
         )
     ],
-    indices = [Index(value = ["bookId"]), Index(value = ["normalizedBody"])]
+    indices = [Index(value = ["bookId"])]
 )
 data class SearchIndexEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,

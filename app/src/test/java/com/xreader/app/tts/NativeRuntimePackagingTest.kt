@@ -23,16 +23,13 @@ class NativeRuntimePackagingTest {
         )
         assertTrue("Sherpa JNI runtime must stay packaged.", "libsherpa-onnx-jni.so" in packagedLibraries)
         assertTrue("ONNX Runtime must stay packaged.", "libonnxruntime.so" in packagedLibraries)
-        assertTrue("QNN GPU runtime must include NetRun extensions.", "libQnnGpuNetRunExtensions.so" in packagedLibraries)
         assertTrue("QNN HTP runtime must include NetRun extensions.", "libQnnHtpNetRunExtensions.so" in packagedLibraries)
         assertTrue("QNN HTP transport requires libcdsprpc.so to be packaged.", "libcdsprpc.so" in packagedLibraries)
+        assertFalse("QNN GPU backend library must not be packaged.", "libQnnGpu.so" in packagedLibraries)
+        assertFalse("QNN GPU NetRun extension library must not be packaged.", "libQnnGpuNetRunExtensions.so" in packagedLibraries)
+        assertFalse("Device OpenCL loader must not be packaged for audiobook generation.", "libOpenCL.so" in packagedLibraries)
+        assertFalse("Device Adreno OpenCL library must not be packaged for audiobook generation.", "libOpenCL_adreno.so" in packagedLibraries)
         val qnnProviderModes = TtsAccelerationRuntime.qnnProviderModes(packagedLibraries)
-        if ("libOpenCL.so" !in packagedLibraries || "libOpenCL_adreno.so" !in packagedLibraries) {
-            assertFalse(
-                "QNN GPU must not be selectable unless packaged OpenCL/Adreno libraries are present.",
-                qnnProviderModes.any { it.backend == QnnBackend.GPU }
-            )
-        }
         assertTrue(
             "QNN HTP runtime should remain selectable when its packaged libraries are present.",
             qnnProviderModes.any { it.backend == QnnBackend.HTP }
@@ -64,16 +61,62 @@ class NativeRuntimePackagingTest {
             onnxRuntime.containsAscii("QNNExecutionProvider")
         )
         assertTrue(
-            "Packaged ONNX Runtime must contain QNN GPU backend metadata.",
-            onnxRuntime.containsAscii("QnnGpu")
-        )
-        assertTrue(
             "Packaged ONNX Runtime must contain QNN HTP backend metadata.",
             onnxRuntime.containsAscii("QnnHtp")
         )
         assertTrue(
             "Packaged ONNX Runtime must support hard no-CPU-fallback enforcement.",
             onnxRuntime.containsAscii("session.disable_cpu_ep_fallback")
+        )
+    }
+
+    @Test
+    fun sherpaJniBinaryContainsStrictHardwareTtsPath() {
+        val sherpaJni = File("src/main/jniLibs/arm64-v8a/libsherpa-onnx-jni.so")
+        assertTrue("Missing packaged Sherpa JNI binary: ${sherpaJni.absolutePath}", sherpaJni.isFile)
+        assertTrue(
+            "Packaged Sherpa JNI must include the strict Kokoro fixed-bucket adapter.",
+            sherpaJni.containsAscii("strict_token_bucket")
+        )
+        assertTrue(
+            "Packaged Sherpa JNI must enforce no CPU EP fallback in hardware sessions.",
+            sherpaJni.containsAscii("session.disable_cpu_ep_fallback")
+        )
+        assertTrue(
+            "Packaged Sherpa JNI must expose QNNExecutionProvider initialization.",
+            sherpaJni.containsAscii("QNNExecutionProvider")
+        )
+        assertTrue(
+            "Packaged Sherpa JNI must explicitly reject NNAPI in strict QNN builds.",
+            sherpaJni.containsAscii("NNAPI provider is disabled in XReader strict QNN builds.")
+        )
+        assertFalse(
+            "Packaged Sherpa JNI must not expose the NNAPI provider entrypoint.",
+            sherpaJni.containsAscii("OrtSessionOptionsAppendExecutionProvider_Nnapi")
+        )
+        assertFalse(
+            "Unsupported provider strings must fail closed instead of falling back to CPU.",
+            sherpaJni.containsAscii("Unsupported string: %s. Fallback to cpu")
+        )
+        assertFalse(
+            "WebGPU initialization failure must fail closed instead of falling back to CPU.",
+            sherpaJni.containsAscii("Failed to enable WebGpuExecutionProvider: %s. Available providers: %s. Fallback to cpu")
+        )
+        assertFalse(
+            "Packaged Sherpa JNI must not expose WebGPU provider initialization.",
+            sherpaJni.containsAscii("WebGpuExecutionProvider")
+        )
+        assertFalse(
+            "Packaged Sherpa JNI must not expose WebGPU provider selection.",
+            sherpaJni.containsAscii("Use WebGpuExecutionProvider")
+        )
+        assertFalse(
+            "Packaged Sherpa JNI must not contain provider CPU fallback branches.",
+            sherpaJni.containsAscii("Fallback to cpu")
+        )
+        assertFalse(
+            "Packaged Sherpa JNI must not contain provider CUDA fallback branches.",
+            sherpaJni.containsAscii("Fallback to cuda")
         )
     }
 

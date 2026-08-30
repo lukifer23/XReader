@@ -4,7 +4,6 @@ import com.xreader.app.core.TextTools
 import java.io.File
 import java.util.Locale
 import java.util.UUID
-import java.util.zip.CRC32
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
@@ -41,7 +40,7 @@ class CbzToEpubConverter {
             output.parentFile?.mkdirs()
             ZipOutputStream(output.outputStream().buffered()).use { zip ->
                 writeStored(zip, "mimetype", EPUB_MIME_TYPE.toByteArray(Charsets.US_ASCII))
-                writeDeflated(zip, "META-INF/container.xml", containerXml.toByteArray(Charsets.UTF_8))
+            writeDeflated(zip, "META-INF/container.xml", EPUB_CONTAINER_BYTES)
                 writeDeflated(zip, "OEBPS/package.opf", packageDocument(safeTitle, identifier, pages).toByteArray(Charsets.UTF_8))
                 writeDeflated(zip, "OEBPS/nav.xhtml", navigationDocument(safeTitle, pages.size).toByteArray(Charsets.UTF_8))
                 pages.forEachIndexed { index, page ->
@@ -166,25 +165,6 @@ class CbzToEpubConverter {
             }
         }.toByteArray(Charsets.UTF_8)
 
-    private fun writeStored(zip: ZipOutputStream, name: String, bytes: ByteArray) {
-        val crc = CRC32().apply { update(bytes) }
-        val entry = ZipEntry(name).apply {
-            method = ZipEntry.STORED
-            size = bytes.size.toLong()
-            compressedSize = bytes.size.toLong()
-            this.crc = crc.value
-        }
-        zip.putNextEntry(entry)
-        zip.write(bytes)
-        zip.closeEntry()
-    }
-
-    private fun writeDeflated(zip: ZipOutputStream, name: String, bytes: ByteArray) {
-        zip.putNextEntry(ZipEntry(name))
-        zip.write(bytes)
-        zip.closeEntry()
-    }
-
     private fun pageName(index: Int): String = "page-${pageNumber(index)}"
 
     private fun pageNumber(index: Int): String = "%04d".format(Locale.US, index + 1)
@@ -240,13 +220,6 @@ class CbzToEpubConverter {
     private fun String.normalizedSortPath(): String =
         replace('\\', '/').lowercase(Locale.US)
 
-    private fun escapeXml(value: String): String =
-        value.replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-            .replace("\"", "&quot;")
-            .replace("'", "&apos;")
-
     private data class CbzPage(
         val entry: ZipEntry,
         val sortName: String,
@@ -254,14 +227,6 @@ class CbzToEpubConverter {
         val mediaType: String,
     )
 
-    private val containerXml = """
-        <?xml version="1.0" encoding="UTF-8"?>
-        <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
-          <rootfiles>
-            <rootfile full-path="OEBPS/package.opf" media-type="application/oebps-package+xml"/>
-          </rootfiles>
-        </container>
-    """.trimIndent()
 
     private companion object {
         private const val EPUB_MIME_TYPE = "application/epub+zip"

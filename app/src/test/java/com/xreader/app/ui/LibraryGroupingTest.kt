@@ -1,5 +1,7 @@
 package com.xreader.app.ui
 
+import com.xreader.app.settings.LibraryGroup
+
 import com.xreader.app.data.BookEntity
 import com.xreader.app.data.BookFormat
 import com.xreader.app.data.ReadingStateEntity

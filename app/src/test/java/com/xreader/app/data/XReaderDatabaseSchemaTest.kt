@@ -85,6 +85,18 @@ class XReaderDatabaseSchemaTest {
         assertFalse(index.getBoolean("unique"))
     }
 
+    @Test
+    fun version15SearchSchemaUsesFtsWithoutFullBodyBtreeIndex() {
+        val search = schema(version = 15).entity("search_index")
+        val indexNames = search.getJSONArray("indices")
+            .let { array -> (0 until array.length()).map { array.getJSONObject(it).getString("name") }.toSet() }
+
+        assertEquals(15, schema(version = 15).getInt("version"))
+        assertTrue("Book lookup index must remain.", "index_search_index_bookId" in indexNames)
+        assertFalse("Normalized full-text must not use a redundant B-tree index.", "index_search_index_normalizedBody" in indexNames)
+        schema(version = 15).entity("search_index_fts")
+    }
+
     private fun schema(version: Int): JSONObject {
         val file = File("schemas/com.xreader.app.data.XReaderDatabase/$version.json")
         assertTrue("Missing exported Room schema ${file.path}", file.isFile)

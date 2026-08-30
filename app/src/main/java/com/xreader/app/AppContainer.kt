@@ -18,6 +18,8 @@ import com.xreader.app.repository.AnnotationRepository
 import com.xreader.app.repository.LibraryBackupRepository
 import com.xreader.app.repository.LibraryBackupService
 import com.xreader.app.repository.LibraryRepository
+import com.xreader.app.repository.FullBackupRepository
+import com.xreader.app.repository.FullBackupService
 import com.xreader.app.repository.ReadingRepository
 import com.xreader.app.settings.SettingsRepository
 import com.xreader.app.settings.NeuralTtsPace
@@ -80,6 +82,12 @@ class AppContainer(
     }
     val libraryBackupService: LibraryBackupService by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         LibraryBackupService(appContext, libraryBackupRepository)
+    }
+    private val fullBackupRepository: FullBackupRepository by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        FullBackupRepository(database, libraryBackupRepository, annotationRepository)
+    }
+    val fullBackupService: FullBackupService by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        FullBackupService(appContext, fullBackupRepository)
     }
     val dictionaryRepository: DictionaryRepository by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         DictionaryRepository(appContext, database.dictionary())

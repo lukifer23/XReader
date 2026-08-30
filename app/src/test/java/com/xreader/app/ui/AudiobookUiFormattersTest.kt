@@ -14,7 +14,9 @@ import com.xreader.app.tts.AudiobookPlaybackUiState
 import com.xreader.app.tts.EMPTY_AUDIOBOOK_PLAYBACK_UI_STATE
 import com.xreader.app.tts.GeneratedAudiobookChapter
 import com.xreader.app.tts.NeuralTtsModelCatalog
+import com.xreader.app.tts.WAV_HEADER_BYTES
 import com.xreader.app.tts.audiobookGenerationProgressLabel
+import com.xreader.app.tts.generatedAudiobookSegmentFileName
 import com.xreader.app.tts.playableSegmentCount
 import java.io.File
 import org.junit.Assert.assertEquals
@@ -975,7 +977,7 @@ class AudiobookUiFormattersTest {
         )
 
         assertEquals(
-            "4 segments • 1 chapter • 2 playable • ~1h audio • resume 2 / 2 • 2 KB • generated 2h ago",
+            "2 playable of 4 segments • ~1h audio • resume 2 / 2 • 2 KB • 1 chapter • generated 2h ago",
             generatedAudiobookRowDetail(row, nowMillis = generatedAt + 2 * 60 * 60_000L)
         )
     }
@@ -1330,6 +1332,42 @@ class AudiobookUiFormattersTest {
     }
 
     @Test
+    fun audiobookUiItemCacheTrustsGeneratingDatabaseProgressWithoutScanningSegmentFiles() {
+        val dir = kotlin.io.path.createTempDirectory("xreader-audio-ui-cache-db-progress").toFile()
+        try {
+            writeGeneratedAudiobookSegmentForUiTest(dir, index = 0)
+            writeGeneratedAudiobookSegmentForUiTest(dir, index = 1)
+            val cache = BookAudiobookAudioUiItemCache()
+            val audio = playableAudio(1).copy(
+                status = BookAudioStatus.GENERATING,
+                filePath = dir.absolutePath,
+                scope = AudiobookGenerationScope.FULL_BOOK.key,
+                scopeLabel = AudiobookGenerationScope.FULL_BOOK.label,
+                segmentCount = 4,
+                completedSegments = 0,
+                updatedAt = 1_000L
+            )
+
+            val first = cache.toUiItems(listOf(audio)).single()
+            val heartbeat = cache.toUiItems(
+                listOf(
+                    audio.copy(
+                        generationAudioMillis = 10_000L,
+                        generationComputeMillis = 5_000L,
+                        updatedAt = 2_000L
+                    )
+                )
+            ).single()
+
+            assertEquals(0, first.playableSegmentFiles)
+            assertEquals(0, heartbeat.playableSegmentFiles)
+            assertTrue(heartbeat.chapters.isEmpty())
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
     fun audiobookUiItemCachePrunesRowsOutsideActiveSet() {
         val dir = kotlin.io.path.createTempDirectory("xreader-audio-ui-cache-prune").toFile()
         try {
@@ -1576,7 +1614,7 @@ class AudiobookUiFormattersTest {
     }
 
     @Test
-    fun audiobookUiInvalidationKeyIgnoresGeneratingHeartbeatTimingAndTimestamps() {
+    fun audiobookUiInvalidationKeyTracksGeneratingHeartbeatTimingButIgnoresTimestampAndFileSizeChurn() {
         val base = audio(4).copy(
             status = BookAudioStatus.GENERATING,
             segmentCount = 10,
@@ -1590,8 +1628,8 @@ class AudiobookUiFormattersTest {
             base.audiobookUiInvalidationKey(),
             base.copy(updatedAt = 2_000L).audiobookUiInvalidationKey()
         )
-        assertEquals(
-            base.audiobookUiInvalidationKey(),
+        assertTrue(
+            base.audiobookUiInvalidationKey() !=
             base.copy(
                 generationAudioMillis = 36_000L,
                 generationComputeMillis = 14_000L
@@ -1649,7 +1687,7 @@ class AudiobookUiFormattersTest {
     }
 
     @Test
-    fun audiobookUiInvalidationRowsIgnoreGeneratingHeartbeatOnlyUpdates() {
+    fun audiobookUiInvalidationRowsTrackGeneratingHeartbeatTimingOnlyUpdates() {
         val base = audio(4).copy(
             status = BookAudioStatus.GENERATING,
             segmentCount = 10,
@@ -1659,7 +1697,8 @@ class AudiobookUiFormattersTest {
             updatedAt = 1_000L
         )
 
-        assertTrue(
+        assertEquals(
+            false,
             sameAudiobookUiInvalidationRows(
                 listOf(base),
                 listOf(
@@ -1672,6 +1711,12 @@ class AudiobookUiFormattersTest {
                 )
             )
         )
+        assertTrue(
+            sameAudiobookUiInvalidationRows(
+                listOf(base),
+                listOf(base.copy(fileSizeBytes = 50_000L, updatedAt = 2_000L))
+            )
+        )
         assertEquals(
             false,
             sameAudiobookUiInvalidationRows(listOf(base), listOf(base.copy(completedSegments = 4)))
@@ -1679,7 +1724,7 @@ class AudiobookUiFormattersTest {
     }
 
     @Test
-    fun audiobooksScreenRowInvalidationIgnoresGeneratingHeartbeatOnlyAndOrderChanges() {
+    fun audiobooksScreenRowInvalidationTracksGeneratingHeartbeatTimingAndOrderChanges() {
         val generating = audio(4).copy(
             status = BookAudioStatus.GENERATING,
             segmentCount = 10,
@@ -1711,7 +1756,7 @@ class AudiobookUiFormattersTest {
             audioRow(ready, title = "Ready")
         )
 
-        assertTrue(sameAudiobookScreenRows(previous, heartbeat))
+        assertEquals(false, sameAudiobookScreenRows(previous, heartbeat))
         assertEquals(false, sameAudiobookScreenRows(previous, progress))
     }
 
@@ -1851,6 +1896,11 @@ class AudiobookUiFormattersTest {
             chapters = chapters,
             playableSegmentFiles = playableSegmentFiles
         )
+
+    private fun writeGeneratedAudiobookSegmentForUiTest(directory: File, index: Int) {
+        File(directory, generatedAudiobookSegmentFileName(index))
+            .writeBytes(ByteArray(WAV_HEADER_BYTES.toInt() + 8) { 1 })
+    }
 
     private fun audioRow(
         audio: BookAudioEntity,

@@ -13,8 +13,10 @@ Install:
 Build:
 
 ```bash
-./gradlew :app:lintDebug :app:testDebugUnitTest :app:assembleDebug --console=plain
+./gradlew clean :app:lintDebug :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintRelease :app:assembleRelease :app:verifyReleasePackaging --console=plain
 ```
+
+The Android-test APK build compiles Room migration coverage but does not execute it. Use an emulator or device for instrumentation and report that separately from the local build gate.
 
 Optional connected-device install:
 
@@ -33,14 +35,15 @@ adb shell am start -n com.xreader.app/.MainActivity
 - Use Readium for EPUB/PDF reading behavior instead of rebuilding reader primitives locally.
 - Put file/database work in services or repositories, not directly in Compose UI.
 - Add focused tests for import, parsing, persistence, search, analytics, and dictionary changes.
+- Keep the full backup versioned and backward-compatible. Never place imported books, covers, generated audio, model files, private paths, or checksum inventories intended for users in backup output.
+- Add every Room schema change to the explicit migration chain, export the new schema, and extend migration instrumentation coverage without destructive fallback.
 
 ## Checks
 
 Run before pushing:
 
 ```bash
-./gradlew :app:lintDebug :app:testDebugUnitTest :app:assembleDebug --console=plain
-./gradlew :app:lintRelease :app:assembleRelease --console=plain
+./gradlew clean :app:lintDebug :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintRelease :app:assembleRelease :app:verifyReleasePackaging --console=plain
 ```
 
 For reader/UI changes, also install on a device or emulator and smoke-test a real EPUB/PDF when possible.
@@ -57,6 +60,7 @@ Update documentation when behavior changes:
 
 - `README.md` for user-facing capability/build changes.
 - `docs/ARCHITECTURE.md` for data flow or dependency changes.
+- `docs/AUDIOBOOK_GENERATION.md` for QNN, model, generation, or device-acceptance changes.
 - `docs/PERFORMANCE.md` for performance methodology or headline baseline changes.
 - `docs/ROADMAP.md` for product scope changes.
 - `CHANGELOG.md` for notable shipped changes.

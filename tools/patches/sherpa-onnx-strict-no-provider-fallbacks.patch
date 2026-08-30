@@ -1,0 +1,136 @@
+diff --git a/sherpa-onnx/csrc/session.cc b/sherpa-onnx/csrc/session.cc
+index 42c2f300..50b5df0e 100755
+--- a/sherpa-onnx/csrc/session.cc
++++ b/sherpa-onnx/csrc/session.cc
+@@ -38,11 +38,11 @@ namespace sherpa_onnx {
+ static void OrtStatusFailure(OrtStatus *status, const char *s) {
+   const auto &api = Ort::GetApi();
+   const char *msg = api.GetErrorMessage(status);
+-  SHERPA_ONNX_LOGE(
+-      "Failed to enable TensorRT : %s."
+-      "Available providers: %s. Fallback to cuda",
+-      msg, s);
++  std::string error_msg = std::string("Failed to enable TensorRT: ") + msg +
++                          ". Available providers: " + s;
++  SHERPA_ONNX_LOGE("%s", error_msg.c_str());
+   api.ReleaseStatus(status);
++  throw std::runtime_error(error_msg);
+ }
+
+ static void ParseConfigFile(
+@@ -213,13 +213,18 @@ Ort::SessionOptions GetSessionOptionsImpl(
+                     "XnnpackExecutionProvider") != available_providers.end()) {
+         sess_opts.AppendExecutionProvider("XNNPACK");
+       } else {
+-        SHERPA_ONNX_LOGE("Available providers: %s. Fallback to cpu!",
+-                         os.str().c_str());
++        std::string error_msg =
++            std::string("XNNPACKExecutionProvider is unavailable. Available providers: ") +
++            os.str();
++        SHERPA_ONNX_LOGE("%s", error_msg.c_str());
++        throw std::runtime_error(error_msg);
+       }
+ #else
+-      SHERPA_ONNX_LOGE(
+-          "Does not support xnnpack for onnxruntime: %d. Fallback to cpu!",
+-          static_cast<int32_t>(ORT_API_VERSION));
++      std::ostringstream msg;
++      msg << "XNNPACK requires ONNX Runtime API >= 12. Current API: "
++          << static_cast<int32_t>(ORT_API_VERSION);
++      SHERPA_ONNX_LOGE("%s", msg.str().c_str());
++      throw std::runtime_error(msg.str());
+ #endif
+       break;
+     }
+@@ -318,10 +323,11 @@ Ort::SessionOptions GetSessionOptionsImpl(
+         }
+         sess_opts.AppendExecutionProvider_CUDA(options);
+       } else {
+-        SHERPA_ONNX_LOGE(
+-            "Please compile with -DSHERPA_ONNX_ENABLE_GPU=ON. Available "
+-            "providers: %s. Fallback to cpu!",
+-            os.str().c_str());
++        std::string error_msg =
++            std::string("CUDAExecutionProvider is unavailable. Available providers: ") +
++            os.str();
++        SHERPA_ONNX_LOGE("%s", error_msg.c_str());
++        throw std::runtime_error(error_msg);
+       }
+       break;
+     }
+@@ -335,11 +341,15 @@ Ort::SessionOptions GetSessionOptionsImpl(
+       if (status) {
+         const auto &api = Ort::GetApi();
+         const char *msg = api.GetErrorMessage(status);
+-        SHERPA_ONNX_LOGE("Failed to enable DirectML: %s. Fallback to cpu", msg);
++        std::string error_msg = std::string("Failed to enable DirectML: ") + msg;
++        SHERPA_ONNX_LOGE("%s", error_msg.c_str());
+         api.ReleaseStatus(status);
++        throw std::runtime_error(error_msg);
+       }
+ #else
+-      SHERPA_ONNX_LOGE("DirectML is for Windows only. Fallback to cpu!");
++      std::string error_msg = "DirectML is for Windows only.";
++      SHERPA_ONNX_LOGE("%s", error_msg.c_str());
++      throw std::runtime_error(error_msg);
+ #endif
+       break;
+     }
+@@ -350,8 +360,10 @@ Ort::SessionOptions GetSessionOptionsImpl(
+       (void)OrtSessionOptionsAppendExecutionProvider_CoreML(sess_opts,
+                                                             coreml_flags);
+ #else
+-      SHERPA_ONNX_LOGE(
+-          "CoreML is for Apple only since onnxruntime>=1.15. Fallback to cpu!");
++      std::string error_msg =
++          "CoreML is for Apple only since onnxruntime>=1.15.";
++      SHERPA_ONNX_LOGE("%s", error_msg.c_str());
++      throw std::runtime_error(error_msg);
+ #endif
+       break;
+     }
+@@ -380,12 +392,15 @@ Ort::SessionOptions GetSessionOptionsImpl(
+         SHERPA_ONNX_LOGE("Use nnapi");
+       }
+ #elif defined(__ANDROID_API__)
+-      SHERPA_ONNX_LOGE(
+-          "Android NNAPI requires API level >= 27. Current API level %d "
+-          "Fallback to cpu!",
+-          (int32_t)__ANDROID_API__);
++      std::ostringstream msg;
++      msg << "Android NNAPI requires API level >= 27. Current API level "
++          << (int32_t)__ANDROID_API__;
++      SHERPA_ONNX_LOGE("%s", msg.str().c_str());
++      throw std::runtime_error(msg.str());
+ #else
+-      SHERPA_ONNX_LOGE("NNAPI is for Android only. Fallback to cpu");
++      std::string error_msg = "NNAPI is for Android only.";
++      SHERPA_ONNX_LOGE("%s", error_msg.c_str());
++      throw std::runtime_error(error_msg);
+ #endif
+       break;
+     }
+@@ -413,15 +428,17 @@ Ort::SessionOptions GetSessionOptionsImpl(
+       if (sts) {
+         const auto &api = Ort::GetApi();
+         const char *msg = api.GetErrorMessage(sts);
+-        SHERPA_ONNX_LOGE(
+-            "Failed to enable SpacemiT Execution Provider: %s. Fallback to cpu",
+-            msg);
++        std::string error_msg =
++            std::string("Failed to enable SpacemiT Execution Provider: ") + msg;
++        SHERPA_ONNX_LOGE("%s", error_msg.c_str());
+         api.ReleaseStatus(sts);
++        throw std::runtime_error(error_msg);
+       }
+ #else
+-      SHERPA_ONNX_LOGE(
+-          "SpacemiT Execution Provider is for SpacemiT AI-CPUs only. Fallback "
+-          "to cpu!");
++      std::string error_msg =
++          "SpacemiT Execution Provider is for SpacemiT AI-CPUs only.";
++      SHERPA_ONNX_LOGE("%s", error_msg.c_str());
++      throw std::runtime_error(error_msg);
+ #endif
+       break;
+     }

@@ -9,12 +9,10 @@ import org.junit.Test
 
 class TtsAccelerationRuntimeTest {
     @Test
-    fun stableProviderOrderExcludesExperimentalWebGpu() {
+    fun providerOrderRequiresPackagedQnnHtpRuntime() {
         TtsAccelerationRuntime.clearProviderFailuresForTests()
         val providers = TtsAccelerationRuntime.providerOrder(
             installedLibraries = setOf("libonnxruntime.so", "libsherpa-onnx-jni.so"),
-            hasVulkan = true,
-            includeExperimentalWebGpu = false,
             androidApiLevel = 36,
             hardware = "qcom",
             boardPlatform = "sun",
@@ -23,17 +21,14 @@ class TtsAccelerationRuntimeTest {
             qnnProviders = qnnProviderConfigs(),
         )
 
-        assertFalse("webgpu" in providers)
-        assertTrue(providers.first() == "nnapi")
+        assertTrue(providers.isEmpty())
     }
 
     @Test
-    fun experimentalProviderOrderCanIncludeWebGpu() {
+    fun stagedQnnProviderOrderSelectsSingleStrictHtpProvider() {
         TtsAccelerationRuntime.clearProviderFailuresForTests()
         val providers = TtsAccelerationRuntime.providerOrder(
-            installedLibraries = setOf("libonnxruntime.so", "libsherpa-onnx-jni.so"),
-            hasVulkan = true,
-            includeExperimentalWebGpu = true,
+            installedLibraries = qnnHtpLibraries(),
             androidApiLevel = 36,
             hardware = "qcom",
             boardPlatform = "sun",
@@ -42,53 +37,14 @@ class TtsAccelerationRuntimeTest {
             qnnProviders = qnnProviderConfigs(),
         )
 
-        assertTrue(providers.indexOf("nnapi") < providers.indexOf("webgpu"))
-    }
-
-    @Test
-    fun stagedQnnProviderOrderPrefersVendorQnnBeforeNnapi() {
-        TtsAccelerationRuntime.clearProviderFailuresForTests()
-        val providers = TtsAccelerationRuntime.providerOrder(
-            installedLibraries = qnnLibraries(),
-            hasVulkan = true,
-            includeExperimentalWebGpu = true,
-            androidApiLevel = 36,
-            hardware = "qcom",
-            boardPlatform = "sun",
-            socManufacturer = "QTI",
-            socModel = "SM8750",
-            qnnProviders = qnnProviderConfigs(),
-        )
-
-        assertEquals("qnn-gpu", TtsAccelerationRuntime.providerDisplayKey(providers[0]))
-        assertEquals("qnn-htp", TtsAccelerationRuntime.providerDisplayKey(providers[1]))
-        assertEquals("nnapi", providers[2])
-        assertTrue(providers.take(5).map { TtsAccelerationRuntime.providerKey(it) } == listOf("qnn", "qnn", "nnapi", "webgpu", "xnnpack"))
-    }
-
-    @Test
-    fun strictAudiobookProviderOrderExcludesCpuBackedFallbacks() {
-        TtsAccelerationRuntime.clearProviderFailuresForTests()
-        val providers = TtsAccelerationRuntime.providerOrder(
-            installedLibraries = qnnLibraries(),
-            hasVulkan = true,
-            includeExperimentalWebGpu = false,
-            includeCpuFallbacks = false,
-            androidApiLevel = 36,
-            hardware = "qcom",
-            boardPlatform = "sun",
-            socManufacturer = "QTI",
-            socModel = "SM8750",
-            qnnProviders = qnnProviderConfigs(),
-        )
-
-        assertEquals(listOf("qnn-gpu", "qnn-htp", "nnapi"), providers.map(TtsAccelerationRuntime::providerDisplayKey))
+        assertEquals(listOf("qnn-htp"), providers.map(TtsAccelerationRuntime::providerDisplayKey))
+        assertEquals(listOf("qnn"), providers.map { TtsAccelerationRuntime.providerKey(it) })
     }
 
     @Test
     fun qnnReadinessRejectsNonQualcommDevice() {
         val readiness = TtsAccelerationRuntime.qnnReadiness(
-            installedLibraries = qnnLibraries(),
+            installedLibraries = qnnHtpLibraries(),
             hardware = "exynos",
             boardPlatform = "s5e",
             socManufacturer = "Samsung",
@@ -127,23 +83,13 @@ class TtsAccelerationRuntimeTest {
     }
 
     @Test
-    fun qnnProviderModesUseStrictQnnHardwareForAudiobookAcceleration() {
-        val htpOnly = TtsAccelerationRuntime.qnnProviderModes(qnnHtpLibraries())
-        assertEquals(listOf(QnnBackend.HTP), htpOnly.map { it.backend })
+    fun qnnProviderModesUseOnlyStrictHtpForAudiobookAcceleration() {
+        val modes = TtsAccelerationRuntime.qnnProviderModes(qnnHtpLibraries())
 
-        val gpuAndHtp = TtsAccelerationRuntime.qnnProviderModes(qnnLibraries())
         assertEquals(
-            listOf(
-                QnnProviderMode(QnnBackend.GPU, QnnExecutionMode.STRICT),
-                QnnProviderMode(QnnBackend.HTP, QnnExecutionMode.STRICT),
-            ),
-            gpuAndHtp
+            listOf(QnnProviderMode(QnnBackend.HTP, QnnExecutionMode.STRICT)),
+            modes
         )
-
-        val readiness = TtsAccelerationRuntime.qnnBackendReadiness(qnnHtpLibraries(), QnnBackend.GPU)
-        assertFalse(readiness.ready)
-        assertTrue(readiness.reason.contains("libOpenCL.so"))
-        assertTrue(readiness.reason.contains("libOpenCL_adreno.so"))
     }
 
     @Test
@@ -169,28 +115,9 @@ class TtsAccelerationRuntimeTest {
         )
 
         assertEquals(setOf("75", "79"), TtsAccelerationRuntime.qnnHtpPackagedArchitectureVersions(mixed))
-        assertEquals(emptySet<String>(), TtsAccelerationRuntime.qnnHtpPackagedArchitectureVersions(mixed - "libQnnHtpV75.so" - "libQnnHtpV79.so"))
-    }
-
-    @Test
-    fun nnapiReadinessRequiresApi27AndPackagedRuntime() {
-        assertFalse(
-            TtsAccelerationRuntime.nnapiReadiness(
-                installedLibraries = setOf("libonnxruntime.so", "libsherpa-onnx-jni.so"),
-                androidApiLevel = 26
-            ).ready
-        )
-        assertFalse(
-            TtsAccelerationRuntime.nnapiReadiness(
-                installedLibraries = emptySet(),
-                androidApiLevel = 36
-            ).ready
-        )
-        assertTrue(
-            TtsAccelerationRuntime.nnapiReadiness(
-                installedLibraries = setOf("libonnxruntime.so", "libsherpa-onnx-jni.so"),
-                androidApiLevel = 36
-            ).ready
+        assertEquals(
+            emptySet<String>(),
+            TtsAccelerationRuntime.qnnHtpPackagedArchitectureVersions(mixed - "libQnnHtpV75.so" - "libQnnHtpV79.so")
         )
     }
 
@@ -223,31 +150,6 @@ class TtsAccelerationRuntimeTest {
     }
 
     @Test
-    fun qnnHtpProviderConfigKeepsNpuTuningForQuantizedModels() {
-        TtsAccelerationRuntime.clearQnnHtpDeviceOptionOverridesForTests()
-        val config = TtsAccelerationRuntime.qnnProviderConfigText(
-            socModel = "SM8750",
-            mode = QnnProviderMode(QnnBackend.HTP, QnnExecutionMode.STRICT)
-        )
-
-        assertFalse(config.contains("DEBUG="))
-        assertTrue(config.contains("backend_path=libQnnHtp.so"))
-        assertTrue(config.contains("disable_cpu_ep_fallback=1"))
-        assertTrue(config.contains("offload_graph_io_quantization=0"))
-        assertTrue(config.contains("skip_qnn_version_check=0"))
-        assertTrue(config.contains("htp_performance_mode=burst"))
-        assertTrue(config.contains("htp_graph_finalization_optimization_mode=2"))
-        assertTrue(config.contains("qnn_context_priority=high"))
-        assertTrue(config.contains("enable_htp_fp16_precision=1"))
-        assertFalse(config.contains("htp_use_signed_process_domain="))
-        assertTrue(config.contains("vtcm_mb=8"))
-        assertTrue(config.contains("rpc_control_latency=200"))
-        assertTrue(config.contains("device_id=0"))
-        assertFalse(config.contains("soc_model="))
-        assertFalse(config.contains("htp_arch="))
-    }
-
-    @Test
     fun qnnHtpProviderConfigCanPinDeviceOptionsForDiagnostics() {
         try {
             TtsAccelerationRuntime.overrideQnnSignedProcessDomainForCurrentProcess(false)
@@ -271,84 +173,46 @@ class TtsAccelerationRuntimeTest {
     }
 
     @Test
-    fun qnnBackendPathFallsBackToLibraryNameWhenNativeLibraryIsNotExtracted() {
+    fun qnnHtpBackendPathFallsBackToLibraryNameWhenNativeLibraryIsNotExtracted() {
         assertEquals(
-            "libQnnGpu.so",
+            "libQnnHtp.so",
             TtsAccelerationRuntime.qnnBackendPath(
                 nativeLibraryDir = null,
-                backend = QnnBackend.GPU
+                backend = QnnBackend.HTP
             )
         )
         assertEquals(
-            "libQnnGpu.so",
+            "libQnnHtp.so",
             TtsAccelerationRuntime.qnnBackendPath(
                 nativeLibraryDir = "/path/that/does/not/exist",
-                backend = QnnBackend.GPU
+                backend = QnnBackend.HTP
             )
         )
     }
 
     @Test
-    fun qnnBackendPathUsesExtractedNativeLibraryFileWhenAvailable() {
+    fun qnnHtpBackendPathUsesExtractedNativeLibraryFileWhenAvailable() {
         val dirPath = createTempDirectory(prefix = "xreader-qnn-libs")
         val dir = dirPath.toFile()
         try {
-            val gpu = File(dir, "libQnnGpu.so").apply { writeBytes(byteArrayOf(1)) }
+            val htp = File(dir, "libQnnHtp.so").apply { writeBytes(byteArrayOf(1)) }
 
             assertEquals(
-                gpu.absolutePath,
+                htp.absolutePath,
                 TtsAccelerationRuntime.qnnBackendPath(
                     nativeLibraryDir = dir.absolutePath,
-                    backend = QnnBackend.GPU
+                    backend = QnnBackend.HTP
                 )
             )
             assertTrue(
                 TtsAccelerationRuntime.qnnProviderConfigText(
                     socModel = "SM8750",
-                    backendPath = gpu.absolutePath
-                ).contains("backend_path=${gpu.absolutePath}")
+                    backendPath = htp.absolutePath
+                ).contains("backend_path=${htp.absolutePath}")
             )
         } finally {
             dir.deleteRecursively()
         }
-    }
-
-    @Test
-    fun qnnGpuOpenClPathUsesDirectoryContainingBothPackagedOpenClLibraries() {
-        val dirPath = createTempDirectory(prefix = "xreader-opencl-libs")
-        val dir = dirPath.toFile()
-        try {
-            assertEquals(null, TtsAccelerationRuntime.qnnGpuOpenClDriverPath(dir.absolutePath))
-
-            File(dir, "libOpenCL.so").writeBytes(byteArrayOf(1))
-            assertEquals(null, TtsAccelerationRuntime.qnnGpuOpenClDriverPath(dir.absolutePath))
-
-            File(dir, "libOpenCL_adreno.so").writeBytes(byteArrayOf(1))
-            assertEquals(dir.absolutePath, TtsAccelerationRuntime.qnnGpuOpenClDriverPath(dir.absolutePath))
-        } finally {
-            dir.deleteRecursively()
-        }
-    }
-
-    @Test
-    fun qnnGpuLibrarySearchPathPrependsExtractedNativeDirectory() {
-        val path = TtsAccelerationRuntime.qnnGpuLibrarySearchPath(
-            nativeLibraryDir = "/data/app/example/lib/arm64",
-            existingPath = "/vendor/lib64:/custom/lib:/data/app/example/lib/arm64"
-        )
-
-        val parts = path.split(":")
-        assertEquals("/data/app/example/lib/arm64", parts.first())
-        assertTrue("/vendor/lib64" in parts)
-        assertTrue("/custom/lib" in parts)
-        assertEquals(parts.distinct(), parts)
-    }
-
-    @Test
-    fun qnnGpuIcdVendorFilePointsToPackagedAdrenoDriver() {
-        val text = TtsAccelerationRuntime.qnnGpuIcdVendorFileText("/data/app/example/lib/arm64")
-
-        assertEquals("/data/app/example/lib/arm64/libOpenCL_adreno.so\n", text)
     }
 
     @Test
@@ -388,30 +252,39 @@ class TtsAccelerationRuntimeTest {
     }
 
     @Test
-    fun hardwareProviderClassifiersRecognizeStrictAudiobookBackends() {
-        assertTrue(TtsAccelerationRuntime.isHardwareAcceleratedProvider("qnn:/tmp/qnn.config"))
-        assertTrue(TtsAccelerationRuntime.isHardwareAcceleratedProvider("nnapi"))
-        assertTrue(TtsAccelerationRuntime.isHardwareAcceleratedProvider("webgpu"))
+    fun hardwareProviderClassifiersRecognizeOnlyStrictHtpBackend() {
+        assertFalse(TtsAccelerationRuntime.isHardwareAcceleratedProvider("qnn:/tmp/qnn.config"))
+        assertFalse(TtsAccelerationRuntime.isHardwareAcceleratedProvider("qnn:/tmp/xreader-qnn-gpu-strict-provider.config"))
+        assertFalse(TtsAccelerationRuntime.isHardwareAcceleratedProvider("qnn-gpu"))
+        assertFalse(TtsAccelerationRuntime.isHardwareAcceleratedProvider("nnapi"))
+        assertFalse(TtsAccelerationRuntime.isHardwareAcceleratedProvider("webgpu"))
         assertFalse(TtsAccelerationRuntime.isHardwareAcceleratedProvider("xnnpack"))
         assertFalse(TtsAccelerationRuntime.isHardwareAcceleratedProvider("cpu"))
 
-        assertTrue(TtsAccelerationRuntime.isStrictAudiobookHardwareProvider("qnn:/tmp/qnn.config"))
+        assertTrue(
+            TtsAccelerationRuntime.isStrictAudiobookHardwareProvider(
+                "qnn:/tmp/xreader-qnn-htp-strict-provider.config"
+            )
+        )
+        assertFalse(TtsAccelerationRuntime.isStrictAudiobookHardwareProvider("qnn:/tmp/qnn.config"))
+        assertFalse(TtsAccelerationRuntime.isStrictAudiobookHardwareProvider("qnn:/tmp/xreader-qnn-gpu-strict-provider.config"))
+        assertFalse(TtsAccelerationRuntime.isStrictAudiobookHardwareProvider("qnn-gpu"))
         assertFalse(TtsAccelerationRuntime.isStrictAudiobookHardwareProvider("nnapi"))
         assertFalse(TtsAccelerationRuntime.isStrictAudiobookHardwareProvider("webgpu"))
         assertFalse(TtsAccelerationRuntime.isStrictAudiobookHardwareProvider("cpu"))
 
-        assertTrue(TtsAccelerationRuntime.isAudiobookGenerationAcceleratedProvider("qnn:/tmp/xreader-qnn-gpu-strict-provider.config"))
-        assertFalse(TtsAccelerationRuntime.isAudiobookGenerationAcceleratedProvider("qnn:/tmp/xreader-qnn-gpu-hybrid-provider.config"))
         assertTrue(TtsAccelerationRuntime.isAudiobookGenerationAcceleratedProvider("qnn:/tmp/xreader-qnn-htp-strict-provider.config"))
+        assertFalse(TtsAccelerationRuntime.isAudiobookGenerationAcceleratedProvider("qnn:/tmp/xreader-qnn-gpu-strict-provider.config"))
+        assertFalse(TtsAccelerationRuntime.isAudiobookGenerationAcceleratedProvider("qnn-gpu"))
         assertFalse(TtsAccelerationRuntime.isAudiobookGenerationAcceleratedProvider("nnapi"))
         assertFalse(TtsAccelerationRuntime.isAudiobookGenerationAcceleratedProvider("webgpu"))
         assertFalse(TtsAccelerationRuntime.isAudiobookGenerationAcceleratedProvider("xnnpack"))
     }
 
     @Test
-    fun providerDisplayKeyIdentifiesQnnBackendConfig() {
+    fun providerDisplayKeyIdentifiesOnlyHtpBackendConfig() {
         assertEquals(
-            "qnn-gpu",
+            "qnn",
             TtsAccelerationRuntime.providerDisplayKey("qnn:/data/user/0/com.xreader.app/cache/xreader-qnn-gpu-strict-provider.config")
         )
         assertEquals(
@@ -419,41 +292,32 @@ class TtsAccelerationRuntimeTest {
             TtsAccelerationRuntime.providerDisplayKey("qnn:/data/user/0/com.xreader.app/cache/xreader-qnn-htp-strict-provider.config")
         )
         assertEquals(
-            "qnn-gpu-hybrid",
-            TtsAccelerationRuntime.providerDisplayKey("qnn:/data/user/0/com.xreader.app/cache/xreader-qnn-gpu-hybrid-provider.config")
+            "qnn",
+            TtsAccelerationRuntime.providerDisplayKey("qnn:/data/user/0/com.xreader.app/cache/custom-qnn-provider.config")
         )
     }
 
     @Test
-    fun qnnBackendIsDerivedFromProviderConfigName() {
+    fun qnnBackendIsDerivedFromHtpProviderConfigName() {
         assertEquals(
-            QnnBackend.GPU,
+            null,
             TtsAccelerationRuntime.qnnBackend("qnn:/data/user/0/com.xreader.app/cache/xreader-qnn-gpu-strict-provider.config")
         )
         assertEquals(
             QnnBackend.HTP,
             TtsAccelerationRuntime.qnnBackend("qnn:/data/user/0/com.xreader.app/cache/xreader-qnn-htp-strict-provider.config")
         )
+        assertEquals(null, TtsAccelerationRuntime.qnnBackend("qnn-gpu"))
         assertEquals(null, TtsAccelerationRuntime.qnnBackend("nnapi"))
     }
 
     @Test
-    fun qnnBackendIsDerivedFromReadinessProviderLabels() {
-        assertEquals(QnnBackend.GPU, TtsAccelerationRuntime.qnnBackend("qnn-gpu"))
-        assertEquals(QnnBackend.HTP, TtsAccelerationRuntime.qnnBackend("qnn-htp"))
-        assertTrue(TtsAccelerationRuntime.isAudiobookGenerationAcceleratedProvider("qnn-gpu"))
-        assertTrue(TtsAccelerationRuntime.isAudiobookGenerationAcceleratedProvider("qnn-htp"))
-    }
-
-    @Test
-    fun failedAcceleratorIsSkippedAfterInitializationFailure() {
+    fun failedNonSelectedAcceleratorDoesNotEnableFallbacks() {
         TtsAccelerationRuntime.clearProviderFailuresForTests()
         TtsAccelerationRuntime.recordProviderInitializationFailed("webgpu")
 
         val providers = TtsAccelerationRuntime.providerOrder(
-            installedLibraries = qnnLibraries(),
-            hasVulkan = true,
-            includeExperimentalWebGpu = true,
+            installedLibraries = qnnHtpLibraries(),
             androidApiLevel = 36,
             hardware = "qcom",
             boardPlatform = "sun",
@@ -463,19 +327,17 @@ class TtsAccelerationRuntimeTest {
         )
 
         assertFalse(providers.any { TtsAccelerationRuntime.providerKey(it) == "webgpu" })
-        assertEquals("qnn-gpu", TtsAccelerationRuntime.providerDisplayKey(providers.first()))
+        assertEquals(listOf("qnn-htp"), providers.map(TtsAccelerationRuntime::providerDisplayKey))
         TtsAccelerationRuntime.clearProviderFailuresForTests()
     }
 
     @Test
-    fun failedGenericQnnDoesNotSuppressExplicitQnnBackends() {
+    fun failedGenericQnnDoesNotEnableCpuBackedFallbacks() {
         TtsAccelerationRuntime.clearProviderFailuresForTests()
         TtsAccelerationRuntime.recordProviderInitializationFailed("qnn:/data/user/0/com.xreader.app/cache/qnn.config")
 
         val providers = TtsAccelerationRuntime.providerOrder(
-            installedLibraries = qnnLibraries(),
-            hasVulkan = true,
-            includeExperimentalWebGpu = false,
+            installedLibraries = qnnHtpLibraries(),
             androidApiLevel = 36,
             hardware = "qcom",
             boardPlatform = "sun",
@@ -484,34 +346,30 @@ class TtsAccelerationRuntimeTest {
             qnnProviders = qnnProviderConfigs(),
         )
 
-        assertEquals("qnn-gpu", TtsAccelerationRuntime.providerDisplayKey(providers.first()))
-        assertTrue(providers.any { TtsAccelerationRuntime.providerKey(it) == "nnapi" })
+        assertEquals(listOf("qnn-htp"), providers.map(TtsAccelerationRuntime::providerDisplayKey))
+        assertFalse(providers.any { TtsAccelerationRuntime.providerKey(it) == "nnapi" })
         TtsAccelerationRuntime.clearProviderFailuresForTests()
     }
 
     @Test
-    fun failedQnnBackendDoesNotBlockOtherQnnBackends() {
+    fun failedSelectedQnnHtpBackendBlocksGeneration() {
         TtsAccelerationRuntime.clearProviderFailuresForTests()
-        TtsAccelerationRuntime.recordProviderInitializationFailed("qnn:/data/user/0/com.xreader.app/cache/xreader-qnn-gpu-strict-provider.config")
+        TtsAccelerationRuntime.recordProviderInitializationFailed(
+            "qnn:/data/user/0/com.xreader.app/cache/xreader-qnn-htp-strict-provider.config"
+        )
 
         val providers = TtsAccelerationRuntime.providerOrder(
-            installedLibraries = qnnLibraries(),
-            hasVulkan = true,
-            includeExperimentalWebGpu = false,
+            installedLibraries = qnnHtpLibraries(),
             androidApiLevel = 36,
             hardware = "qcom",
             boardPlatform = "sun",
             socManufacturer = "QTI",
             socModel = "SM8750",
-            qnnProviders = listOf(
-                "qnn:/data/user/0/com.xreader.app/cache/xreader-qnn-gpu-strict-provider.config",
-                "qnn:/data/user/0/com.xreader.app/cache/xreader-qnn-htp-strict-provider.config",
-                "qnn:/data/user/0/com.xreader.app/cache/xreader-qnn-gpu-hybrid-provider.config"
-            ),
+            qnnProviders = qnnProviderConfigs(),
         )
 
-        assertEquals("qnn-htp", TtsAccelerationRuntime.providerDisplayKey(providers.first()))
-        assertTrue(providers.any { TtsAccelerationRuntime.providerKey(it) == "nnapi" })
+        assertTrue(providers.isEmpty())
+        assertFalse(providers.any { TtsAccelerationRuntime.providerKey(it) == "nnapi" })
         TtsAccelerationRuntime.clearProviderFailuresForTests()
     }
 
@@ -533,25 +391,6 @@ class TtsAccelerationRuntimeTest {
     }
 
     @Test
-    fun qnnGpuOpenClFailuresAreClassifiedForUserFacingDiagnostics() {
-        val provider = "qnn:/data/user/0/com.xreader.app/cache/xreader-qnn-gpu-strict-provider.config"
-        val error = IllegalStateException(
-            "QNN SetupBackend failed qnn_backend_manager.cc:581 InitializeBackend Failed to initialize backend.",
-            RuntimeException(
-                "GPU ERROR: GPU_ERROR_FAILED_CREATION(10006) - Invalid OpenCL driver path. " +
-                    "QNN_COMMON_ERROR_PLATFORM_NOT_SUPPORTED"
-            )
-        )
-
-        assertTrue(TtsAccelerationRuntime.isQnnGpuOpenClFailure(provider, error))
-        assertEquals(
-            "QNN GPU failed before audio generation. " +
-                "The Qualcomm runtime could not load a usable OpenCL driver from the app process.",
-            TtsAccelerationRuntime.providerInitializationFailureSummary(provider, error)
-        )
-    }
-
-    @Test
     fun failedQnnHtpProviderIsBlockedWithReasonAfterTransportFailure() {
         TtsAccelerationRuntime.clearProviderFailuresForTests()
         val provider = "qnn:/data/user/0/com.xreader.app/cache/xreader-qnn-htp-strict-provider.config"
@@ -561,16 +400,13 @@ class TtsAccelerationRuntimeTest {
         )
 
         val providers = TtsAccelerationRuntime.providerOrder(
-            installedLibraries = qnnLibraries(),
-            hasVulkan = true,
-            includeExperimentalWebGpu = false,
+            installedLibraries = qnnHtpLibraries(),
             androidApiLevel = 36,
             hardware = "qcom",
             boardPlatform = "sun",
             socManufacturer = "QTI",
             socModel = "SM8750",
             qnnProviders = listOf(provider),
-            includeCpuFallbacks = false,
         )
 
         assertFalse(providers.any { TtsAccelerationRuntime.providerDisplayKey(it) == "qnn-htp" })
@@ -580,44 +416,6 @@ class TtsAccelerationRuntimeTest {
             TtsAccelerationRuntime.audiobookHardwareProviderBlockReason()
         )
         TtsAccelerationRuntime.clearProviderFailuresForTests()
-    }
-
-    @Test
-    fun failedQnnHardwareBackendsReportCombinedBlockReason() {
-        TtsAccelerationRuntime.clearProviderFailuresForTests()
-        TtsAccelerationRuntime.recordProviderInitializationFailed(
-            "qnn:/data/user/0/com.xreader.app/cache/xreader-qnn-gpu-strict-provider.config",
-            IllegalStateException("Invalid OpenCL driver path")
-        )
-        TtsAccelerationRuntime.recordProviderInitializationFailed(
-            "qnn:/data/user/0/com.xreader.app/cache/xreader-qnn-htp-strict-provider.config",
-            IllegalStateException("QNN_DEVICE_ERROR_INVALID_CONFIG")
-        )
-
-        val reason = TtsAccelerationRuntime.audiobookHardwareProviderBlockReason().orEmpty()
-        assertTrue(reason.contains("QNN GPU failed"))
-        assertTrue(reason.contains("QNN HTP/NPU transport failed"))
-        TtsAccelerationRuntime.clearProviderFailuresForTests()
-    }
-
-    @Test
-    fun orderedProviderFailureSummaryTrimsAndSuppressesDuplicates() {
-        assertEquals(
-            "GPU failed HTP failed",
-            TtsAccelerationRuntime.orderedProviderFailureSummary(" GPU failed ", "HTP failed")
-        )
-        assertEquals(
-            "QNN failed",
-            TtsAccelerationRuntime.orderedProviderFailureSummary("QNN failed", " QNN failed ")
-        )
-        assertEquals(
-            "HTP failed",
-            TtsAccelerationRuntime.orderedProviderFailureSummary(null, " HTP failed ")
-        )
-        assertEquals(
-            null,
-            TtsAccelerationRuntime.orderedProviderFailureSummary(" ", null)
-        )
     }
 
     @Test
@@ -641,24 +439,10 @@ class TtsAccelerationRuntimeTest {
         assertEquals(setOf("libonnxruntime.so"), first)
         assertEquals(first, second)
         assertEquals(1, discoveries)
-        TtsAccelerationRuntime.clearPackagedNativeLibrariesCacheForTests()
-    }
 
-    @Test
-    fun packagedNativeLibraryCacheInvalidatesWhenInstallKeyChanges() {
-        TtsAccelerationRuntime.clearPackagedNativeLibrariesCacheForTests()
-        var discoveries = 0
-        val firstKey = PackagedNativeLibrariesKey(
-            nativeLibraryDir = "/data/app/lib",
-            sourcePaths = listOf("/data/app/base.apk")
-        )
-        val nextKey = firstKey.copy(sourcePaths = listOf("/data/app/base.apk", "/data/app/split.apk"))
-
-        TtsAccelerationRuntime.cachedPackagedNativeLibraries(firstKey) {
-            discoveries += 1
-            setOf("base.so")
-        }
-        val next = TtsAccelerationRuntime.cachedPackagedNativeLibraries(nextKey) {
+        val next = TtsAccelerationRuntime.cachedPackagedNativeLibraries(
+            key.copy(sourcePaths = listOf("/data/app/base.apk", "/data/app/split.apk"))
+        ) {
             discoveries += 1
             setOf("base.so", "split.so")
         }
@@ -680,15 +464,7 @@ class TtsAccelerationRuntimeTest {
         "libQnnHtpV79.so",
     )
 
-    private fun qnnLibraries(): Set<String> = qnnHtpLibraries() + setOf(
-        "libQnnGpu.so",
-        "libQnnGpuNetRunExtensions.so",
-        "libOpenCL.so",
-        "libOpenCL_adreno.so",
-    )
-
     private fun qnnProviderConfigs(): List<String> = listOf(
-        "qnn:/data/user/0/com.xreader.app/cache/xreader-qnn-gpu-strict-provider.config",
         "qnn:/data/user/0/com.xreader.app/cache/xreader-qnn-htp-strict-provider.config",
     )
 }

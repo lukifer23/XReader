@@ -104,10 +104,7 @@ internal fun AudiobookPlaybackUiState.generatedAudiobookMetadataKey(): Generated
 internal fun AudiobookPlaybackUiState.matchesGeneratedAudiobookMetadataKey(
     key: GeneratedAudiobookMetadataKey?,
 ): Boolean =
-    key != null &&
-        key.bookTitle == bookTitle &&
-        key.profileLabel == normalizedTtsMediaSubtitle(profileLabel) &&
-        key.segmentDurationMs == segmentDurationMs.coerceAtLeast(0)
+    key != null && generatedAudiobookMetadataKey() == key
 
 internal data class GeneratedAudiobookPlaybackStateKey(
     val foregroundActive: Boolean,
@@ -129,12 +126,7 @@ internal fun AudiobookPlaybackUiState.generatedAudiobookPlaybackStateKey(): Gene
 internal fun AudiobookPlaybackUiState.matchesGeneratedAudiobookPlaybackStateKey(
     key: GeneratedAudiobookPlaybackStateKey?,
 ): Boolean =
-    key != null &&
-        key.foregroundActive == foregroundActive &&
-        key.playing == playing &&
-        key.segmentIndex == segmentIndex &&
-        key.segmentCount == segmentCount &&
-        key.segmentDurationMs == segmentDurationMs.coerceAtLeast(0)
+    key != null && generatedAudiobookPlaybackStateKey() == key
 
 private fun generatedAudiobookPlaybackState(state: AudiobookPlaybackUiState): PlaybackState {
     val total = state.segmentCount

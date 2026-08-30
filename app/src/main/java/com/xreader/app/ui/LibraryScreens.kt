@@ -107,6 +107,7 @@ import com.xreader.app.importer.SupportedBookTypes
 import com.xreader.app.repository.bookExportFileName
 import com.xreader.app.repository.bookExportMimeType
 import com.xreader.app.settings.LibraryDensity
+import com.xreader.app.settings.LibraryGroup
 import com.xreader.app.settings.LibrarySort
 import com.xreader.app.settings.NeuralTtsGender
 import com.xreader.app.settings.NeuralTtsPace
@@ -247,7 +248,7 @@ internal fun LibraryRoute(
                             label = if (state.importing) "Importing books" else "Import books",
                             onClick = { importMenuOpen = true },
                             enabled = !state.importing,
-                            modifier = Modifier.size(44.dp)
+                            modifier = Modifier.size(48.dp)
                         ) {
                             if (state.importing) {
                                 CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
@@ -282,6 +283,7 @@ internal fun LibraryRoute(
             state = state,
             metadataOptionsState = viewModel.metadataOptionsState,
             onQuery = viewModel::setQuery,
+            onSearchExpanded = viewModel::setSearchExpanded,
             onSearch = viewModel::searchLibrary,
             onGroup = viewModel::setGroup,
             onSort = viewModel::setSort,
@@ -472,6 +474,7 @@ internal fun LibraryScreen(
     state: LibraryUiState,
     metadataOptionsState: StateFlow<LibraryMetadataOptionsUiState>,
     onQuery: (String) -> Unit,
+    onSearchExpanded: (Boolean) -> Unit,
     onSearch: () -> Unit,
     onGroup: (LibraryGroup) -> Unit,
     onSort: (LibrarySort) -> Unit,
@@ -498,7 +501,6 @@ internal fun LibraryScreen(
     var deleteCandidate by remember { mutableStateOf<BookEntity?>(null) }
     var coverTarget by remember { mutableStateOf<BookEntity?>(null) }
     var collectionsTarget by remember { mutableStateOf<BookListItem?>(null) }
-    var searchExpanded by remember { mutableStateOf(false) }
     val supportedCoverMimeTypes = remember {
         arrayOf("image/jpeg", "image/png", "image/webp", "image/*")
     }
@@ -510,34 +512,9 @@ internal fun LibraryScreen(
             editing = null
         }
     }
-    val continueItem = remember(state.books, state.group) {
-        if (state.group == LibraryGroup.BOOKS) {
-            state.books
-                .filter { it.isLibraryInProgress() }
-                .maxByOrNull { it.state?.lastReadAt ?: it.book.lastOpenedAt ?: it.book.importedAt }
-        } else {
-            null
-        }
-    }
-    val nextSeriesItem = remember(state.allBooks, state.group, state.query, continueItem) {
-        if (state.group == LibraryGroup.BOOKS && state.query.isBlank()) {
-            recommendNextSeriesBook(state.allBooks)
-                ?.takeUnless { it.next.book.id == continueItem?.book?.id }
-        } else {
-            null
-        }
-    }
-    val displayBooks = remember(state.books, state.group, continueItem) {
-        if (state.group == LibraryGroup.BOOKS && continueItem != null) {
-            state.books.filterNot { it.book.id == continueItem.book.id }
-        } else {
-            state.books
-        }
-    }
-
     LaunchedEffect(state.query, state.librarySearchResults) {
         if (state.query.isNotBlank() || state.librarySearchResults.isNotEmpty()) {
-            searchExpanded = true
+            onSearchExpanded(true)
         }
     }
 
@@ -547,20 +524,20 @@ internal fun LibraryScreen(
             .background(MaterialTheme.colorScheme.background)
             .padding(horizontal = 16.dp)
     ) {
-        if (searchExpanded) {
+        if (state.searchExpanded) {
             LibrarySearchField(
                 query = state.query,
                 onQuery = onQuery,
                 onSearch = onSearch,
                 onCollapse = {
                     if (state.query.isNotBlank()) onQuery("")
-                    searchExpanded = false
+                    onSearchExpanded(false)
                 }
             )
         } else {
             LibraryActionRow(
                 state = state,
-                onToggleSearch = { searchExpanded = true },
+                onToggleSearch = { onSearchExpanded(true) },
                 onGroup = onGroup,
                 onSort = onSort,
                 onToggleDensity = onToggleDensity
@@ -578,20 +555,18 @@ internal fun LibraryScreen(
                 copy = state.emptyStateCopy(),
                 onImport = onImport,
                 onShowAll = {
-                    searchExpanded = false
+                    onSearchExpanded(false)
                     onShowAll()
                 }
             )
         } else {
-            val grouped = remember(state.group, displayBooks, state.sort) {
-                groupBooks(state.group, displayBooks, state.sort)
-            }
+            val grouped = state.sections.associate { it.header to it.books }
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 28.dp),
                 verticalArrangement = Arrangement.spacedBy(if (state.density == LibraryDensity.COMPACT) 8.dp else 10.dp)
             ) {
-                continueItem?.let { current ->
+                state.continueItem?.let { current ->
                     item {
                         ContinueReadingCard(
                             item = current,
@@ -607,7 +582,7 @@ internal fun LibraryScreen(
                         )
                     }
                 }
-                nextSeriesItem?.let { recommendation ->
+                state.nextSeriesItem?.let { recommendation ->
                     item {
                         SeriesNextCard(
                             recommendation = recommendation,
@@ -779,7 +754,7 @@ internal fun LibraryActionRow(
         TooltipIconButton(
             label = "Search library",
             onClick = onToggleSearch,
-            modifier = Modifier.size(44.dp)
+            modifier = Modifier.size(48.dp)
         ) {
             Icon(Icons.Filled.Search, contentDescription = null)
         }
@@ -787,7 +762,7 @@ internal fun LibraryActionRow(
             TooltipIconButton(
                 label = "Sort library",
                 onClick = { sortMenuOpen = true },
-                modifier = Modifier.size(44.dp)
+                modifier = Modifier.size(48.dp)
             ) {
                 Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = null)
             }
@@ -811,7 +786,7 @@ internal fun LibraryActionRow(
         TooltipIconButton(
             label = densityLabel,
             onClick = onToggleDensity,
-            modifier = Modifier.size(44.dp)
+            modifier = Modifier.size(48.dp)
         ) {
             Icon(
                 if (state.density == LibraryDensity.COMPACT) Icons.Filled.ViewAgenda else Icons.Filled.ViewCompact,
@@ -1300,1084 +1275,6 @@ internal fun LibraryEmptyState(
     }
 }
 
-@Composable
-internal fun BookAudiobookDialog(
-    book: BookEntity,
-    settings: ReaderSettings,
-    models: List<NeuralTtsModelEntity>,
-    hardwareReadiness: AudiobookGenerationHardwareReadiness,
-    bookAudioItems: List<BookAudiobookAudioUiItem>,
-    scan: AudiobookScanUiState?,
-    playback: AudiobookPlaybackUiState,
-    onDismiss: () -> Unit,
-    onScan: () -> Unit,
-    onGenerate: (AudiobookGenerationScope) -> Unit,
-    onCancelGeneration: (BookAudioEntity) -> Unit,
-    onExportAudio: (BookAudioEntity) -> Unit,
-    onDeleteAudio: (BookAudioEntity) -> Unit,
-    onDeleteAllAudio: () -> Unit,
-    onPlayAudio: (BookAudioEntity) -> Unit,
-    onPlayAudioFromSegment: (BookAudioEntity, Int) -> Unit,
-    onPauseAudio: (BookAudioEntity) -> Unit,
-    onStopAudio: () -> Unit,
-    onSpeakerSelected: (Int) -> Unit,
-    onGenderSelected: (NeuralTtsGender) -> Unit,
-    onToneSelected: (NeuralTtsTone) -> Unit,
-    onPaceSelected: (NeuralTtsPace) -> Unit,
-    onDownload: (String) -> Unit,
-    onCancelModelInstall: (String) -> Unit,
-    onPreview: (String) -> Unit,
-) {
-    val bookAudio = remember(bookAudioItems) { bookAudioItems.map { it.audio } }
-    val modelsById = remember(models) { models.associateBy { it.modelId } }
-    val selectedSpec = NeuralTtsModelCatalog.models.firstOrNull { it.modelId == settings.neuralTtsModelId }
-        ?: NeuralTtsModelCatalog.models.first()
-    val selectedModel = modelsById[selectedSpec.modelId]
-    val selectedStatus = selectedModel?.status ?: NeuralTtsModelStatus.NOT_DOWNLOADED
-    val selectedSpeaker = selectedSpec.speaker(settings.neuralTtsSpeakerId)
-    val narratorOptions = remember(selectedSpec, settings.neuralTtsGender, selectedSpeaker) {
-        selectedSpec.speakers
-            .filter { settings.neuralTtsGender == NeuralTtsGender.ANY || it.gender == settings.neuralTtsGender }
-            .let { filtered ->
-                if (selectedSpeaker in filtered) filtered else listOf(selectedSpeaker) + filtered
-            }
-    }
-    val selectedAudioItem = remember(bookAudioItems, settings.neuralTtsModelId, settings.neuralTtsSpeakerId, settings.neuralTtsPace, settings.neuralTtsTone) {
-        selectedAudiobookStatusItem(
-            items = bookAudioItems,
-            modelId = settings.neuralTtsModelId,
-            speakerId = selectedSpec.normalizedSpeakerId(settings.neuralTtsSpeakerId),
-            speed = settings.neuralTtsPace.speed,
-            tone = settings.neuralTtsTone.name
-        )
-    }
-    val selectedProfileSpeakerId = selectedSpec.normalizedSpeakerId(settings.neuralTtsSpeakerId)
-    val generatingSelectedAudio = remember(bookAudio, settings.neuralTtsModelId, selectedProfileSpeakerId, settings.neuralTtsPace, settings.neuralTtsTone) {
-        bookAudio.any { audio ->
-            audio.matchesAudiobookProfile(
-                modelId = settings.neuralTtsModelId,
-                speakerId = selectedProfileSpeakerId,
-                speed = settings.neuralTtsPace.speed,
-                tone = settings.neuralTtsTone.name
-            ) && audio.status == BookAudioStatus.GENERATING
-        }
-    }
-    val generationBlockedReason = audiobookGenerationBlockedReason(
-        status = selectedStatus,
-        generatingSelectedAudio = generatingSelectedAudio,
-        modelName = selectedSpec.displayName,
-        hardwareReadiness = hardwareReadiness
-    )
-    val generatedAudioItems = remember(bookAudioItems) {
-        bookAudioItems
-            .filter { item -> item.shouldShowInGlobalAudiobooksScreen() }
-            .sortedByDescending { it.audio.generatedAt ?: it.audio.updatedAt }
-    }
-    var deleteCandidate by remember(book.id) { mutableStateOf<BookAudioEntity?>(null) }
-    var deleteAllOpen by remember(book.id) { mutableStateOf(false) }
-    var chapterPicker by remember(book.id) { mutableStateOf<BookAudiobookAudioUiItem?>(null) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Generate audiobook") },
-        text = {
-            LazyColumn(
-                modifier = Modifier.heightIn(max = 560.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                item {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(book.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        Text(
-                            text = audiobookGenerationHeaderDetail(
-                                book = book,
-                                scan = scan,
-                                selectedSpec = selectedSpec,
-                                selectedSpeaker = selectedSpeaker,
-                                tone = settings.neuralTtsTone,
-                                pace = settings.neuralTtsPace
-                            ),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                selectedAudioItem?.let { item ->
-                    item {
-                        AudiobookStatusCard(
-                            audio = item.audio,
-                            playableSegmentFiles = item.playableSegmentFiles,
-                            onCancelGeneration = onCancelGeneration,
-                            onExportAudio = onExportAudio,
-                            playback = playback,
-                            onPlayAudio = onPlayAudio,
-                            onPauseAudio = onPauseAudio,
-                            onStopAudio = onStopAudio,
-                            onDeleteAudio = { deleteCandidate = it },
-                        )
-                    }
-                }
-                if (bookAudio.isNotEmpty()) {
-                    item {
-                        OutlinedButton(
-                            onClick = { deleteAllOpen = true },
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = bookAudio.all { it.canDeleteGeneratedAudiobook() },
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                        ) {
-                            Icon(Icons.Filled.Delete, contentDescription = null)
-                            Spacer(Modifier.width(6.dp))
-                            Text(
-                                if (bookAudio.any { !it.canDeleteGeneratedAudiobook() }) {
-                                    "Stop generation before deleting audio"
-                                } else {
-                                    "Delete all generated audio for this book"
-                                }
-                            )
-                        }
-                    }
-                }
-                item {
-                    AudiobookScanCard(
-                        scan = scan,
-                        onScan = onScan
-                    )
-                }
-                item {
-                    AudiobookRuntimeNote()
-                }
-                item {
-                    AudiobookChipGroup(
-                        title = "Voice",
-                        options = NeuralTtsGender.entries,
-                        selected = settings.neuralTtsGender,
-                        label = { it.label },
-                        onSelected = onGenderSelected
-                    )
-                }
-                if (selectedSpec.speakers.size > 1) {
-                    item {
-                        AudiobookChipGroup(
-                            title = "Narrator",
-                            options = narratorOptions,
-                            selected = selectedSpeaker,
-                            label = { "${it.label} (${it.gender.label})" },
-                            onSelected = { onSpeakerSelected(it.id) }
-                        )
-                    }
-                }
-                item {
-                    AudiobookChipGroup(
-                        title = "Narration style",
-                        options = NeuralTtsTone.entries,
-                        selected = settings.neuralTtsTone,
-                        label = { it.label },
-                        onSelected = onToneSelected
-                    )
-                }
-                item {
-                    AudiobookChipGroup(
-                        title = "Pacing",
-                        options = NeuralTtsPace.entries,
-                        selected = settings.neuralTtsPace,
-                        label = { it.label },
-                        onSelected = onPaceSelected
-                    )
-                }
-                item {
-                    AudiobookSelectedVoiceModelRow(
-                        spec = selectedSpec,
-                        status = selectedStatus,
-                        statusText = neuralTtsStatusText(
-                            status = selectedStatus,
-                            downloaded = selectedModel?.downloadedBytes ?: 0,
-                            total = selectedModel?.totalBytes ?: selectedSpec.archiveBytes,
-                            archiveBytes = selectedSpec.archiveBytes,
-                            error = selectedModel?.error
-                        ),
-                        onDownload = { onDownload(selectedSpec.modelId) },
-                        onCancel = { onCancelModelInstall(selectedSpec.modelId) },
-                        onPreview = { onPreview(selectedSpec.modelId) }
-                    )
-                }
-                generationBlockedReason?.let { reason ->
-                    item {
-                        Text(
-                            reason,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                if (generatedAudioItems.isNotEmpty()) {
-                    item {
-                        GeneratedAudiobookList(
-                            items = generatedAudioItems,
-                            selectedAudioId = selectedAudioItem?.audio?.id,
-                            playback = playback,
-                            onExportAudio = onExportAudio,
-                            onPlayAudio = onPlayAudio,
-                            onPauseAudio = onPauseAudio,
-                            onStopAudio = onStopAudio,
-                            onDeleteAudio = { deleteCandidate = it },
-                            onShowChapters = { chapterPicker = it }
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(
-                    onClick = { onGenerate(AudiobookGenerationScope.SAMPLE) },
-                    enabled = generationBlockedReason == null
-                ) {
-                    Icon(Icons.Filled.PlayArrow, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    AudiobookScopeActionText(AudiobookGenerationScope.SAMPLE, scan)
-                }
-                OutlinedButton(
-                    onClick = { onGenerate(AudiobookGenerationScope.FIRST_CHAPTER) },
-                    enabled = generationBlockedReason == null
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    AudiobookScopeActionText(AudiobookGenerationScope.FIRST_CHAPTER, scan)
-                }
-                Button(
-                    onClick = { onGenerate(AudiobookGenerationScope.FULL_BOOK) },
-                    enabled = generationBlockedReason == null
-                ) {
-                    Icon(Icons.Filled.GraphicEq, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    if (generatingSelectedAudio) {
-                        Text("Generating")
-                    } else {
-                        AudiobookScopeActionText(AudiobookGenerationScope.FULL_BOOK, scan)
-                    }
-                }
-            }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } }
-    )
-    deleteCandidate?.let { audio ->
-        AlertDialog(
-            onDismissRequest = { deleteCandidate = null },
-            title = { Text("Delete generated audio?") },
-            text = {
-                Text(generatedAudiobookDeleteDetail(audio))
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        deleteCandidate = null
-                        onDeleteAudio(audio)
-                    }
-                ) {
-                    Text("Delete")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { deleteCandidate = null }) {
-                    Text("Cancel")
-                }
-            }
-        )
-    }
-    if (deleteAllOpen) {
-        AlertDialog(
-            onDismissRequest = { deleteAllOpen = false },
-            title = { Text("Delete all audiobook audio?") },
-            text = { Text("This removes every generated, partial, and failed audiobook version for ${book.title}.") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        deleteAllOpen = false
-                        onDeleteAllAudio()
-                    }
-                ) {
-                    Text("Delete all")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { deleteAllOpen = false }) {
-                    Text("Cancel")
-                }
-            }
-        )
-    }
-    chapterPicker?.let { item ->
-        AudiobookChapterPickerDialog(
-            title = item.audio.displayProfileLabel(),
-            chapters = item.chapters,
-            playback = playback.takeIf { it.audioId == item.audio.id },
-            onDismiss = { chapterPicker = null },
-            onChapter = { chapter ->
-                chapterPicker = null
-                onPlayAudioFromSegment(item.audio, chapter.firstSegmentIndex)
-            }
-        )
-    }
-}
-
-@Composable
-private fun AudiobookScanCard(
-    scan: AudiobookScanUiState?,
-    onScan: () -> Unit,
-) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant
-    ) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(Icons.Filled.Search, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text("Full-book audio scan", style = MaterialTheme.typography.labelLarge)
-                    Text(
-                        audiobookScanSummary(scan),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                if (scan?.scanning == true) {
-                    CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
-                } else {
-                    OutlinedButton(onClick = onScan) {
-                        Text(if (scan?.hasText == true) "Rescan" else "Scan")
-                    }
-                }
-            }
-            scan?.error?.let { error ->
-                Text(
-                    error,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error
-                )
-            }
-            if (scan?.hasText == true) {
-                val pillLabels = remember(scan) { audiobookScanPillLabels(scan) }
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    pillLabels.forEach { label ->
-                        AudiobookScanPill(label)
-                    }
-                }
-                val detectedChapters = remember(scan.chapterTitles) {
-                    audiobookDetectedChapterTitleSummary(scan.chapterTitles)
-                }
-                detectedChapters?.let { detectedText ->
-                    Text(
-                        text = detectedText,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun AudiobookScanPill(text: String) {
-    Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.surface
-    ) {
-        Text(
-            text = text,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-    }
-}
-
-internal fun audiobookScanSummary(scan: AudiobookScanUiState?): String =
-    when {
-        scan?.scanning == true -> "Scanning indexed book text for extractable narration."
-        scan?.hasText == true -> audiobookPreparedScanSummary(scan)
-        scan?.error != null -> "Scan could not prepare narration for this book."
-        else -> "Scan the selected ebook before a long generation job."
-    }
-
-private fun audiobookPreparedScanSummary(scan: AudiobookScanUiState): String {
-    val sourceText = "${scan.sourceSectionCount} source sections prepared"
-    return if (scan.chapterCount > 0) {
-        "$sourceText • ${generatedAudiobookChapterCountLabel(scan.chapterCount)} detected"
-    } else {
-        sourceText
-    }
-}
-
-internal fun audiobookScanPillLabels(scan: AudiobookScanUiState): List<String> =
-    buildList(capacity = 5) {
-        add("${scan.wordCount} words")
-        add("${scan.segmentCount} segments")
-        if (scan.chapterCount > 0) {
-            add(generatedAudiobookChapterCountLabel(scan.chapterCount))
-        }
-        add(audiobookDurationLabel(scan.estimatedAudioMillis))
-        add(audiobookStorageLabel(scan.estimatedStorageBytes))
-    }
-
-internal fun audiobookDetectedChapterTitleSummary(titles: List<String>): String? {
-    var hasTitle = false
-    val detail = buildString {
-        titles.forEach { rawTitle ->
-            val title = rawTitle.trim()
-            if (title.isBlank()) return@forEach
-            if (hasTitle) append(" • ")
-            append(title)
-            hasTitle = true
-        }
-    }
-    return detail.takeIf { hasTitle }?.let { "Detected: $it" }
-}
-
-internal fun audiobookScopeActionLabel(
-    scope: AudiobookGenerationScope,
-    scan: AudiobookScanUiState?,
-): String {
-    val meta = audiobookScopeActionMetaLabel(scope, scan) ?: return audiobookScopeActionTitle(scope)
-    return "${audiobookScopeActionTitle(scope)} • $meta"
-}
-
-internal fun audiobookScopeActionTitle(scope: AudiobookGenerationScope): String =
-    when (scope) {
-        AudiobookGenerationScope.SAMPLE -> "Sample"
-        AudiobookGenerationScope.FIRST_CHAPTER -> "Chapter"
-        AudiobookGenerationScope.FULL_BOOK -> "Full book"
-    }
-
-internal fun audiobookScopeActionMetaLabel(
-    scope: AudiobookGenerationScope,
-    scan: AudiobookScanUiState?,
-): String? {
-    if (scan?.hasText != true) {
-        return null
-    }
-    val segments = audiobookScopeSegmentEstimate(scope, scan)
-    val duration = audiobookScopeDurationEstimateMillis(scope, scan)
-    return "$segments seg • ${audiobookDurationLabel(duration)}"
-}
-
-@Composable
-private fun AudiobookScopeActionText(
-    scope: AudiobookGenerationScope,
-    scan: AudiobookScanUiState?,
-) {
-    val meta = audiobookScopeActionMetaLabel(scope, scan)
-    Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-        Text(audiobookScopeActionTitle(scope), maxLines = 1)
-        if (meta != null) {
-            Text(
-                meta,
-                style = MaterialTheme.typography.labelSmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
-}
-
-private fun audiobookScopeSegmentEstimate(
-    scope: AudiobookGenerationScope,
-    scan: AudiobookScanUiState,
-): Int =
-    scope.segmentLimit(
-        totalSegments = scan.segmentCount,
-        firstChapterSegmentCount = scan.firstChapterSegmentCount
-    )
-
-private fun audiobookScopeDurationEstimateMillis(
-    scope: AudiobookGenerationScope,
-    scan: AudiobookScanUiState,
-): Long {
-    if (scan.segmentCount <= 0 || scan.estimatedAudioMillis <= 0L) return 0L
-    val segments = audiobookScopeSegmentEstimate(scope, scan)
-    return (scan.estimatedAudioMillis * segments / scan.segmentCount).coerceAtLeast(0L)
-}
-
-@Composable
-private fun AudiobookRuntimeNote() {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant
-    ) {
-        Text(
-            text = "Generated locally on device with Kokoro v1.0. Full-book jobs require hardware acceleration, keep resumable segment files as they run, and can take time on long books.",
-            modifier = Modifier.padding(12.dp),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
-
-@Composable
-private fun AudiobookStatusCard(
-    audio: BookAudioEntity,
-    playableSegmentFiles: Int,
-    onCancelGeneration: (BookAudioEntity) -> Unit,
-    onExportAudio: (BookAudioEntity) -> Unit,
-    playback: AudiobookPlaybackUiState,
-    onPlayAudio: (BookAudioEntity) -> Unit,
-    onPauseAudio: (BookAudioEntity) -> Unit,
-    onStopAudio: () -> Unit,
-    onDeleteAudio: (BookAudioEntity) -> Unit,
-) {
-    val progress = when {
-        audio.segmentCount <= 0 -> 0f
-        else -> audio.completedSegments.toFloat() / audio.segmentCount.toFloat()
-    }.coerceIn(0f, 1f)
-    val playableSegments = playableSegmentFiles
-    val title = when (audio.status) {
-        BookAudioStatus.GENERATED -> if (playableSegments > 0) "${audio.scopeLabel} ready" else "${audio.scopeLabel} files missing"
-        BookAudioStatus.GENERATING -> "Generating ${audio.scopeLabel.lowercase(Locale.US)}"
-        BookAudioStatus.CANCELED -> "${audio.scopeLabel} generation stopped"
-        BookAudioStatus.FAILED -> "${audio.scopeLabel} generation failed"
-    }
-    val detail = audiobookStatusDetail(audio, playableSegmentFiles = playableSegmentFiles)
-    val canPlay = playableSegments > 0
-
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
-        color = when (audio.status) {
-            BookAudioStatus.GENERATED -> MaterialTheme.colorScheme.primaryContainer
-            BookAudioStatus.GENERATING -> MaterialTheme.colorScheme.secondaryContainer
-            BookAudioStatus.CANCELED -> MaterialTheme.colorScheme.surfaceVariant
-            BookAudioStatus.FAILED -> MaterialTheme.colorScheme.errorContainer
-        }
-    ) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(title, style = MaterialTheme.typography.labelLarge)
-            Text(
-                detail,
-                style = MaterialTheme.typography.bodySmall,
-                color = when (audio.status) {
-                    BookAudioStatus.GENERATED -> MaterialTheme.colorScheme.onPrimaryContainer
-                    BookAudioStatus.GENERATING -> MaterialTheme.colorScheme.onSecondaryContainer
-                    BookAudioStatus.CANCELED -> MaterialTheme.colorScheme.onSurfaceVariant
-                    BookAudioStatus.FAILED -> MaterialTheme.colorScheme.onErrorContainer
-                }
-            )
-            if (audio.status == BookAudioStatus.GENERATING && audio.segmentCount > 0) {
-                LinearProgressIndicator(
-                    progress = { progress },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                TextButton(
-                    onClick = { onCancelGeneration(audio) },
-                    modifier = Modifier.align(Alignment.End)
-                ) {
-                    Text("Stop")
-                }
-            }
-            if ((audio.status == BookAudioStatus.CANCELED || audio.status == BookAudioStatus.FAILED) && !canPlay) {
-                TextButton(
-                    onClick = { onDeleteAudio(audio) },
-                    modifier = Modifier.align(Alignment.End)
-                ) {
-                    Icon(Icons.Filled.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Delete")
-                }
-            }
-            if (canPlay) {
-                AudiobookPlaybackActions(
-                    audio = audio,
-                    playableSegmentFiles = playableSegments,
-                    playback = playback,
-                    onPlayAudio = onPlayAudio,
-                    onPauseAudio = onPauseAudio,
-                    onStopAudio = onStopAudio,
-                    onExportAudio = onExportAudio,
-                    onDeleteAudio = onDeleteAudio,
-                    modifier = Modifier.align(Alignment.End)
-                )
-                playback.error?.takeIf { playback.audioId == audio.id }?.let { error ->
-                    Text(error, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                }
-            }
-        }
-    }
-}
-
-internal fun audiobookStatusDetail(
-    audio: BookAudioEntity,
-    playableSegmentFiles: Int,
-    nowMillis: Long = System.currentTimeMillis(),
-): String =
-    when (audio.status) {
-        BookAudioStatus.GENERATED -> generatedAudiobookStatusDetail(audio, playableSegmentFiles)
-        BookAudioStatus.GENERATING -> generatingAudiobookStatusDetail(audio, nowMillis = nowMillis)
-        BookAudioStatus.CANCELED -> canceledAudiobookStatusDetail(audio)
-        BookAudioStatus.FAILED -> audio.error ?: "Generation stopped before audio was ready."
-    }
-
-private fun generatedAudiobookStatusDetail(
-    audio: BookAudioEntity,
-    playableSegmentFiles: Int,
-): String =
-    buildString {
-        append(
-            when {
-                playableSegmentFiles >= audio.segmentCount -> "${audio.segmentCount} segments"
-                playableSegmentFiles <= 0 -> "Audio files missing"
-                else -> "$playableSegmentFiles playable of ${audio.segmentCount} segments"
-            }
-        )
-        appendAudiobookDetailPart(audio.audiobookPerformanceLabel())
-        appendAudiobookDetailPart(audio.estimatedDurationLabel())
-        appendAudiobookDetailPart(audio.audiobookResumeLabel(prefix = "resume", playableSegmentFiles = playableSegmentFiles))
-        appendAudiobookDetailPart(audio.fileSizeBytes.takeIf { it > 0 }?.compactBytes())
-    }
-
-private fun generatingAudiobookStatusDetail(
-    audio: BookAudioEntity,
-    nowMillis: Long,
-): String {
-    if (audio.segmentCount <= 0) return "Preparing segments"
-    val progress = (audio.completedSegments.toFloat() / audio.segmentCount.toFloat()).coerceIn(0f, 1f)
-    return buildString {
-        appendAudiobookDetailPart(audio.audiobookGenerationProgressLabel())
-        appendAudiobookDetailPart("${(progress * 100).roundToInt()}%")
-        appendAudiobookDetailPart(audio.generationEtaLabel(nowMillis = nowMillis))
-        appendAudiobookDetailPart(audio.audiobookPerformanceLabel())
-        appendAudiobookDetailPart(audio.estimatedDurationLabel())
-    }
-}
-
-private fun canceledAudiobookStatusDetail(audio: BookAudioEntity): String {
-    if (audio.segmentCount <= 0) return "No segments were generated."
-    return buildString {
-        append(audio.completedSegments.coerceAtMost(audio.segmentCount))
-        append(" of ")
-        append(audio.segmentCount)
-        append(" segments completed")
-        appendAudiobookDetailPart(audio.audiobookPerformanceLabel())
-        appendAudiobookDetailPart(audio.estimatedDurationLabel())
-    }
-}
-
-@Composable
-private fun AudiobookPlaybackActions(
-    audio: BookAudioEntity,
-    playableSegmentFiles: Int,
-    playback: AudiobookPlaybackUiState,
-    onPlayAudio: (BookAudioEntity) -> Unit,
-    onPauseAudio: (BookAudioEntity) -> Unit,
-    onStopAudio: () -> Unit,
-    onExportAudio: (BookAudioEntity) -> Unit,
-    onDeleteAudio: (BookAudioEntity) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val active = playback.audioId == audio.id && playback.active
-    val actions = generatedAudiobookActionState(
-        active = active,
-        playback = playback,
-        audio = audio,
-        playableSegmentFiles = playableSegmentFiles
-    )
-    FlowRow(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        if (active) {
-            Text(
-                playbackProgressLabel(playback),
-                modifier = Modifier
-                    .widthIn(max = 240.dp)
-                    .align(Alignment.CenterVertically),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-        if (actions.showPlay) {
-            TooltipIconButton(
-                label = actions.playIconLabel,
-                onClick = {
-                    if (active && playback.playing) onPauseAudio(audio) else onPlayAudio(audio)
-                },
-                modifier = Modifier.size(40.dp),
-                enabled = actions.canPlay
-            ) {
-                Icon(if (active && playback.playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, contentDescription = null)
-            }
-        }
-        if (active) {
-            TooltipIconButton(
-                label = "Stop generated audio",
-                onClick = onStopAudio,
-                modifier = Modifier.size(40.dp)
-            ) {
-                Icon(Icons.Filled.Stop, contentDescription = null)
-            }
-        }
-        if (actions.showExport) {
-            TooltipIconButton(
-                label = "${actions.exportLabel} generated audio",
-                onClick = { onExportAudio(audio) },
-                modifier = Modifier.size(40.dp),
-                enabled = actions.canExport
-            ) {
-                Icon(Icons.Filled.FileDownload, contentDescription = null)
-            }
-        }
-        TooltipIconButton(
-            label = "Delete generated audio",
-            onClick = { onDeleteAudio(audio) },
-            modifier = Modifier.size(40.dp),
-            enabled = audio.canDeleteFromAudiobooksScreen()
-        ) {
-            Icon(Icons.Filled.Delete, contentDescription = null)
-        }
-    }
-}
-
-internal fun playbackProgressLabel(playback: AudiobookPlaybackUiState): String =
-    if (playback.segmentCount > 0) {
-        joinPlaybackProgressParts(
-            state = audiobookPlaybackStateLabel(playback),
-            chapter = playback.chapterTitle,
-            time = playback.segmentTimeLabel()
-        )
-    } else {
-        "Ready"
-    }
-
-private fun joinPlaybackProgressParts(
-    state: String,
-    chapter: String?,
-    time: String?,
-): String {
-    val trimmedChapter = chapter?.trim()
-    val trimmedTime = time?.trim()
-    if (trimmedChapter.isNullOrEmpty() && trimmedTime.isNullOrEmpty()) return state
-    return buildString {
-        append(state)
-        if (!trimmedChapter.isNullOrEmpty()) {
-            append(" • ")
-            append(trimmedChapter)
-        }
-        if (!trimmedTime.isNullOrEmpty()) {
-            append(" • ")
-            append(trimmedTime)
-        }
-    }
-}
-
-@Composable
-private fun GeneratedAudiobookList(
-    items: List<BookAudiobookAudioUiItem>,
-    selectedAudioId: Long?,
-    playback: AudiobookPlaybackUiState,
-    onExportAudio: (BookAudioEntity) -> Unit,
-    onPlayAudio: (BookAudioEntity) -> Unit,
-    onPauseAudio: (BookAudioEntity) -> Unit,
-    onStopAudio: () -> Unit,
-    onDeleteAudio: (BookAudioEntity) -> Unit,
-    onShowChapters: (BookAudiobookAudioUiItem) -> Unit,
-) {
-    val listIdentity = generatedAudiobookItemsIdentityKey(items)
-    var expanded by remember(listIdentity, selectedAudioId) { mutableStateOf(false) }
-    val visibleAudio = remember(items, selectedAudioId, expanded) {
-        visibleGeneratedAudiobookItems(items, selectedAudioId, expanded)
-    }
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Generated audio", style = MaterialTheme.typography.labelLarge)
-        visibleAudio.forEach { item ->
-            GeneratedAudiobookRow(
-                audio = item,
-                selected = item.audio.id == selectedAudioId,
-                playback = playback.forAudiobooksScreenRow(item.audio.id),
-                onExportAudio = onExportAudio,
-                onPlayAudio = onPlayAudio,
-                onPauseAudio = onPauseAudio,
-                onStopAudio = onStopAudio,
-                onDeleteAudio = onDeleteAudio,
-                onShowChapters = onShowChapters
-            )
-        }
-        if (items.size > COLLAPSED_GENERATED_AUDIO_COUNT) {
-            TextButton(onClick = { expanded = !expanded }) {
-                Text(if (expanded) "Show fewer versions" else "Show all ${items.size} versions")
-            }
-        }
-    }
-}
-
-@Composable
-private fun GeneratedAudiobookRow(
-    audio: BookAudiobookAudioUiItem,
-    selected: Boolean,
-    playback: AudiobookPlaybackUiState,
-    onExportAudio: (BookAudioEntity) -> Unit,
-    onPlayAudio: (BookAudioEntity) -> Unit,
-    onPauseAudio: (BookAudioEntity) -> Unit,
-    onStopAudio: () -> Unit,
-    onDeleteAudio: (BookAudioEntity) -> Unit,
-    onShowChapters: (BookAudiobookAudioUiItem) -> Unit,
-) {
-    val audioEntity = audio.audio
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
-        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.Top,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Icon(
-                    Icons.Filled.GraphicEq,
-                    contentDescription = null,
-                    tint = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(
-                        audioEntity.displayProfileLabel(),
-                        style = MaterialTheme.typography.bodyMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        generatedAudiobookRowDetail(audio),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-            FlowRow(
-                modifier = Modifier.align(Alignment.End),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                AudiobookPlaybackActions(
-                    audio = audioEntity,
-                    playableSegmentFiles = audio.playableSegmentFiles,
-                    playback = playback,
-                    onPlayAudio = onPlayAudio,
-                    onPauseAudio = onPauseAudio,
-                    onStopAudio = onStopAudio,
-                    onExportAudio = onExportAudio,
-                    onDeleteAudio = onDeleteAudio
-                )
-                if (audio.chapters.size > 1) {
-                    TooltipIconButton(
-                        label = "Choose chapter",
-                        onClick = { onShowChapters(audio) },
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null)
-                    }
-                }
-            }
-        }
-    }
-}
-
-internal fun generatedAudiobookRowDetail(
-    audio: BookAudiobookAudioUiItem,
-    nowMillis: Long = System.currentTimeMillis(),
-): String {
-    val audioEntity = audio.audio
-    return buildString {
-        append(audioEntity.segmentCount)
-        append(" segments")
-        if (audio.chapters.isNotEmpty()) {
-            appendAudiobookDetailPart(generatedAudiobookChapterCountLabel(audio.chapters.size))
-        }
-        appendAudiobookDetailPart(generatedAudioPlayableDetail(audio))
-        appendAudiobookDetailPart(audioEntity.estimatedDurationLabel())
-        appendAudiobookDetailPart(audioEntity.audiobookPerformanceLabel())
-        appendAudiobookDetailPart(
-            audioEntity.audiobookResumeLabel(prefix = "resume", playableSegmentFiles = audio.playableSegmentFiles)
-        )
-        appendAudiobookDetailPart(audioEntity.fileSizeBytes.takeIf { it > 0 }?.compactBytes())
-        audioEntity.generatedAt?.let { generatedAt ->
-            appendAudiobookDetailPart("generated ${relativeAgeLabel(generatedAt, nowMillis)}")
-        }
-    }
-}
-
-internal fun generatedAudiobookDeleteDetail(audio: BookAudioEntity): String =
-    buildString {
-        append(audio.displayProfileLabel())
-        appendAudiobookDetailPart(audio.estimatedDurationLabel())
-        appendAudiobookDetailPart(audio.fileSizeBytes.takeIf { it > 0 }?.compactBytes())
-    }
-
-internal fun audiobookGenerationHeaderDetail(
-    book: BookEntity,
-    scan: AudiobookScanUiState?,
-    selectedSpec: NeuralTtsModelSpec,
-    selectedSpeaker: NeuralTtsSpeakerSpec,
-    tone: NeuralTtsTone,
-    pace: NeuralTtsPace,
-): String =
-    buildString {
-        append("Full book")
-        appendAudiobookDetailPart(bookLengthLabel(book))
-        appendAudiobookDetailPart(scan?.takeIf { it.hasText }?.let { audiobookDurationLabel(it.estimatedAudioMillis) })
-        appendAudiobookDetailPart(selectedSpec.displayName)
-        appendAudiobookDetailPart(selectedSpeaker.label)
-        appendAudiobookDetailPart(tone.label)
-        appendAudiobookDetailPart(pace.label)
-    }
-
-private fun StringBuilder.appendAudiobookDetailPart(part: String?) {
-    if (part.isNullOrBlank()) return
-    if (isNotEmpty()) append(" • ")
-    append(part)
-}
-
-private fun generatedAudioPlayableDetail(audio: BookAudiobookAudioUiItem): String? =
-    when {
-        audio.audio.status == BookAudioStatus.GENERATED && audio.playableSegmentFiles <= 0 -> "audio files missing"
-        audio.audio.status == BookAudioStatus.GENERATED && audio.playableSegmentFiles < audio.audio.segmentCount ->
-            "${audio.playableSegmentFiles} playable"
-        audio.audio.status != BookAudioStatus.GENERATED && audio.playableSegmentFiles > 0 ->
-            "${audio.playableSegmentFiles} playable"
-        else -> null
-    }
-
-@Composable
-private fun <T> AudiobookChipGroup(
-    title: String,
-    options: List<T>,
-    selected: T,
-    label: (T) -> String,
-    onSelected: (T) -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(title, style = MaterialTheme.typography.labelLarge)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            options.forEach { option ->
-                FilterChip(
-                    selected = option == selected,
-                    onClick = { onSelected(option) },
-                    label = { Text(label(option)) },
-                    leadingIcon = if (option == selected) {
-                        { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
-                    } else {
-                        null
-                    }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun AudiobookSelectedVoiceModelRow(
-    spec: NeuralTtsModelSpec,
-    status: NeuralTtsModelStatus,
-    statusText: String,
-    onDownload: () -> Unit,
-    onCancel: () -> Unit,
-    onPreview: () -> Unit,
-) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant
-    ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("Local voice model", style = MaterialTheme.typography.labelLarge)
-                Text(
-                    spec.displayName,
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    statusText,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (status == NeuralTtsModelStatus.FAILED) {
-                        MaterialTheme.colorScheme.error
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            when (status) {
-                NeuralTtsModelStatus.DOWNLOADING,
-                NeuralTtsModelStatus.EXTRACTING -> {
-                    CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
-                    TextButton(onClick = onCancel) { Text("Stop") }
-                }
-                NeuralTtsModelStatus.INSTALLED -> TextButton(onClick = onPreview) { Text("Preview") }
-                NeuralTtsModelStatus.NOT_DOWNLOADED -> TextButton(onClick = onDownload) { Text("Download") }
-                NeuralTtsModelStatus.FAILED -> TextButton(onClick = onDownload) { Text("Retry") }
-            }
-        }
-    }
-}
-
-internal fun audiobookGenerationBlockedReason(
-    status: NeuralTtsModelStatus,
-    generatingSelectedAudio: Boolean,
-    modelName: String,
-    hardwareReadiness: AudiobookGenerationHardwareReadiness = AudiobookGenerationHardwareReadiness(ready = true),
-): String? =
-    when {
-        generatingSelectedAudio -> "This voice is already generating audio. Stop it before starting another scope."
-        status == NeuralTtsModelStatus.INSTALLED -> null
-        status == NeuralTtsModelStatus.DOWNLOADING -> "$modelName is still downloading. Generation will unlock when the download finishes."
-        status == NeuralTtsModelStatus.EXTRACTING -> "$modelName is installing. Generation will unlock when setup finishes."
-        status == NeuralTtsModelStatus.FAILED -> "$modelName did not install cleanly. Retry the download before generating audio."
-        status == NeuralTtsModelStatus.NOT_DOWNLOADED -> "Download $modelName before generating audiobook audio."
-        else -> null
-    } ?: hardwareReadiness.reason.takeIf { !hardwareReadiness.ready }
-
-internal fun selectedAudiobookStatusItem(
-    items: List<BookAudiobookAudioUiItem>,
-    modelId: String,
-    speakerId: Int,
-    speed: Float,
-    tone: String,
-): BookAudiobookAudioUiItem? {
-    val matching = items.filter { item -> item.audio.matchesAudiobookProfile(modelId, speakerId, speed, tone) }
-    return matching.firstOrNull { it.audio.status == BookAudioStatus.GENERATING }
-        ?: matching.firstOrNull { it.audio.scope == AudiobookGenerationScope.FULL_BOOK.key }
-        ?: matching.maxByOrNull { it.audio.generatedAt ?: it.audio.updatedAt }
-}
-
-internal fun BookAudioEntity.matchesAudiobookProfile(
-    modelId: String,
-    speakerId: Int,
-    speed: Float,
-    tone: String,
-): Boolean =
-    this.modelId == modelId &&
-        this.speakerId == speakerId &&
-        abs(this.speed - speed) < AUDIOBOOK_PROFILE_SPEED_EPSILON &&
-        this.tone == tone
 
 @Composable
 internal fun BookCollectionsDialog(
@@ -2619,7 +1516,7 @@ internal fun BookRow(
                 TooltipIconButton(
                     label = "Book actions",
                     onClick = { menuOpen = true },
-                    modifier = Modifier.size(44.dp)
+                    modifier = Modifier.size(48.dp)
                 ) {
                     Icon(Icons.Filled.MoreVert, contentDescription = null)
                 }
@@ -2858,7 +1755,7 @@ private fun BookAudioEntity.fileSafeProfileName(): String =
         .fileSafeName()
         .take(48)
 
-private fun BookAudioEntity.displayProfileLabel(): String =
+internal fun BookAudioEntity.displayProfileLabel(): String =
     audiobookDisplayProfileLabel(includeScope = true)
 
 internal fun visibleGeneratedAudiobooks(
@@ -2951,7 +1848,7 @@ private fun formatPlaybackTimestamp(millis: Int): String {
     }
 }
 
-private fun relativeAgeLabel(
+internal fun relativeAgeLabel(
     timeMillis: Long,
     nowMillis: Long = System.currentTimeMillis(),
 ): String {
@@ -3017,8 +1914,8 @@ internal fun Long.compactBytes(): String =
     }
 
 private const val AUDIOBOOK_ESTIMATED_WORDS_PER_MINUTE = 150f
-private const val COLLAPSED_GENERATED_AUDIO_COUNT = 4
-private const val AUDIOBOOK_PROFILE_SPEED_EPSILON = 0.001f
+internal const val COLLAPSED_GENERATED_AUDIO_COUNT = 4
+internal const val AUDIOBOOK_PROFILE_SPEED_EPSILON = 0.001f
 
 private val SEARCH_SNIPPET_WHITESPACE = Regex("\\s+")
 private val SEARCH_SNIPPET_TERM_PATTERN = Regex("[\\p{L}\\p{N}]+")

@@ -1,5 +1,7 @@
 package com.xreader.app.ui
 
+import com.xreader.app.settings.LibraryGroup
+
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

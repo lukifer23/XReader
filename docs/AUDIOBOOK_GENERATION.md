@@ -6,21 +6,20 @@ XReader's embedded audiobook path is local-first and model-specific. V1 supports
 
 - Model: `kokoro-multi-lang-v1_0`
 - Engine: Sherpa-ONNX OfflineTTS through the app-bundled JNI bridge.
-- Full-book providers: strict `qnn-gpu`, strict `qnn-htp`, then strict `nnapi`; CPU-backed `xnnpack`/`cpu` are deliberately excluded from full-book generation.
-- Preview providers: hardware-capable providers when available, then `xnnpack`, then `cpu`, so short voice previews still work on unsupported devices.
-- Disabled for full-book generation: `webgpu`, because prior WebGPU full-book runs were crash-prone and allowed partial CPU fallback.
+- Provider: strict `qnn-htp` only for preview and full-book neural generation. `qnn-gpu`, `nnapi`, `webgpu`, `xnnpack`, and `cpu` are not packaged or selected as alternate generation backends.
+- The runtime attempts one strict QNN HTP/NPU provider. If that provider fails to initialize, lacks a strict-compatible model artifact, assigns graph work to CPU, or runs too slowly, generation fails closed instead of trying another backend.
 
-Full-book generation now fails closed unless a real accelerated provider initializes and then proves sustained faster-than-realtime performance on generated segment output. The repository requests an accelerated provider list for full-book work, rejects CPU-backed providers up front, then applies the sustained speed gate during generation after enough segment/audio evidence exists. Providers slower than `0.55x` audio time are rejected instead of silently producing unusably slow full-book jobs, so a run that degrades toward realtime stops early with a provider diagnostic instead of wasting hours.
+Neural generation now fails closed unless the selected strict QNN HTP/NPU provider initializes and then proves sustained faster-than-realtime performance on generated segment output for full-book work. The repository requests a single hardware provider, rejects CPU-backed providers up front, then applies the sustained speed gate during generation after enough segment/audio evidence exists. Providers slower than `0.55x` audio time are rejected instead of silently producing unusably slow full-book jobs, so a run that degrades toward realtime stops early with a provider diagnostic instead of wasting hours.
 
 Generation speed is measured as end-to-end segment cost: native model synthesis plus WAV save and atomic finalize. Generated-audiobook manifests keep `generationComputeMillis` for the total measured generation cost and `generationSaveMillis` for the file-output portion, so slow runs can be traced to provider inference or disk/encode overhead without guessing.
 
 User-facing performance labels report this as `x audio time`, where lower is better: `0.5x audio time` means generation took half the audio duration, while `2.0x audio time` means generation was slower than realtime.
 
-Strict QNN GPU and HTP/NPU both require a prepared `model.qnn.onnx` beside the installed model and a matching `xreader-qnn-model-manifest.json` whose `strict_qnn_compatible` field is `true`. A bare `model.qnn.onnx` is not enough, because current device evidence showed an artifact can still contain control-flow, sequence, random, and dynamic-input graph surfaces that leave unsupported work on CPU. Strict QNN provider configs set `disable_cpu_ep_fallback=1`; if ONNX Runtime assigns nodes to CPU, generation fails instead of pretending to accelerate. NNAPI is built through the strict Sherpa-ONNX patch with Android NNAPI CPU disabled.
+Strict QNN providers require a prepared `model.qnn.onnx` beside the installed model and a matching `xreader-qnn-model-manifest.json` whose `strict_qnn_compatible` field is `true`. A bare `model.qnn.onnx` is not enough, because current device evidence showed an artifact can still contain control-flow, sequence, random, and dynamic-input graph surfaces that leave unsupported work on CPU. QNN provider configs set `disable_cpu_ep_fallback=1`; if ONNX Runtime assigns nodes to CPU, generation fails instead of pretending to accelerate.
 
-Readiness checks used by Settings and generation dialogs are deliberately non-mutating: they report strict QNN GPU/HTP availability using provider labels and do not create provider config files. Actual strict QNN provider configs are written only when a real synthesis runtime starts.
+Readiness checks used by Settings and generation dialogs are deliberately non-mutating: they report strict hardware availability using provider labels and do not create provider config files. Actual strict QNN provider configs are written only when a real synthesis runtime starts.
 
-Long-lived WebGPU sessions remain crash-prone until proven otherwise. A 2026-06-12 full-book run reached `362/397` generated segments, then the native process aborted after ONNX Runtime WebGPU reported `Failed to download data from buffer: [Device] is lost.` WebGPU stays available for experiments and previews, but it is not a full-book provider until it can run without CPU fallback and without device-loss crashes.
+WebGPU is retired from the active audiobook generation path. A 2026-06-12 full-book run reached `362/397` generated segments, then the native process aborted after ONNX Runtime WebGPU reported `Failed to download data from buffer: [Device] is lost.` XReader now keeps neural generation on the strict QNN path only.
 
 ## Text Preparation
 
@@ -88,13 +87,13 @@ Do not add placeholder model rows, fake acceleration toggles, or unsupported voi
 
 ## Acceleration Timeline
 
-### Phase 1: Stabilized CPU Preview Baseline
+### Phase 1: Retired CPU Preview Baseline
 
-Status: retained only for preview and diagnostics.
+Status: retired from app runtime. Historical measurements remain useful only for comparison.
 
 Tasks:
 
-- Use `xnnpack` before `cpu` for short previews and remove unstable provider claims from preview selection.
+- Keep CPU/XNNPACK out of runtime provider selection; unsupported devices show a blocked state instead of a slow generated preview.
 - Record provider used in generated audio manifests.
 - Benchmark Kokoro v1.0 preview generation on the Samsung test device.
 - Capture speed, ETA accuracy, battery/thermal behavior, and provider logs.
@@ -102,8 +101,8 @@ Tasks:
 
 Acceptance:
 
-- Preview generation completes, saves, plays, and deletes without blocking the reader UI.
-- CPU-backed preview providers are never labeled as full-book acceleration.
+- Preview generation completes, saves, plays, and deletes through the same strict hardware provider path.
+- CPU-backed preview providers are not selected.
 
 ### Phase 2: Native QNN Bring-Up
 
@@ -114,7 +113,7 @@ Tasks:
 - Stage Qualcomm Android QNN runtime libraries with `tools/stage_public_qnn_runtime.sh` or a QAIRT-matched local package.
 - If we need to rebuild Sherpa-ONNX itself, use Qualcomm QAIRT/QNN SDK plus Android NDK with `tools/build_sherpa_qnn_android.sh`, then stage those outputs with `tools/stage_qnn_android_runtime.sh`.
 - Package only the required QNN/Sherpa/ONNX shared libraries and DSP assets for a development build.
-- Use the internal provider probe to report staged QNN libraries, and keep provider selection honest: strict QNN first, then strict NNAPI.
+- Use the internal provider probe to report staged QNN libraries, and keep provider selection honest: strict QNN HTP/NPU only, no secondary provider fallback.
 - Record QNN initialization success/failure in logcat and in generated audiobook manifests through the selected provider field.
 - Keep QNN off the user-facing UI until it produces a complete audiobook successfully.
 
@@ -135,36 +134,16 @@ Current local status:
   - QNN HTP with the 2.47 runtime failed device creation with `QNN_DEVICE_ERROR_INVALID_CONFIG`.
   - QNN GPU failed because vendor OpenCL libraries were not accessible from the app namespace and reported `QNN_COMMON_ERROR_PLATFORM_NOT_SUPPORTED`.
   - ONNX Runtime then assigned graph nodes to CPU; with `session.disable_cpu_ep_fallback=1`, this correctly fails instead of pretending to accelerate.
-- QNN GPU now stays out of provider selection unless the APK also packages `libOpenCL.so` and `libOpenCL_adreno.so`. For a personal local build, stage that device-specific OpenCL chain from the connected Qualcomm test phone:
-
-```bash
-tools/stage_device_opencl_runtime.sh RFCY90NPZBN
-```
-
-That script pulls the OpenCL ICD/Adreno user-mode libraries from the device and recursively stages non-system shared-library dependencies discoverable via `llvm-readelf`. Treat this as a local hardware experiment tied to that device family, not a redistributable Play Store artifact.
-- Samsung SM-F966U / SM8750 validation on 2026-06-22 confirmed the rebuilt debug APK packaged `libOpenCL.so`, `libOpenCL_adreno.so`, QNN GPU, QNN HTP, ONNX Runtime, and Sherpa JNI. Launch logcat reported QNN provider availability, but installed-model strict smoke still failed because ONNX Runtime assigned stock Kokoro graph nodes to CPU with strict fallback disabled.
+- QNN GPU/OpenCL is retired from the packaged audiobook path. The app no longer stages `libQnnGpu.so`, `libQnnGpuNetRunExtensions.so`, `libOpenCL.so`, or `libOpenCL_adreno.so`, and provider selection treats `qnn-gpu` as unsupported instead of an alternate backend.
+- Samsung SM-F966U / SM8750 validation on 2026-06-22 confirmed that a rebuilt debug APK with GPU/OpenCL libraries still failed installed-model strict smoke because ONNX Runtime assigned stock Kokoro graph nodes to CPU with strict fallback disabled. That evidence is why the current path is HTP/NPU-only plus a strict-compatible prepared model artifact.
 - Samsung SM-F966U / SM8750 validation on 2026-06-23 exposed QNN HTP transport sensitivity. Over-specified HTP options such as signed process-domain, forced `soc_model`, and forced `htp_arch` can trigger `QNN_DEVICE_ERROR_INVALID_CONFIG`, so the app now writes a minimal HTP provider config by default and keeps those values only as explicit instrumentation overrides.
-- App-side QNN model selection now requires both `model.qnn.onnx` and a strict-compatible `xreader-qnn-model-manifest.json` for GPU and HTP/NPU. The model-prep tool writes `strict_qnn_compatible` plus a blocker report for control-flow, sequence, random, and dynamic-input surfaces so incompatible artifacts do not become selectable.
-- QNN libraries may be staged in development builds, but `qnn` must pass strict no-fallback smoke and a real generation speed/stability gate before it counts as usable generation acceleration.
+- App-side QNN model selection now requires both `model.qnn.onnx` and a strict-compatible `xreader-qnn-model-manifest.json` for HTP/NPU. The model-prep tool writes `strict_qnn_compatible` plus a blocker report for control-flow, sequence, random, and dynamic-input surfaces so incompatible artifacts do not become selectable.
+- 2026-06-30 local rebuild: `libsherpa-onnx-jni.so` was rebuilt from the patched Sherpa tree against the cached QAIRT 2.40 SDK and cached QNN-enabled ONNX Runtime package, then staged into the debug APK with QNN runtime libraries. Packaging tests now assert that the APK's Sherpa JNI contains `strict_token_bucket`, `session.disable_cpu_ep_fallback`, and `QNNExecutionProvider`, and no longer contains the old unsupported-provider CPU fallback string.
+- QNN libraries may be staged in development builds, but `qnn` must still pass strict no-fallback smoke and a real generation speed/stability gate on device before it counts as usable generation acceleration.
 
-### Phase 2b: WebGPU/Vulkan Android GPU Path
+### Phase 2b: Retired WebGPU/Vulkan Path
 
-Status: experimental only, not a full-book generation provider.
-
-Tasks:
-
-- Rebuild Sherpa-ONNX JNI against the standard ONNX Runtime Android package that includes WebGPU, XNNPACK, and NNAPI.
-- Add a native `webgpu` provider selector that calls ONNX Runtime's generic `SessionOptionsAppendExecutionProvider("WebGPU", ...)`.
-- Let Dawn select its Android Vulkan backend; do not force the rejected lowercase `vulkan` provider option.
-- Keep WebGPU out of full-book generation until it can run without CPU fallback and without device-loss crashes.
-- Run generation in an isolated process so native provider aborts do not kill the main reader UI.
-- Recycle WebGPU TTS runtimes periodically during full-book generation.
-
-Acceptance:
-
-- Device logcat shows `Use WebGpuExecutionProvider`.
-- Device logcat shows Adreno Vulkan / Dawn initialization for `com.xreader.app`.
-- Kokoro preview generation completes with non-empty samples.
+Status: retired from active generation.
 
 Samsung SM-F966U / SM8750 evidence from 2026-06-12:
 
@@ -173,7 +152,7 @@ Samsung SM-F966U / SM8750 evidence from 2026-06-12:
 - `AdrenoVK-0: Engine Name : Dawn`
 - `sherpa-onnx: Use WebGpuExecutionProvider`
 - Instrumented Kokoro smoke test passed.
-- Full-book crash evidence: WebGPU generated 362 segments before native aborting with Dawn device lost; mitigation is isolated-process generation plus 32-segment WebGPU runtime rotation.
+- Full-book crash evidence: WebGPU generated 362 segments before native aborting with Dawn device lost. The mitigation is removal from the neural generation provider set, not runtime fallback.
 
 ### QNN Development Commands
 
@@ -181,7 +160,6 @@ Public QNN runtime flow:
 
 ```bash
 tools/stage_public_qnn_runtime.sh
-tools/stage_device_opencl_runtime.sh RFCY90NPZBN
 ./gradlew --no-daemon clean :app:lintDebug :app:testDebugUnitTest :app:assembleDebug --console=plain
 ```
 
@@ -189,13 +167,15 @@ Full source rebuild flow:
 
 ```bash
 export ANDROID_NDK=/Users/admin/Library/Android/sdk/ndk/28.2.13676358
-export QNN_SDK_ROOT=/path/to/Qualcomm/AI_Runtime_SDK
+export QNN_SDK_ROOT=/Users/admin/Documents/XReader/.native-cache/qairt-sdk/qairt/2.40.0.251030
+export SHERPA_ONNX_ONNXRUNTIME_ROOT=/Users/admin/Documents/XReader/.native-build/onnxruntime-qnn-android-package
 
 SHERPA_LIB_DIR="$(tools/build_sherpa_qnn_android.sh)"
-ONNXRUNTIME_LIB_DIR=/path/to/onnxruntime-android-qnn/jni/arm64-v8a tools/stage_qnn_android_runtime.sh "$SHERPA_LIB_DIR"
-tools/stage_device_opencl_runtime.sh RFCY90NPZBN
+ONNXRUNTIME_LIB_DIR="$SHERPA_ONNX_ONNXRUNTIME_ROOT/jni/arm64-v8a" tools/stage_qnn_android_runtime.sh "$SHERPA_LIB_DIR"
 ./gradlew --no-daemon clean :app:lintDebug :app:testDebugUnitTest :app:assembleDebug --console=plain
 ```
+
+GPU/OpenCL staging is intentionally absent. The strict-QNN contract packages no GPU/OpenCL, NNAPI, WebGPU, XNNPACK, or CPU alternate generation provider. `:app:verifyReleasePackaging` enforces the prohibited fallback inventory on the assembled release APK; connected-device QNN proof is still required before claiming usable acceleration.
 
 After installing the resulting APK on a Qualcomm device, verify provider selection:
 
@@ -212,9 +192,9 @@ Status: in progress, after strict QNN initialization is stable.
 
 Tasks:
 
-- Benchmark strict QNN against the preview CPU baseline on identical preview text and identical book segments.
+- Benchmark strict QNN HTP/NPU against the historical CPU baseline on identical preview text and identical book segments.
 - Measure initialization overhead, per-segment latency, total generation time, battery, and thermal throttling.
-- Prepare a QNN-ready Kokoro artifact instead of assuming the stock `model.onnx` can fully offload. ONNX Runtime's strict QNN backends require a fixed compatible graph, and XReader now looks for `model.qnn.onnx` plus a strict-compatible manifest beside the installed Kokoro model before enabling GPU or HTP/NPU full-book generation.
+- Prepare a QNN-ready Kokoro artifact instead of assuming the stock `model.onnx` can fully offload. ONNX Runtime's strict QNN backend requires a fixed compatible graph, and XReader now looks for `model.qnn.onnx` plus a strict-compatible manifest beside the installed Kokoro model before enabling HTP/NPU full-book generation.
 - Generate that artifact with representative calibration tensors:
 
 ```bash
@@ -226,16 +206,14 @@ tools/prepare_kokoro_qnn_model.py \
   --require-strict-qnn-compatible
 ```
 
-The output directory contains the normal Kokoro support files plus `model.qnn.onnx` and `xreader-qnn-model-manifest.json`. Push or package that directory so both files sit next to the installed `model.onnx`. The app chooses the prepared model for strict QNN providers only when the manifest declares `strict_qnn_compatible: true`; otherwise it fails closed and reports the missing strict-compatible artifact.
-- Verify that QNN/NNAPI fail closed when unavailable, unsupported, or slower than the full-book audio-time threshold.
+The output directory contains the normal Kokoro support files plus `model.qnn.onnx` and `xreader-qnn-model-manifest.json`. Push or package that directory so both files sit next to the installed `model.onnx`. The app chooses the prepared model for strict hardware providers only when the manifest declares `strict_qnn_compatible: true`; otherwise it fails closed and reports the missing strict-compatible artifact.
+- Verify that QNN fails closed when unavailable, unsupported, or slower than the full-book audio-time threshold.
 - Capture Simpleperf/Perfetto evidence for a short generation run on the Samsung test device and confirm the selected provider in logcat plus the generated manifest.
 - Confirm long-segment heartbeat updates, stop handling, and UI responsiveness while a strict provider is actively generating, not only after segment completion.
-- Measure whether QNN GPU or prepared QNN HTP/NPU beats strict NNAPI enough on real book generation to justify the packaged runtime cost.
-- Keep WebGPU as a separate experiment until it can run full-book generation without CPU fallback and without native device-loss crashes.
-
+- Measure whether prepared QNN HTP/NPU beats realtime enough on real book generation to justify the packaged runtime cost.
 Acceptance:
 
-- QNN beats XNNPACK enough on real book generation to justify binary/runtime complexity, or it stays internal/disabled.
+- QNN HTP/NPU beats the historical XNNPACK/CPU baseline enough on real book generation to justify binary/runtime complexity, or it stays internal/disabled.
 - No user-visible acceleration toggle exists unless the provider is real, measured, and reliable.
 
 ## Research Notes

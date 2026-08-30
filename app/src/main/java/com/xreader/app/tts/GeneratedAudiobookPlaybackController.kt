@@ -548,7 +548,7 @@ class GeneratedAudiobookPlaybackController(
         filePath?.let { path ->
             require(File(path).isDirectory) { "Generated audio files are missing." }
         } ?: error("Generated audio files are missing.")
-        val files = expectedPlayableSegmentFiles()
+        val files = playableSegmentFiles()
         require(files.isNotEmpty()) { "Generated audio segments are missing." }
         return files
     }
@@ -605,7 +605,6 @@ internal data class GeneratedAudiobookPlaybackPreparationKey(
     val playableSegmentCount: Int,
     val scope: String,
     val fileSizeBytes: Long,
-    val activeGenerationUpdatedAt: Long?,
     val generatedAt: Long?,
 )
 
@@ -617,8 +616,7 @@ internal fun BookAudioEntity.generatedAudiobookPlaybackPreparationKey(): Generat
         segmentCount = segmentCount,
         playableSegmentCount = playableSegmentCount(),
         scope = scope,
-        fileSizeBytes = fileSizeBytes,
-        activeGenerationUpdatedAt = updatedAt.takeIf { status == BookAudioStatus.GENERATING },
+        fileSizeBytes = fileSizeBytes.takeUnless { status == BookAudioStatus.GENERATING } ?: 0L,
         generatedAt = generatedAt
     )
 

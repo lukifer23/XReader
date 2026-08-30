@@ -36,8 +36,6 @@ install -m 0644 "$SHERPA_LIB_DIR/libsherpa-onnx-jni.so" "$TARGET_DIR/libsherpa-o
 install -m 0644 "$ONNXRUNTIME_LIB_DIR/libonnxruntime.so" "$TARGET_DIR/libonnxruntime.so"
 
 for lib in \
-  libQnnGpu.so \
-  libQnnGpuNetRunExtensions.so \
   libQnnHtp.so \
   libQnnHtpNetRunExtensions.so \
   libQnnHtpPrepare.so \
